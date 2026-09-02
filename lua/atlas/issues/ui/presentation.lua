@@ -15,17 +15,13 @@ function M.issue_hl(key)
 	if lower == "" or lower == "none" then
 		return "LineNr"
 	end
-	if lower:find("#", 1, true) then
-		return "AtlasTextMuted"
-	end
-
-	return "AtlasJiraKey"
+	return "AtlasTextMuted"
 end
 
 ---@param status_id string|nil
 ---@return string
 function M.status_hl(status_id)
-	return highlights.dynamic_for_bg(status_id and ("jira-status:" .. status_id) or nil) or "AtlasTextMuted"
+	return highlights.dynamic_for_bg(status_id and ("issue-status:" .. status_id) or nil) or "AtlasTextMuted"
 end
 
 ---@param name string|IssueUser|nil

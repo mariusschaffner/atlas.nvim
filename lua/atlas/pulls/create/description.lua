@@ -1,31 +1,24 @@
 -- Builds the initial title and description for `:Atlas create pr`.
 --
 -- The newest commit supplies the title. For the description, Atlas first reads
--- the configured `pr_template`, or `.github/pull_request_template.md` by
--- default. A non-empty template is used as the description.
+-- the configured `pr_template`, or `.gitlab/merge_request_templates/Default.md`
+-- by default. A non-empty template is used as the description.
 --
 -- Without a template, Atlas creates a summary placeholder, groups conventional
--- commits into sections, accepts an optional leading `[JIRA-123]`, links commit
--- hashes and issue references, collects those references under Related, and
--- appends the diffstat. If none of the commits use a conventional prefix, Atlas
--- keeps a linked plain commit list and the same diffstat.
---
--- Inspired by:
--- https://github.com/mjveilleux/pr-description.nvim
--- https://github.com/RemoteRabbit/pr-description.nvim
+-- commits into sections, accepts an optional leading `[ISSUE-123]`-style prefix,
+-- links commit hashes and issue references, collects those references under
+-- Related, and appends the diffstat. If none of the commits use a conventional
+-- prefix, Atlas keeps a linked plain commit list and the same diffstat.
 
 local M = {}
 
 local config = require("atlas.config")
 local git = require("atlas.core.git")
 
-local DEFAULT_PR_TEMPLATE = ".github/pull_request_template.md"
+local DEFAULT_PR_TEMPLATE = ".gitlab/merge_request_templates/Default.md"
 
 local URL_PATHS = {
-	github = { issue = "/issues/", commit = "/commit/" },
 	gitlab = { issue = "/-/issues/", commit = "/-/commit/" },
-	bitbucket = { issue = "/issues/", commit = "/commits/" },
-	jira = { issue = "/browse/" },
 }
 
 local COMMIT_CATEGORIES = {
@@ -74,7 +67,6 @@ local SECTIONS = {
 ---@class PullsCreateDescriptionLinks
 ---@field provider AtlasPullsProviderId|"unknown"|nil
 ---@field repo_url string|nil
----@field jira_url string|nil
 ---@field urls { issue: string|nil, commit: string|nil }
 
 ---@param root string
@@ -116,19 +108,6 @@ local function add_diffstat(lines, diffstat)
 	table.insert(lines, "```")
 end
 
----@return string|nil
-local function jira_url()
-	local jira = config.provider_options("jira")
-	if jira == nil then
-		return nil
-	end
-	local base_url = vim.trim(jira.base_url or ""):gsub("/+$", "")
-	if base_url == "" then
-		return nil
-	end
-	return base_url .. URL_PATHS.jira.issue:gsub("/+$", "")
-end
-
 ---@param root string
 ---@return PullsCreateDescriptionLinks
 local function links(root)
@@ -136,7 +115,6 @@ local function links(root)
 	return {
 		provider = remote and remote.provider or nil,
 		repo_url = remote and remote.url or nil,
-		jira_url = jira_url(),
 		urls = (remote and URL_PATHS[remote.provider]) or {},
 	}
 end
@@ -145,12 +123,6 @@ end
 ---@param context PullsCreateDescriptionLinks
 ---@return string
 local function add_links(text, context)
-	if context.jira_url then
-		text = text:gsub("%[?([A-Z][A-Z0-9]+%-%d+)%]?", function(key)
-			return string.format("[%s](%s/%s)", key, context.jira_url, key)
-		end)
-	end
-
 	if context.repo_url then
 		local issue_path = context.urls.issue or "/issues/"
 		text = text:gsub("%[?#(%d+)%]?", function(number)
@@ -208,11 +180,6 @@ local function related(context, head, commits)
 	end
 
 	for _, text in ipairs(texts) do
-		if context.jira_url then
-			for key in text:gmatch("[A-Z][A-Z0-9]+%-%d+") do
-				add(key, context.jira_url .. "/" .. key)
-			end
-		end
 		if context.repo_url then
 			local issue_path = context.urls.issue or "/issues/"
 			for number in text:gmatch("#(%d+)") do

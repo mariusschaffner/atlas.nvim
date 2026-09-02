@@ -78,13 +78,6 @@ local function build(key_for)
 end
 
 ---@return PullsReactionOption[]
-function M.github()
-	return build(function(k)
-		return k
-	end)
-end
-
----@return PullsReactionOption[]
 function M.gitlab()
 	-- Atlas key -> GitLab API name
 	local name = {

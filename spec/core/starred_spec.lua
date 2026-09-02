@@ -104,27 +104,27 @@ describe("core.starred", function()
 		local pull = { id = 7, repo_full_name = "octo/repo", title = "Pull" }
 		local repo = { id = "octo/repo", name = "repo" }
 
-		local item = assert(starred.add(pull, "github", repo))
-		assert.are.equal("github:pulls/octo/repo#7", item.ref)
+		local item = assert(starred.add(pull, "gitlab", repo))
+		assert.are.equal("gitlab:pulls/octo/repo#7", item.ref)
 		assert.are.same({ item }, assert(starred.list()))
 
-		local is_starred = starred.toggle(pull, "github", repo)
+		local is_starred = starred.toggle(pull, "gitlab", repo)
 		assert.is_false(is_starred)
 		assert.are.same({}, assert(starred.list()))
 
-		is_starred = starred.toggle(pull, "github", repo)
+		is_starred = starred.toggle(pull, "gitlab", repo)
 		assert.is_true(is_starred)
 		assert.is_true(starred.clear_all())
 		assert.are.same({}, assert(starred.list()))
 	end)
 
 	it("filters items by domain and provider", function()
-		assert(starred.add({ key = "GH-1" }, "github"))
-		assert(starred.add({ key = "JIRA-1" }, "jira"))
-		assert(starred.add({ id = 7, repo_full_name = "octo/repo" }, "github"))
+		assert(starred.add({ key = "GL-1" }, "gitlab"))
+		assert(starred.add({ key = "OTHER-1" }, "other"))
+		assert(starred.add({ id = 7, repo_full_name = "octo/repo" }, "gitlab"))
 
-		assert.are.same({ "github:issues/GH-1", "jira:issues/JIRA-1" }, refs(assert(starred.list("issues"))))
-		assert.are.same({ "github:issues/GH-1", "github:pulls/octo/repo#7" }, refs(assert(starred.list(nil, "github"))))
-		assert.are.same({ "github:issues/GH-1" }, refs(assert(starred.list("issues", "github"))))
+		assert.are.same({ "gitlab:issues/GL-1", "other:issues/OTHER-1" }, refs(assert(starred.list("issues"))))
+		assert.are.same({ "gitlab:issues/GL-1", "gitlab:pulls/octo/repo#7" }, refs(assert(starred.list(nil, "gitlab"))))
+		assert.are.same({ "gitlab:issues/GL-1" }, refs(assert(starred.list("issues", "gitlab"))))
 	end)
 end)

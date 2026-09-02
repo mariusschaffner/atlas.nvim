@@ -25,7 +25,7 @@ end
 
 describe("providers contracts", function()
 	it("loads pull request providers", function()
-		assert_contract("pulls", { "bitbucket", "github", "gitlab" }, { "search_view", "views" }, {
+		assert_contract("pulls", { "gitlab" }, { "search_view", "views" }, {
 			"fetch_user",
 			"fetch_pullrequests",
 			"fetch_by_refs",
@@ -43,29 +43,27 @@ describe("providers contracts", function()
 	it("loads issue providers", function()
 		assert_contract(
 			"issues",
-			{ "github", "gitlab", "jira" },
+			{ "gitlab" },
 			{ "search_view", "issue_ref", "views" },
 			{ "fetch_user", "fetch_issues", "fetch_by_refs", "fetch_issue" }
 		)
 	end)
 
-	it("exposes Bitbucket review actions", function()
-		local provider = assert(providers.load("bitbucket", "pulls"))
+	it("exposes GitLab review actions", function()
+		local provider = assert(providers.load("gitlab", "pulls"))
 		local reviews = assert(provider.capabilities.reviews)
 
-		assert_functions(reviews, { "fetch", "submit_review", "approve", "request_changes" }, "bitbucket.pulls.reviews")
+		assert_functions(reviews, { "fetch", "submit_review", "approve", "request_changes" }, "gitlab.pulls.reviews")
 	end)
 
-	it("exposes notifications for GitHub and GitLab", function()
-		for _, id in ipairs({ "github", "gitlab" }) do
-			for _, domain in ipairs({ "pulls", "issues" }) do
-				local provider = assert(providers.load(id, domain))
-				assert_functions(
-					provider.capabilities.notifications,
-					{ "fetch", "mark_read", "mark_done" },
-					id .. "." .. domain .. ".notifications"
-				)
-			end
+	it("exposes notifications for GitLab", function()
+		for _, domain in ipairs({ "pulls", "issues" }) do
+			local provider = assert(providers.load("gitlab", domain))
+			assert_functions(
+				provider.capabilities.notifications,
+				{ "fetch", "mark_read", "mark_done" },
+				"gitlab." .. domain .. ".notifications"
+			)
 		end
 	end)
 end)

@@ -78,10 +78,7 @@
 -- Configs
 
 ---@class AtlasProvidersConfig
----@field bitbucket AtlasBitbucketConfig|nil
----@field github AtlasGitHubConfig|nil
 ---@field gitlab AtlasGitLabConfig|nil
----@field jira AtlasJiraConfig|nil
 
 ---@class AtlasPullsConfig
 ---@field git_transport AtlasGitTransport|nil Git transport for Atlas-managed repositories (default: "https").
@@ -92,8 +89,6 @@
 ---@field default_delete_branch boolean|nil
 ---@field comment_templates AtlasPullsCommentTemplatesConfig|nil
 ---@field custom_actions AtlasPullsCustomAction[]|nil
----@field bitbucket AtlasBitbucketPullsConfig|nil
----@field github AtlasGitHubPullsConfig|nil
 ---@field gitlab AtlasGitLabPullsConfig|nil
 
 ---@class AtlasIssuesCustomActionContext
@@ -111,9 +106,7 @@
 ---@field max_results number|nil
 ---@field with_relationships boolean|nil
 ---@field custom_actions AtlasIssuesCustomAction[]|nil
----@field github AtlasGitHubIssuesConfig|nil
 ---@field gitlab AtlasGitLabIssuesConfig|nil
----@field jira AtlasJiraIssuesConfig|nil
 
 -- Config
 
@@ -327,9 +320,7 @@ local function migrate_legacy(opts)
 					section[id] = domain_config
 
 					for key, value in pairs(legacy_config) do
-						local domain_scoped = key == "views"
-							or key == "bookmarks"
-							or (domain == "issues" and id == "jira" and key == "project_config")
+						local domain_scoped = key == "views" or key == "bookmarks"
 						if domain_scoped then
 							if domain_config[key] == nil then
 								domain_config[key] = value
@@ -341,19 +332,6 @@ local function migrate_legacy(opts)
 				end
 			end
 		end
-	end
-
-	local jira_provider = type(opts.providers.jira) == "table" and opts.providers.jira or nil
-	if jira_provider and jira_provider.project_config ~= nil then
-		local issues = type(opts.issues) == "table" and opts.issues or {}
-		local jira_issues = type(issues.jira) == "table" and issues.jira or {}
-		if jira_issues.project_config == nil then
-			jira_issues.project_config = jira_provider.project_config
-		end
-		jira_provider.project_config = nil
-		issues.jira = jira_issues
-		opts.issues = issues
-		migrated = true
 	end
 
 	if migrated then

@@ -46,10 +46,6 @@ local function generic_rows(issue)
 	return rows
 end
 
-local function github_rows(_issue)
-	return {}
-end
-
 local function gitlab_rows(issue)
 	local rows = {}
 	---@cast issue GitLabIssue
@@ -59,25 +55,8 @@ local function gitlab_rows(issue)
 	return rows
 end
 
-local function jira_rows(issue)
-	local rows = {}
-	---@cast issue JiraIssue
-	local _, priority_hl = icons.issues_priority(issue.priority)
-	add(rows, "Priority", issue.priority, priority_hl)
-	local project = issue.project
-	if project then
-		add(rows, "Project", project.name ~= "" and project.name or project.key)
-	end
-	if issue.is_subscribed ~= nil then
-		add(rows, "Watching", issue.is_subscribed and "Yes" or "No")
-	end
-	return rows
-end
-
 local provider_rows = {
-	github = github_rows,
 	gitlab = gitlab_rows,
-	jira = jira_rows,
 }
 
 local function render(issue, rows)

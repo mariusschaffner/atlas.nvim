@@ -2,8 +2,8 @@ local M = {}
 local config = require("atlas.config")
 local url = require("atlas.providers.url")
 
----@alias AtlasPullsProviderId "bitbucket"|"github"|"gitlab"
----@alias AtlasIssuesProviderId "jira"|"github"|"gitlab"
+---@alias AtlasPullsProviderId "gitlab"
+---@alias AtlasIssuesProviderId "gitlab"
 ---@alias AtlasProviderId AtlasPullsProviderId|AtlasIssuesProviderId
 ---@alias AtlasDomain "pulls"|"issues"
 ---@alias AtlasEntity "pr"|"issue"|"repo"
@@ -116,63 +116,18 @@ function M.configured(domain)
 end
 
 add({
-	id = "jira",
-	name = "Jira",
-	resolver = require("atlas.providers.jira.resolve"),
-	domains = {
-		issues = {
-			module = "atlas.issues.providers.jira",
-			icon = { icon = "󰌃", hl_group = "AtlasJiraTheme" },
-			bookmark_key = "J",
-			bookmark_label = "JQL",
-		},
-	},
-})
-
-add({
-	id = "github",
-	name = "GitHub",
-	resolver = require("atlas.providers.github.resolve"),
-	domains = {
-		pulls = {
-			module = "atlas.pulls.providers.github",
-			icon = { icon = "", hl_group = "AtlasGitHubTheme" },
-			bookmark_key = "S",
-		},
-		issues = {
-			module = "atlas.issues.providers.github",
-			icon = { icon = "", hl_group = "AtlasGHIssuesTheme" },
-			bookmark_key = "S",
-		},
-	},
-})
-
-add({
-	id = "bitbucket",
-	name = "Bitbucket",
-	resolver = require("atlas.providers.bitbucket.resolve"),
-	domains = {
-		pulls = {
-			module = "atlas.pulls.providers.bitbucket",
-			icon = { icon = "", hl_group = "AtlasBitbucketTheme" },
-			bookmark_key = "S",
-		},
-	},
-})
-
-add({
 	id = "gitlab",
 	name = "GitLab",
 	resolver = require("atlas.providers.gitlab.resolve"),
 	domains = {
 		pulls = {
 			module = "atlas.pulls.providers.gitlab",
-			icon = { icon = "", hl_group = "AtlasGitLabTheme" },
+			icon = { icon = "", hl_group = "AtlasGitLabTheme" },
 			bookmark_key = "S",
 		},
 		issues = {
 			module = "atlas.issues.providers.gitlab",
-			icon = { icon = "", hl_group = "AtlasGLIssuesTheme" },
+			icon = { icon = "", hl_group = "AtlasGLIssuesTheme" },
 			bookmark_key = "S",
 		},
 	},

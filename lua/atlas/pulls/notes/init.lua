@@ -258,19 +258,8 @@ function M.resolve_target(value)
 	if not url_host then
 		return nil, "Expected a pull request URL or canonical reference"
 	end
-	local owner, repo
-	owner, repo, id = path:match("^/([^/]+)/([^/]+)/pull/(%d+)/?$")
-	if owner then
-		provider, repository = "github", owner .. "/" .. repo
-	else
-		owner, repo, id = path:match("^/([^/]+)/([^/]+)/pull%-requests/(%d+)/?$")
-		if owner then
-			provider, repository = "bitbucket", owner .. "/" .. repo
-		else
-			repository, id = path:match("^/(.-)/%-/merge_requests/(%d+)/?$")
-			provider = repository and "gitlab" or nil
-		end
-	end
+	repository, id = path:match("^/(.-)/%-/merge_requests/(%d+)/?$")
+	provider = repository and "gitlab" or nil
 	if not provider or not repository or not id then
 		return nil, "Unsupported pull request URL"
 	end

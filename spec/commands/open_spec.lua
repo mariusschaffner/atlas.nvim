@@ -132,9 +132,9 @@ describe("commands.open", function()
 	end)
 
 	it("routes a direct target to detail as a pull request ref", function()
-		local value = "https://github.com/owner/repo/pull/42"
+		local value = "https://gitlab.com/owner/repo/-/merge_requests/42"
 		local target = {
-			provider = "github",
+			provider = "gitlab",
 			domain = "pulls",
 			entity = "pr",
 			id = 42,
@@ -152,27 +152,27 @@ describe("commands.open", function()
 
 	it("opens dot as the current repository dashboard", function()
 		repository = {
-			provider = "github",
+			provider = "gitlab",
 			domain = "pulls",
 			entity = "repo",
-			host = "github.com",
+			host = "gitlab.com",
 			repo_full_name = "owner/repo",
-			url = "https://github.com/owner/repo",
+			url = "https://gitlab.com/owner/repo",
 		}
 
 		command.open(".")
 
 		assert.are.equal("pulls", calls.dashboard[1].domain)
-		assert.are.equal("github", calls.dashboard[1].provider)
+		assert.are.equal("gitlab", calls.dashboard[1].provider)
 		assert.are.equal(repository, calls.dashboard[1].opts.initial_view.target)
 	end)
 
 	it("resolves a number against the current repository with PR priority", function()
 		repository = {
-			provider = "github",
+			provider = "gitlab",
 			domain = "pulls",
 			entity = "repo",
-			host = "github.com",
+			host = "gitlab.com",
 			repo_full_name = "owner/repo",
 		}
 		pull_result = { id = 42, title = "PR" }
@@ -188,10 +188,10 @@ describe("commands.open", function()
 
 	it("falls back from a missing PR to the issue in the same repository", function()
 		repository = {
-			provider = "github",
+			provider = "gitlab",
 			domain = "pulls",
 			entity = "repo",
-			host = "github.com",
+			host = "gitlab.com",
 			repo_full_name = "owner/repo",
 		}
 		issue_result = { key = "ISSUE-42", title = "Issue" }

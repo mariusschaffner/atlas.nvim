@@ -11,11 +11,6 @@ local function add(rows, label, value, hl_group)
 	rows[#rows + 1] = { label, tostring(value), hl_group or "AtlasTextMuted" }
 end
 
-local function status_value(kind, label)
-	local icon, hl_group = icons.pulls_status(kind)
-	return (icon ~= "" and (icon .. " ") or "") .. label, hl_group
-end
-
 local function generic_rows(pr)
 	local state = tostring(pr.state or "-")
 	local author = presentation.user_handle(pr.author)
@@ -32,39 +27,6 @@ local function generic_rows(pr)
 		{ "Created", utils.relative_time(pr.created_on), "AtlasTextMuted" },
 		{ "Updated", utils.relative_time(pr.updated_on), "AtlasTextMuted" },
 	}
-end
-
-local function github_rows(pr)
-	---@cast pr GitHubPullRequest
-	local rows = {}
-	local review = {
-		APPROVED = "successful",
-		CHANGES_REQUESTED = "failed",
-		REVIEW_REQUIRED = "inprogress",
-	}
-	local review_status = review[tostring(pr.review_decision or ""):upper()]
-	if review_status then
-		local value, hl_group = icons.pulls_status(review_status)
-		add(rows, "Review", value, hl_group)
-	end
-
-	local build = {
-		SUCCESS = "successful",
-		FAILURE = "failed",
-		ERROR = "failed",
-		PENDING = "inprogress",
-		EXPECTED = "inprogress",
-	}
-	local build_status = pr.check_status and build[pr.check_status:upper()] or nil
-	if build_status then
-		local value, hl_group = icons.pulls_status(build_status)
-		add(rows, "Build", value, hl_group)
-	end
-
-	if pr.lines_added ~= nil or pr.lines_removed ~= nil then
-		add(rows, "Changes", string.format("+%d / -%d", pr.lines_added or 0, pr.lines_removed or 0))
-	end
-	return rows
 end
 
 local function gitlab_rows(pr)
@@ -109,32 +71,8 @@ local function gitlab_rows(pr)
 	return rows
 end
 
-local function bitbucket_rows(pr)
-	---@cast pr BitbucketPullRequest
-	local rows = {}
-	local approved, changes_requested, total = 0, 0, 0
-	for _, reviewer in ipairs(pr.reviewers or {}) do
-		total = total + 1
-		if reviewer.decision == "approved" then
-			approved = approved + 1
-		elseif reviewer.decision == "changes_requested" then
-			changes_requested = changes_requested + 1
-		end
-	end
-	if total > 0 then
-		local kind = changes_requested > 0 and "failed" or (approved == total and "successful" or "inprogress")
-		local label = changes_requested > 0 and "Changes requested" or string.format("%d/%d approved", approved, total)
-		local value, hl_group = status_value(kind, label)
-		add(rows, "Review", value, hl_group)
-	end
-	add(rows, "Tasks", tostring(pr.tasks_count or 0), "AtlasTextMuted")
-	return rows
-end
-
 local provider_rows = {
-	github = github_rows,
 	gitlab = gitlab_rows,
-	bitbucket = bitbucket_rows,
 }
 
 local function render(pr, rows)

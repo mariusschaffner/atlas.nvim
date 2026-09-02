@@ -111,37 +111,6 @@ local function check_pulls()
 	end
 end
 
-local function check_bitbucket()
-	local provider = config.provider_options("bitbucket")
-	if provider == nil then
-		vim.health.info("Bitbucket not configured")
-		return
-	end
-
-	check_credentials(provider, { "user", "token" }, "Bitbucket")
-	check_provider_views("bitbucket")
-end
-
-local function check_github()
-	if config.provider_options("github") == nil then
-		vim.health.info("GitHub not configured")
-		return
-	end
-	check_provider_views("github")
-
-	if vim.fn.executable("gh") ~= 1 then
-		vim.health.error("gh CLI not found", { "Install from https://cli.github.com" })
-		return
-	end
-	vim.health.ok("gh CLI found")
-
-	if vim.system({ "gh", "auth", "status" }, { text = true }):wait().code ~= 0 then
-		vim.health.error("gh not authenticated", { "Run: gh auth login" })
-		return
-	end
-	vim.health.ok("gh authenticated")
-end
-
 local function check_gitlab()
 	local provider = config.provider_options("gitlab")
 	if provider == nil then
@@ -152,18 +121,6 @@ local function check_gitlab()
 	check_credentials(provider, { "base_url", "token" }, "GitLab")
 	check_https_url(provider.base_url, "providers.gitlab.base_url")
 	check_provider_views("gitlab")
-end
-
-local function check_jira()
-	local provider = config.provider_options("jira")
-	if provider == nil then
-		vim.health.info("Jira not configured")
-		return
-	end
-
-	check_credentials(provider, { "email", "token" }, "Jira")
-	check_https_url(provider.base_url, "providers.jira.base_url")
-	check_provider_views("jira")
 end
 
 local function validate_keymaps()
@@ -205,17 +162,8 @@ function M.check()
 	vim.health.start("Pulls")
 	check_pulls()
 
-	vim.health.start("Bitbucket")
-	check_bitbucket()
-
-	vim.health.start("GitHub")
-	check_github()
-
 	vim.health.start("GitLab")
 	check_gitlab()
-
-	vim.health.start("Jira")
-	check_jira()
 
 	vim.health.start("Keymaps")
 	validate_keymaps()

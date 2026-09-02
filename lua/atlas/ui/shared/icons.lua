@@ -1,6 +1,5 @@
 local M = {}
 
-local config = require("atlas.config")
 local providers = require("atlas.providers")
 
 ---@class AtlasIconStyle
@@ -71,7 +70,7 @@ local ICONS = {
 	},
 
 	issues = {
-		issue = { icon = "", hl_group = "AtlasGHIssueOpen" },
+		issue = { icon = "", hl_group = "AtlasGLIssueOpen" },
 		type = {
 			epic = { icon = "", hl_group = "AtlasJiraEpic" },
 			story = { icon = "󰃀", hl_group = "AtlasTextPositive" },
@@ -134,18 +133,11 @@ end
 function M.issues_type(name)
 	local key = tostring(name or "")
 	local default = ICONS.issues.type[key:lower()]
-	local jira = config.domain_options("jira", "issues") or {}
-	local configured = ((jira.project_config or {}).issue_types or {})[key]
-
-	if configured then
-		return configured.icon or (default and default.icon) or "",
-			configured.hl_group or (default and default.hl_group) or "AtlasTextMuted"
-	end
 	if default then
 		return get(default)
 	end
 	local hl_group =
-		require("atlas.ui.shared.highlights").dynamic_for(key ~= "" and ("jira-issue-type:" .. key:lower()) or nil)
+		require("atlas.ui.shared.highlights").dynamic_for(key ~= "" and ("issue-type:" .. key:lower()) or nil)
 	return "", hl_group or "AtlasTextMuted"
 end
 

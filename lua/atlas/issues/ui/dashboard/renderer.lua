@@ -110,8 +110,7 @@ local function issues_to_rows(issue_groups, columns)
 		for _, child in ipairs(children) do
 			table.insert(root_row.children, issue_to_row(child, true, "plain"))
 		end
-		local provider_id = state.provider and state.provider.id or ""
-		if #children > 0 and provider_id ~= "jira" then
+		if #children > 0 then
 			local issue_key = tostring(group.issue.key or "")
 			local collapsed = state.collapsed_issue_keys[issue_key] == true
 			root_row.icon, root_row._fold_icon_hl = icons.general(collapsed and "fold_closed" or "fold_open")
@@ -132,9 +131,6 @@ end
 ---@param issue_groups IssuesGroup[]
 ---@return boolean
 local function should_show_indicator(issue_groups)
-	if not state.provider or state.provider.id ~= "jira" then
-		return false
-	end
 	for _, group in ipairs(issue_groups) do
 		if #group.children > 0 then
 			return true
@@ -187,27 +183,14 @@ end
 ---@return string
 local function issue_meta_text(issue)
 	local parts = {}
-	local provider_id = state.provider and state.provider.id
-	local repository
-	if provider_id == "github" then
-		---@cast issue GitHubIssue
-		repository = issue.repo_full_name
-	elseif provider_id == "gitlab" then
-		---@cast issue GitLabIssue
-		repository = issue.project_path
-	end
+	---@cast issue GitLabIssue
+	local repository = issue.project_path
 	if repository and repository ~= "" then
 		table.insert(parts, repository)
 	end
 	local type_name = issue.type and tostring(issue.type.name or "") or ""
 	if type_name ~= "" then
 		table.insert(parts, type_name)
-	end
-	if provider_id == "jira" then
-		---@cast issue JiraIssue
-		if issue.priority and issue.priority ~= "" then
-			table.insert(parts, issue.priority)
-		end
 	end
 	local due = utils.format_date(issue.duedate)
 	if due ~= "" then

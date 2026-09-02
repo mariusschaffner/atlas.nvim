@@ -5,13 +5,10 @@
 
 # Atlas.nvim
 
-Review GitHub, Bitbucket, and GitLab pull requests and manage Jira, GitHub, and GitLab issues without leaving Neovim.
+Review GitLab merge requests and manage GitLab issues without leaving Neovim.
 
 <p>
-  <img alt="GitHub" src="https://img.shields.io/badge/GitHub-181717?style=flat-square&logo=github&logoColor=white">
-  <img alt="Bitbucket" src="https://img.shields.io/badge/Bitbucket-0052CC?style=flat-square&logo=bitbucket&logoColor=white">
   <img alt="GitLab" src="https://img.shields.io/badge/GitLab-FC6D26?style=flat-square&logo=gitlab&logoColor=white">
-  <img alt="Jira" src="https://img.shields.io/badge/Jira-0052CC?style=flat-square&logo=jira&logoColor=white">
 </p>
 
 <img alt="Atlas UI" src="https://github.com/user-attachments/assets/de6459f9-f123-40a6-acbd-097a17e7ae86" />
@@ -27,12 +24,8 @@ Review GitHub, Bitbucket, and GitLab pull requests and manage Jira, GitHub, and 
 - [Configuration](#configuration)
 - [Commands](#commands)
 - [Pulls](#pulls)
-  - [GitHub](#github)
-  - [Bitbucket](#bitbucket)
   - [GitLab](#gitlab)
 - [Issues](#issues)
-  - [Jira](#jira)
-  - [GitHub](#github-issues)
   - [GitLab](#gitlab-issues)
 - [Events](#events)
 - [Keymaps](#keymaps)
@@ -74,9 +67,6 @@ require("atlas").setup({})
 
 - Neovim: `0.10+`
 - `git` and `curl` on `$PATH`
-- Jira: Jira Cloud REST API v3 (`*.atlassian.net`) or Jira Server REST API v2
-- Bitbucket: Bitbucket Cloud REST API 2.0 (`api.bitbucket.org`)
-- GitHub: GitHub CLI (`gh`) authenticated with `gh auth login`
 - GitLab: GitLab REST API v4 (`gitlab.com` or self-hosted), Personal Access Token with `api` scope
 
 > [!tip]
@@ -91,13 +81,13 @@ require("atlas").setup({})
 Run `:Atlas review` inside a Git repository to pick one of its open or draft pull requests, or pass a pull-request URL directly. Atlas opens the configured diff viewer.
 Or press the configured `pulls.open_diff` key (`gd` by default) on a pull request to start a review.
 
-- See pending, resolved, and outdated provider threads inline at their diff locations.
-- Add inline or file-level comments and suggestions; reply to, edit, delete, resolve, or reopen threads when supported.
-- Submit pending comments with an optional review summary, approve, or request changes when supported.
-- Merge pull requests from Atlas using the methods supported by each provider.
-- Review provider tasks and GitHub checklists alongside their comments.
+- See pending, resolved, and outdated GitLab threads inline at their diff locations.
+- Add inline or file-level comments and suggestions; reply to, edit, delete, resolve, or reopen threads.
+- Submit pending comments with an optional review summary, approve, or request changes.
+- Merge pull requests from Atlas using the methods supported by GitLab.
+- Review GitLab tasks alongside their comments.
 - Browse comments, tasks, and local notes.
-- Mark files reviewed in AtlasDiff; GitHub syncs the state with the pull request.
+- Mark files reviewed in AtlasDiff.
 
 > [!NOTE]
 > **Alternative viewers:** [CodeDiff](https://github.com/esmuellert/codediff.nvim), [Diffview](https://github.com/sindrets/diffview.nvim), and [Diffview-plus](https://github.com/dlyongemallo/diffview-plus.nvim) can display Atlas comment, task, and local-note overlays, but their integrations rely on plugin internals and may break after upstream changes.
@@ -117,7 +107,7 @@ For scripts, use `bin/atlas-notes`. Notes added there appear in AtlasDiff, CodeD
 
 ```sh
 ./bin/atlas-notes add \
-  --target https://github.com/owner/repository/pull/123 \
+  --target https://gitlab.com/owner/repository/-/merge_requests/123 \
   --file lua/review_queue.lua --line 19 \
   --context "local item = queue[index]" \
   --type suggestion --body "Should this be a bool?"
@@ -218,7 +208,7 @@ output:run(cmd, on_exit, { cwd = "/repo" })
 
 `:Atlas create pr` opens a form for the current branch using a configured template or a description generated from its commits. Edit the title and description, choose the target branch and reviewers, set the draft state, and preview the commits and diffstat before submitting.
 
-`:Atlas create issue` opens a provider-specific form for GitHub, GitLab, or Jira with Markdown descriptions, saved templates, and fields such as labels, assignees, milestones, and Jira issue types.
+`:Atlas create issue` opens a GitLab issue form with Markdown descriptions, saved templates, and fields such as labels, assignees, and milestones.
 
 ### Notifications
 
@@ -226,7 +216,7 @@ output:run(cmd, on_exit, { cwd = "/repo" })
   <img width="85%" alt="Notifications" src="https://github.com/user-attachments/assets/117b5ad7-3840-4487-bd91-f2f9bf213428">
 </p>
 
-Open GitHub and GitLab notifications inside Atlas, refresh them, open the related item, and mark notifications as read or done without leaving Neovim.
+Open GitLab notifications inside Atlas, refresh them, open the related item, and mark notifications as read or done without leaving Neovim.
 
 ### Bookmarks
 
@@ -234,7 +224,7 @@ Open GitHub and GitLab notifications inside Atlas, refresh them, open the relate
   <img width="85%" alt="Bookmarks" src="https://github.com/user-attachments/assets/f008d6af-dfc6-4b65-8af1-94cd6ce9fc99">
 </p>
 
-Turn frequently used GitHub and GitLab searches, Bitbucket repository/project views, or Jira JQL into named shortcuts. Use bookmarks for review queues, recurring project views, and the searches you return to throughout the day.
+Turn frequently used GitLab searches into named shortcuts. Use bookmarks for review queues, recurring project views, and the searches you return to throughout the day.
 
 Bookmarks appear alongside your configured views, keeping important queries one action away.
 Star a pull request or issue with `*` to keep it at the top of lists. Starred items are saved locally and appear in the first bookmark entry.
@@ -272,35 +262,12 @@ At some point there will probably an extension for lualine.
   },
 
   providers = {
-    ---@type AtlasGitHubConfig
-    github = {
-      cache_ttl = 300, -- Set to 0 to disable caching.
-    },
-
     ---@type AtlasGitLabConfig
     gitlab = {
       base_url = "https://gitlab.com",
       -- Personal Access Token with `api` scope:
       -- https://docs.gitlab.com/ee/user/profile/personal_access_tokens.html
       token = vim.env.GITLAB_TOKEN,
-      cache_ttl = 300, -- Set to 0 to disable caching.
-    },
-
-    ---@type AtlasBitbucketConfig
-    bitbucket = {
-      user = vim.env.BITBUCKET_USER,
-      token = vim.env.BITBUCKET_TOKEN,
-      cache_ttl = 300, -- Set to 0 to disable caching.
-    },
-
-    ---@type AtlasJiraConfig
-    jira = {
-      base_url = "https://your-site.atlassian.net",
-      email = "you@example.com", -- Required for basic authentication only.
-      --- See: https://support.atlassian.com/atlassian-account/docs/manage-api-tokens-for-your-atlassian-account/
-      token = "your_jira_api_token",
-      auth_method = "basic", -- "basic" or "bearer", defaults to "basic". If using bearer, set `token` to your API token.
-      api_type = "cloud", -- either "cloud" or "server", defaults to "cloud". Cloud API is v3, server API is v2
       cache_ttl = 300, -- Set to 0 to disable caching.
     },
   },
@@ -323,7 +290,7 @@ At some point there will probably an extension for lualine.
 - `:Atlas diff <pull-request-url>` - Open a pull request in native AtlasDiff
 - `:Atlas create <pr|issue>` - Create a pull request or issue
 - `:Atlas search [provider]` - Search configured pull-request and issue providers
-- `:Atlas open <target|.>` - Open a provider URL, Jira key, a PR/issue number in the current repository, or the current repository
+- `:Atlas open <target|.>` - Open a GitLab URL, a PR/issue number in the current repository, or the current repository
 - `:Atlas notes [target]` - Inspect local review notes
 - `:Atlas clear [cache|notes|stars]` - Clear all Atlas data or only cached data and cloned repositories, local review notes, or starred items
 - `:Atlas logs` - Toggle Atlas logs
@@ -332,7 +299,7 @@ At some point there will probably an extension for lualine.
 
 ## Pulls
 
-Use `:Atlas pulls [provider]` to browse and manage pull requests from GitHub, Bitbucket, and GitLab.
+Use `:Atlas pulls` to browse and manage GitLab merge requests.
 Shared authentication and endpoints are configured in the top-level `providers` table.
 
 ### Pulls Configuration
@@ -386,123 +353,13 @@ pulls = {
     settings = {
       ["your-workspace/atlas"] = {
         readme = "README.md", -- optional, defaults to README.md
-        pr_template = ".github/pull_request_template.md", -- optional, defaults to .github/pull_request_template.md
+        pr_template = ".gitlab/merge_request_templates/Default.md", -- optional, defaults to .gitlab/merge_request_templates/Default.md
       },
     },
   },
   custom_actions = {}, -- See Custom Actions below.
 },
 ```
-
-<a id="github"></a>
-
-<details>
-<summary><strong>GitHub</strong></summary>
-
-```lua
-pulls = {
-  ---@type AtlasGitHubPullsConfig
-  github = {
-    ---@type AtlasGitHubViewConfig[]
-    views = {
-      {
-        name = "My PRs",
-        key = "1",
-        layout = "plain", -- "compact", "grouped", or "plain"
-        search = "author:@me sort:updated-desc",
-      },
-      {
-        name = "Team",
-        key = "2",
-        layout = "compact",
-        search = "org:your-org sort:updated-desc",
-      },
-      {
-        name = "Repo",
-        key = "3",
-        layout = "grouped",
-        search = "repo:your-org/your-repo",
-      },
-    },
-
-    bookmarks = {
-      key   = "S",      -- default
-      label = "Search", -- default
-      items = {
-        ["Drafts"]           = "is:pr is:draft author:@me",
-        ["Recently merged"]  = "is:pr is:merged author:@me sort:updated-desc",
-        ["Review requested"] = "is:pr is:open review-requested:@me",
-      },
-    },
-  },
-},
-```
-
-<img alt="GitHub pull requests" src="https://github.com/user-attachments/assets/8b570bb3-d073-4ab0-99fc-2d9179e173cd">
-
-</details>
-
-<a id="bitbucket"></a>
-
-<details>
-<summary><strong>Bitbucket</strong></summary>
-
-```lua
-pulls = {
-  ---@type AtlasBitbucketPullsConfig
-  bitbucket = {
-    ---@type AtlasBitbucketViewConfig[]
-    views = {
-      {
-        name = "Me",
-        key = "M",
-        layout = "compact", -- "compact", "grouped", or "plain"
-        targets = {
-          { workspace = "your-workspace", repo = "standalone-repo" },
-          { workspace = "your-workspace", project = "CORE" },
-        },
-
-        ---@param pr PullRequest
-        ---@param ctx { user: PullsUser|nil }
-        filter = function(pr, ctx)
-          local user = ctx.user
-          return pr.author and user and pr.author.id == user.id
-        end,
-      },
-      {
-        name = "Team",
-        key = "1",
-        layout = "grouped",
-        targets = {
-          { workspace = "your-workspace", project = "TEAM" },
-        },
-      },
-    },
-
-    bookmarks = {
-      key   = "S",      -- default
-      label = "Search", -- default
-      items = {
-        ["Atlas"] = {
-          targets = {
-            { workspace = "your-workspace", repo = "atlas" },
-            { workspace = "your-workspace", project = "ATLAS" },
-          },
-          filter = function(pr)
-            return pr.state ~= "draft"
-          end,
-        },
-      },
-    },
-  },
-},
-```
-
-Each Bitbucket target selects one repository with `repo`, or every repository in a project with its `project` key. Views and bookmarks can mix both target types and narrow the resulting PRs with `filter`.
-
-<img alt="Bitbucket pull requests" src="https://github.com/user-attachments/assets/bcdd0c9c-e15f-4e82-81fd-cde38aa68a2d">
-
-</details>
 
 <a id="gitlab"></a>
 
@@ -559,7 +416,7 @@ pulls = {
 
 ## Issues
 
-Use `:Atlas issues [provider]` to browse and manage Jira, GitHub, and GitLab issues.
+Use `:Atlas issues` to browse and manage GitLab issues.
 Shared authentication and endpoints are configured in the top-level `providers` table.
 
 ### Issue Configuration
@@ -571,119 +428,6 @@ issues = {
   custom_actions = {}, -- See Custom Actions below.
 }
 ```
-
-<a id="jira"></a>
-
-<details>
-<summary><strong>Jira</strong></summary>
-
-> [!IMPORTANT]
-> The markdown editor for issue descriptions and comments is still experimental and may not work perfectly in all cases. You can toggle between markdown and ADF view in the overview tab to see the raw ADF content and how it translates to markdown. If you encounter any issues with the markdown editor, please open an issue with details.
-
-```lua
-issues = {
-  ---@type AtlasJiraIssuesConfig
-  jira = {
-    ---@type AtlasJiraViewConfig[]
-    views = {
-      {
-        name = "My Board",
-        key = "M",
-        layout = "plain",
-        jql = "project = KAN AND assignee = currentUser() ORDER BY updated DESC",
-      },
-      {
-        name = "Team Board",
-        key = "T",
-        layout = "compact",
-        jql = "project = KAN ORDER BY updated DESC",
-      },
-    },
-
-    bookmarks = {
-      key   = "J",   -- default
-      label = "JQL", -- default
-      items = {
-        ["Backlog"]     = "project = KAN AND statusCategory != Done AND (sprint IS EMPTY OR sprint NOT IN openSprints()) ORDER BY Rank ASC",
-        ["Next sprint"] = "project = KAN AND sprint in futureSprints() ORDER BY Rank ASC",
-        ["My open"]     = "assignee = currentUser() AND statusCategory != Done ORDER BY updated DESC",
-      },
-    },
-
-    project_config = {
-      -- The Jira custom field ID used for story points. Defaults to "customfield_10016".
-      story_points_field = "customfield_10016",
-      issue_types = {
-        ["Maintenance"] = { icon = "", hl_group = "AtlasTextWarning" },
-        ["Infrastructure"] = { icon = "󰒋", hl_group = "AtlasLogInfo" },
-      },
-
-      KAN = {
-        customfield_10003 = {
-          name = "Approvers",
-          format = function(value)
-            if type(value) ~= "table" or #value == 0 then
-              return nil -- nil hides the field
-            end
-            return table.concat(value, ", ")
-          end,
-          hl_group = "AtlasChipActive",
-          display = "chip", -- "chip" or "table"
-        },
-      },
-    },
-  },
-},
-```
-
-<img alt="Jira issues" src="https://github.com/user-attachments/assets/4cb40f1f-0b18-4fb1-82ae-6bc57fc8a7c5">
-
-</details>
-
-<a id="github-issues"></a>
-
-<details>
-<summary><strong>GitHub Issues</strong></summary>
-
-```lua
-issues = {
-  ---@type AtlasGitHubIssuesConfig
-  github = {
-    ---@type AtlasGitHubIssuesViewConfig[]
-    views = {
-      {
-        name = "Assigned",
-        key = "1",
-        layout = "plain",
-        search = "assignee:@me is:open",
-      },
-      {
-        name = "Created",
-        key = "2",
-        layout = "compact",
-        search = "author:@me is:open",
-      },
-      {
-        name = "Mentions",
-        key = "3",
-        layout = "plain",
-        search = "mentions:@me is:open",
-      },
-    },
-
-    bookmarks = {
-      key   = "S",      -- default
-      label = "Search", -- default
-      items = {
-        ["Bugs"]            = "is:issue is:open label:bug",
-        ["Recently closed"] = "is:issue is:closed author:@me sort:updated-desc",
-      },
-    },
-  },
-},
-```
-
-</details>
 
 <a id="gitlab-issues"></a>
 
