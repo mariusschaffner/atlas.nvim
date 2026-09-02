@@ -6,8 +6,6 @@ local help = require("atlas.ui.popups.help")
 local highlights = require("atlas.ui.shared.highlights")
 local icons = require("atlas.ui.shared.icons")
 local keymap_resolver = require("atlas.core.keymaps")
-local note_renderer = require("atlas.pulls.notes.ui.renderer")
-local notes = require("atlas.pulls.diff.notes")
 local review = require("atlas.pulls.diff.review")
 local review_actions = require("atlas.pulls.actions.review")
 local review_threads = require("atlas.pulls.ui.components.review_threads")
@@ -51,8 +49,6 @@ end
 ---@field tasks PullsComment[]
 ---@field reviewers PullsReviewer[]
 ---@field history PullsReviewHistoryEntry[]
----@field notes AtlasNote[]
----@field note_target AtlasNoteTarget|nil
 
 ---@class AtlasDiffReviewPanel
 ---@field buf integer
@@ -71,8 +67,6 @@ local function panel_data(session)
 		tasks = review_state and review_state.tasks or {},
 		reviewers = review_state and review_state.reviewers or {},
 		history = review_state and review_state.history or {},
-		notes = session.notes or {},
-		note_target = session.note_target,
 	}
 end
 
@@ -92,7 +86,6 @@ function M.new(buf, win, session)
 			pending = true,
 			comments = true,
 			tasks = true,
-			notes = false,
 		},
 	}
 end
@@ -581,9 +574,9 @@ local function has_pending(thread)
 end
 
 ---@param data AtlasDiffReviewPanelData
----@return table[], table[], table[], table[], table[]
+---@return table[], table[], table[], table[]
 local function panel_items(data)
-	local pending, published_comments, standalone_tasks, rendered_notes = {}, {}, {}, {}
+	local pending, published_comments, standalone_tasks = {}, {}, {}
 	for _, thread in ipairs(review_threads.group_comments(data.comments, data.tasks)) do
 		local position = thread.comment.file or thread.comment.inline
 		table.insert(has_pending(thread) and pending or published_comments, {
@@ -612,18 +605,6 @@ local function panel_items(data)
 			})
 		end
 	end
-	if data.note_target then
-		for _, note in ipairs(data.notes) do
-			table.insert(rendered_notes, {
-				kind = "note",
-				note = note,
-				key = note_renderer.note_key(data.note_target, note),
-				path = note.file_path,
-				line = note.line,
-				timestamp = tostring(note.updated_at or note.created_at or ""),
-			})
-		end
-	end
 	local function sort_items(left, right)
 		if left.path ~= right.path then
 			return left.path < right.path
@@ -639,8 +620,7 @@ local function panel_items(data)
 	table.sort(pending, sort_items)
 	table.sort(published_comments, sort_items)
 	table.sort(standalone_tasks, sort_items)
-	table.sort(rendered_notes, sort_items)
-	return reviewer_items(data), pending, published_comments, standalone_tasks, rendered_notes
+	return reviewer_items(data), pending, published_comments, standalone_tasks
 end
 
 ---@param panel AtlasDiffReviewPanel|nil
@@ -661,7 +641,7 @@ function M.render(panel, session)
 	local cursor = vim.api.nvim_win_get_cursor(panel.win)
 	local width = math.max(6, vim.api.nvim_win_get_width(panel.win))
 	local lines, spans, line_map = {}, {}, {}
-	local reviewers, pending_comments, published_comments, standalone_tasks, rendered_notes = panel_items(data)
+	local reviewers, pending_comments, published_comments, standalone_tasks = panel_items(data)
 	local published, pending = 0, 0
 	for _, items in ipairs({ data.comments, data.tasks }) do
 		for _, item in ipairs(items) do
@@ -674,7 +654,6 @@ function M.render(panel, session)
 	end
 	local comment_icon = icons.general("comment")
 	local task_icon = icons.pulls("tasks")
-	local note_icon = icons.general("pin")
 	local pending_icon = icons.pulls_status("inprogress")
 	local comment_action_keys = {
 		reply = key_label("pulls.review.diff.add_comment"),
@@ -690,18 +669,12 @@ function M.render(panel, session)
 	}
 	local review_capability = panel.session.review and panel.session.review.provider.capabilities.reviews
 	local review_edit_key = review_capability and review_capability.edit_review and comment_action_keys.edit or nil
-	local note_action_keys = {
-		edit = key_label("ui.comments.edit"),
-		delete = key_label("ui.delete"),
-	}
 	local winbar = string.format(
-		" Atlas Review %%=%s Comments: %d   %s Tasks: %d   %s Notes: %d",
+		" Atlas Review %%=%s Comments: %d   %s Tasks: %d",
 		comment_icon,
 		published,
 		task_icon,
-		#data.tasks,
-		note_icon,
-		#data.notes
+		#data.tasks
 	)
 	if pending > 0 then
 		winbar = winbar .. string.format("   %s Pending: %d", pending_icon, pending)
@@ -718,7 +691,6 @@ function M.render(panel, session)
 		},
 		{ id = "tasks", title = "Tasks", item_name = "task", items = standalone_tasks },
 		{ id = "comments", title = "Comments", item_name = "comment", items = published_comments },
-		{ id = "notes", title = "Notes", item_name = "note", items = rendered_notes },
 	}
 	for _, section in ipairs(sections) do
 		if #section.items > 0 then
@@ -764,7 +736,7 @@ function M.render(panel, session)
 							panel.session.source.head_revision,
 							review_edit_key
 						)
-					elseif item.kind ~= "note" then
+					else
 						block_lines, block_spans, block_map = review_threads.render_compact(
 							item.thread,
 							width,
@@ -775,14 +747,6 @@ function M.render(panel, session)
 								toggle_resolved_key = item.kind == "task" and task_action_keys.toggle_resolved or nil,
 							}
 						)
-					else
-						block_lines, block_spans, block_map = note_renderer.render_list({
-							{
-								target = data.note_target,
-								note = item.note,
-								expanded = item_expanded,
-							},
-						}, width, { action_keys = note_action_keys })
 					end
 					local offset = #lines
 					utils.append_block(lines, spans, { lines = block_lines, highlights = block_spans })
@@ -899,8 +863,6 @@ function M.register_keymaps(panel)
 			toggle_selected()
 		elseif not session.focus_item then
 			return
-		elseif entry and entry.note then
-			session.focus_item({ kind = "note", note = entry.note }, focus_diff)
 		elseif entry and (entry.thread_root or entry.comment) then
 			local comment = entry.thread_root or entry.comment
 			if not comment.is_task then
@@ -925,14 +887,6 @@ function M.register_keymaps(panel)
 						session:render()
 					end
 				end)
-			end
-			return
-		end
-		if entry and entry.note then
-			if action == "edit" then
-				notes.edit(session, entry.note)
-			elseif action == "delete" then
-				notes.delete(session, entry.note)
 			end
 			return
 		end
@@ -983,8 +937,7 @@ function M.register_keymaps(panel)
 		if not session then
 			return
 		end
-		local reviewers, pending, published_comments, standalone_tasks, rendered_notes =
-			panel_items(panel_data(session))
+		local reviewers, pending, published_comments, standalone_tasks = panel_items(panel_data(session))
 		local keys, history_keys = {}, {}
 		for _, reviewer in ipairs(reviewers) do
 			if reviewer.kind == "awaiting_reviewers" or #reviewer.history > 0 then
@@ -994,7 +947,7 @@ function M.register_keymaps(panel)
 				table.insert(history_keys, reviewer.key .. ":history")
 			end
 		end
-		for _, items in ipairs({ pending, published_comments, standalone_tasks, rendered_notes }) do
+		for _, items in ipairs({ pending, published_comments, standalone_tasks }) do
 			for _, item in ipairs(items) do
 				table.insert(keys, item.key)
 			end
@@ -1022,7 +975,6 @@ function M.register_keymaps(panel)
 			return
 		end
 		review.reload(session)
-		notes.reload(session)
 	end)
 	add_mapping(entries, "ui.close", "Close panel", 11, function()
 		local session = active_session(panel)

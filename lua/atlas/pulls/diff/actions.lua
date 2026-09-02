@@ -4,18 +4,6 @@ local picker = require("atlas.ui.picker")
 
 local pull_actions = require("atlas.pulls.actions")
 local review_api = require("atlas.pulls.diff.review")
-local notes = require("atlas.pulls.notes")
-
----@param session AtlasDiffSession
-local function reload_notes(session)
-	if not session.note_target then
-		return
-	end
-	local items = notes.list(session.note_target)
-	if items then
-		session.notes = items
-	end
-end
 
 ---@param session AtlasDiffSession
 ---@param action AtlasPullAction
@@ -29,7 +17,6 @@ local function run(session, action)
 			return
 		end
 		if result and not err then
-			reload_notes(session)
 			review_api.reload(session)
 		end
 	end)

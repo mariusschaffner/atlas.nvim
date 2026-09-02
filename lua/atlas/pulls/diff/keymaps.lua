@@ -3,8 +3,6 @@ local M = {}
 local actions = require("atlas.pulls.diff.actions")
 local comments = require("atlas.pulls.diff.comments")
 local help = require("atlas.ui.popups.help")
-local notes = require("atlas.pulls.diff.notes")
-local picker = require("atlas.ui.picker")
 local pull_actions = require("atlas.pulls.actions")
 local resolver = require("atlas.core.keymaps")
 local review = require("atlas.pulls.diff.review")
@@ -39,26 +37,9 @@ end
 ---@param session AtlasDiffSession
 ---@param buf integer
 ---@param on_comment fun()
----@param on_note fun()
-local function with_item(session, buf, on_comment, on_note)
-	local has_comment = comments.has_at_cursor(session, buf)
-	local has_note = notes.has_at_cursor(session, buf)
-	if has_comment and has_note then
-		picker.select({
-			title = "Select review item",
-			items = { "Comment thread", "Local notes" },
-			on_select = function(choice)
-				if choice == "Comment thread" then
-					on_comment()
-				elseif choice == "Local notes" then
-					on_note()
-				end
-			end,
-		})
-	elseif has_comment then
+local function with_item(session, buf, on_comment)
+	if comments.has_at_cursor(session, buf) then
 		on_comment()
-	elseif has_note then
-		on_note()
 	end
 end
 
@@ -87,7 +68,7 @@ function M.register(session, opts)
 	local reviewable = session.review and (session.review.pr.state == "open" or session.review.pr.state == "draft")
 	local pending = session.review and session.review.data.review.pending == true
 	local can_complete = reviewable and (not pending or reviews.submit_review ~= nil)
-	local has_review_items = session.review ~= nil or session.note_target ~= nil
+	local has_review_items = session.review ~= nil
 	local file_buffers = {}
 	for _, buf in ipairs(opts.file_buffers or {}) do
 		file_buffers[buf] = true
@@ -99,9 +80,6 @@ function M.register(session, opts)
 				add(items, "ui.refresh", "Refresh review", function()
 					if session.review then
 						review.reload(session)
-					end
-					if session.note_target then
-						notes.reload(session)
 					end
 				end)
 			end
@@ -162,11 +140,9 @@ function M.register(session, opts)
 			end
 
 			if has_review_items and content_buffer(session, buf) then
-				add(items, "ui.show_details", "Open comment or note", function()
+				add(items, "ui.show_details", "Open comment", function()
 					with_item(session, buf, function()
 						comments.open_at_cursor(session, buf)
-					end, function()
-						notes.open_at_cursor(session, buf)
 					end)
 				end)
 				if session.review then
@@ -214,18 +190,11 @@ function M.register(session, opts)
 						comments.jump(session, buf, 1)
 					end)
 				end
-				add(items, "ui.delete", "Delete comment or note", function()
+				add(items, "ui.delete", "Delete comment", function()
 					with_item(session, buf, function()
 						comments.delete_at_cursor(session, buf)
-					end, function()
-						notes.delete_at_cursor(session, buf)
 					end)
 				end)
-				if session.note_target and session.current and buf == session.current.right.buf then
-					add(items, "pulls.review.diff.add_note", "Add local note", function()
-						notes.add_at_cursor(session, buf)
-					end)
-				end
 				if session.review then
 					add(items, "ui.toggle_fold", "Toggle review thread", function()
 						if not comments.toggle_at_cursor(session, buf) and vim.fn.foldlevel(".") > 0 then
@@ -236,14 +205,6 @@ function M.register(session, opts)
 						if not comments.toggle_all(session) and vim.fn.foldlevel(".") > 0 then
 							vim.cmd.normal({ args = { "zA" }, bang = true })
 						end
-					end)
-				end
-				if session.note_target then
-					add(items, "pulls.review.diff.previous_note", "Previous note", function()
-						notes.jump(session, -1)
-					end)
-					add(items, "pulls.review.diff.next_note", "Next note", function()
-						notes.jump(session, 1)
 					end)
 				end
 			end

@@ -86,36 +86,11 @@ Or press the configured `pulls.open_diff` key (`gd` by default) on a pull reques
 - Submit pending comments with an optional review summary, approve, or request changes.
 - Merge pull requests from Atlas using the methods supported by GitLab.
 - Review GitLab tasks alongside their comments.
-- Browse comments, tasks, and local notes.
+- Browse comments and tasks.
 - Mark files reviewed in AtlasDiff.
 
 > [!NOTE]
-> **Alternative viewers:** [CodeDiff](https://github.com/esmuellert/codediff.nvim), [Diffview](https://github.com/sindrets/diffview.nvim), and [Diffview-plus](https://github.com/dlyongemallo/diffview-plus.nvim) can display Atlas comment, task, and local-note overlays, but their integrations rely on plugin internals and may break after upstream changes.
-
-#### Local notes
-
-<p align="center">
-  <img width="85%" alt="Local review notes" src="https://github.com/user-attachments/assets/8652d731-b57f-45f8-896e-d62d0ec8d7f4">
-</p>
-
-Local notes let you leave something on a diff without posting it to the pull request. Each note is attached to a file and line and can be an `ISSUE`, `SUGGESTION`, `NOTE`, or `PRAISE`. Diff views mark notes as outdated when their saved line changes.
-
-<details>
-<summary><strong>Script and integration</strong></summary>
-
-For scripts, use `bin/atlas-notes`. Notes added there appear in AtlasDiff, CodeDiff, Diffview, Diffview-plus, and `:Atlas notes`:
-
-```sh
-./bin/atlas-notes add \
-  --target https://gitlab.com/owner/repository/-/merge_requests/123 \
-  --file lua/review_queue.lua --line 19 \
-  --context "local item = queue[index]" \
-  --type suggestion --body "Should this be a bool?"
-```
-
-My dotfiles include a [Pi extension that wraps this script](https://github.com/emrearmagan/dotfiles/blob/main/config/pi/extensions/atlas-notes.ts) so review agents can list and add notes.
-
-</details>
+> **Alternative viewers:** [CodeDiff](https://github.com/esmuellert/codediff.nvim), [Diffview](https://github.com/sindrets/diffview.nvim), and [Diffview-plus](https://github.com/dlyongemallo/diffview-plus.nvim) can display Atlas comment and task overlays, but their integrations rely on plugin internals and may break after upstream changes.
 
 ### View Pipelines
 
@@ -218,17 +193,6 @@ output:run(cmd, on_exit, { cwd = "/repo" })
 
 Open GitLab notifications inside Atlas, refresh them, open the related item, and mark notifications as read or done without leaving Neovim.
 
-### Bookmarks
-
-<p align="center">
-  <img width="85%" alt="Bookmarks" src="https://github.com/user-attachments/assets/f008d6af-dfc6-4b65-8af1-94cd6ce9fc99">
-</p>
-
-Turn frequently used GitLab searches into named shortcuts. Use bookmarks for review queues, recurring project views, and the searches you return to throughout the day.
-
-Bookmarks appear alongside your configured views, keeping important queries one action away.
-Star a pull request or issue with `*` to keep it at the top of lists. Starred items are saved locally and appear in the first bookmark entry.
-
 ### Statusline
 
 Atlas comes with its own statusline for key hints, loading progress, and notifications. Keeping it enabled is recommended because most interaction and feedback goes through it.
@@ -257,8 +221,8 @@ At some point there will probably an extension for lualine.
     statusline = true,
     -- "auto", "default", "snacks", or "fzf-lua".
     picker = "auto",
-    -- Make the main Atlas dashboard a listed buffer.
-    listed_buffer = false,
+    -- Make the main Atlas dashboard a listed buffer (default: true).
+    listed_buffer = true,
   },
 
   providers = {
@@ -291,8 +255,7 @@ At some point there will probably an extension for lualine.
 - `:Atlas create <pr|issue>` - Create a pull request or issue
 - `:Atlas search [provider]` - Search configured pull-request and issue providers
 - `:Atlas open <target|.>` - Open a GitLab URL, a PR/issue number in the current repository, or the current repository
-- `:Atlas notes [target]` - Inspect local review notes
-- `:Atlas clear [cache|notes|stars]` - Clear all Atlas data or only cached data and cloned repositories, local review notes, or starred items
+- `:Atlas clear [cache]` - Clear all Atlas data or only cached data and cloned repositories
 - `:Atlas logs` - Toggle Atlas logs
 - `:AtlasDiff <base>...<head>` - Open a Git range in native AtlasDiff directly
 - `:AtlasDiff <pull-request-url>` - Open a pull request in native AtlasDiff directly
@@ -397,15 +360,6 @@ pulls = {
         group = "gitlab-org",
       },
     },
-
-    bookmarks = {
-      key   = "S",      -- default
-      label = "Search", -- default
-      items = {
-        ["Reviewing"]    = { scope = "all", extra_params = { reviewer_id = "Me" } },
-        ["Created by me"] = { scope = "all", author_username = "me" },
-      },
-    },
   },
 },
 ```
@@ -461,16 +415,6 @@ issues = {
         extra_params = { ["not[labels]"] = "wontfix" },
       },
     },
-
-    bookmarks = {
-      key   = "S",      -- default
-      label = "Search", -- default
-      items = {
-        ["No labels"] = { scope = "all", state = "opened",
-                          extra_params = { ["not[labels]"] = "*" } },
-        ["Closed"]    = { scope = "created_by_me", state = "closed" },
-      },
-    },
   },
 },
 ```
@@ -518,7 +462,6 @@ keymaps = {
       mark_done = "d",
     },
     toggle_subscription = "gS",
-    toggle_star = "*",
     refresh = "r",
     refresh_view = "R",
     open_actions = "A",
@@ -579,13 +522,10 @@ keymaps = {
         toggle_comments = "gH",
         next_comment = "]c",
         previous_comment = "[c",
-        next_note = "]n",
-        previous_note = "[n",
         add_comment = "c",
         submit_comment = "C",
         add_suggestion = "s",
         submit_suggestion = "S",
-        add_note = "<leader>n",
         toggle_resolved = "x",
       },
     },

@@ -51,7 +51,6 @@
 ---@field provider string
 ---@field workspace string
 ---@field repo string
----@field is_starred boolean|nil
 ---@field reviewers PullsReviewer[]|nil
 
 ---@class PullRequestDetails

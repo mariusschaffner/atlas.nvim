@@ -5,7 +5,6 @@ local config = require("atlas.config")
 local keymaps = require("atlas.core.keymaps")
 local notify = require("atlas.core.notify")
 local hints = require("atlas.pulls.diff.ui.hints")
-local notes = require("atlas.pulls.diff.notes")
 local position = require("atlas.pulls.diff.position")
 local review_keymaps = require("atlas.pulls.diff.keymaps")
 local review_panel = require("atlas.pulls.diff.ui.review_panel")
@@ -29,7 +28,7 @@ local FILE_STATUSES = {
 ---@field sync_scheduled boolean
 ---@field suspended boolean
 ---@field auto_open_panel boolean
----@field pending_jump { path: string, comment: PullsComment|nil, note: AtlasNote|nil, focus_diff: boolean }|nil
+---@field pending_jump { path: string, comment: PullsComment|nil, focus_diff: boolean }|nil
 ---@field additions integer
 ---@field deletions integer
 ---@field closed boolean
@@ -145,15 +144,7 @@ local function finish_pending_jump(session)
 	end
 	state.pending_jump = nil
 
-	---@type AtlasDiffSide|nil
-	local side = pending.note and "RIGHT" or nil
-	local line = pending.note and pending.note.line or nil
-	if pending.comment then
-		side, line = position.comment(document, pending.comment)
-	elseif document.binary or document.status == "deleted" then
-		session_api.notify(session, "info", "This note's file is no longer in the diff")
-		return
-	end
+	local side, line = position.comment(document, pending.comment)
 
 	local target = side == "LEFT" and current.left or current.right
 	if
@@ -280,7 +271,6 @@ local function suspend(session)
 	end
 	if session.current then
 		ui_comments.clear(session.current)
-		notes.clear(session.current)
 		hints.clear(session.current)
 		session.current = nil
 	end
@@ -396,15 +386,13 @@ local function focus_item(session, item, focus_diff)
 		return
 	end
 	local pending = { focus_diff = focus_diff }
-	local note = item.kind == "note" and item.note or nil
 	local comment = item.comment and (item.comment.file or item.comment.inline) and item.comment or nil
-	if not note and not comment then
+	if not comment then
 		session_api.notify(session, "info", "This comment is not attached to the diff")
 		return
 	end
-	local target = comment and (comment.file or comment.inline) or nil
-	local path = relative_path(session.source.root, note and note.file_path or target.path)
-	pending.note = note
+	local target = comment.file or comment.inline
+	local path = relative_path(session.source.root, target.path)
 	pending.comment = comment
 	if path == "" then
 		session_api.notify(session, "info", "This review item's file is no longer in the diff")
@@ -476,8 +464,7 @@ local function attach(session, view, tabpage)
 		group = vim.api.nvim_create_augroup("AtlasDiffview" .. tabpage, { clear = true }),
 		sync_scheduled = false,
 		suspended = false,
-		auto_open_panel = diff_config.show_review_panel == true
-			and (session.review ~= nil or session.note_target ~= nil),
+		auto_open_panel = diff_config.show_review_panel == true and session.review ~= nil,
 		pending_jump = nil,
 		additions = 0,
 		deletions = 0,
@@ -489,7 +476,7 @@ local function attach(session, view, tabpage)
 		reload_view(session)
 	end
 
-	if session.review or session.note_target then
+	if session.review then
 		local panel =
 			session_api.create_review_panel(session, string.format("atlas-diff-diffview://%d/review", tabpage))
 		review_panel.configure(panel)

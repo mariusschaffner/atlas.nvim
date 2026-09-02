@@ -3,7 +3,6 @@ local M = {}
 local notify = require("atlas.core.notify")
 local resolver = require("atlas.core.keymaps")
 local utils = require("atlas.ui.shared.utils")
-local bookmarks = require("atlas.ui.shared.bookmarks")
 local actions = require("atlas.issues.actions")
 local registrations = {}
 
@@ -58,7 +57,7 @@ function M.register(buf, views)
 	local items = {}
 
 	for _, view in ipairs(views) do
-		if view._kind ~= "bookmarks" and view.key ~= nil and view.key ~= "" then
+		if view.key ~= nil and view.key ~= "" then
 			local v = view
 			table.insert(items, {
 				key = v.key,
@@ -70,37 +69,6 @@ function M.register(buf, views)
 			})
 		end
 	end
-
-	local bookmark_key = bookmarks.key("issues", provider.id)
-	if bookmark_key then
-		table.insert(items, {
-			key = bookmark_key,
-			desc = "Switch to bookmarks",
-			hidden = true,
-			callback = function()
-				for _, view in ipairs(state.views) do
-					if view._kind == "bookmarks" then
-						controller.switch_view(view)
-						return
-					end
-				end
-			end,
-		})
-	end
-
-	utils.insert_if(
-		items,
-		item("ui.select", {
-			desc = "Run bookmark",
-			callback = function()
-				local navigation = require("atlas.ui.navigation")
-				local node = navigation.current_item()
-				if type(node) == "table" and node.kind == "bookmark" then
-					controller.run_bookmark(node.name, node.value)
-				end
-			end,
-		})
-	)
 
 	if capabilities.actions then
 		utils.insert_if(
@@ -151,17 +119,6 @@ function M.register(buf, views)
 			opts = { nowait = true },
 			callback = function()
 				controller.show_issue_details(buf)
-			end,
-		})
-	)
-
-	utils.insert_if(
-		items,
-		item("ui.toggle_star", {
-			desc = "Star or unstar issue",
-			index = 5,
-			callback = function()
-				controller.toggle_issue_star(selected_issue())
 			end,
 		})
 	)

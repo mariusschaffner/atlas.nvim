@@ -10,18 +10,12 @@
 ---@field name string
 ---@field key string|nil
 ---@field layout "compact"|"grouped"|"plain"|nil
----@field _kind "bookmarks"|"starred"|nil
----@field _bookmarks table<string, any>|nil
----@field _starred { domain: "pulls", provider: string }|nil
 
 ---@class AtlasIssuesViewConfig
 ---@field name string
 ---@field key string|nil
 ---@field layout "plain"|"compact"|nil
 ---@field search string|nil
----@field _kind "bookmarks"|"starred"|nil
----@field _bookmarks table<string, any>|nil
----@field _starred { domain: "issues", provider: string }|nil
 
 ---@class AtlasPullsRepoConfig
 ---@field settings table<string, AtlasPullsRepoSettings>|nil
@@ -51,7 +45,7 @@
 ---@field compact boolean|nil
 ---@field compact_context_lines integer|nil
 ---@field show_review_panel boolean|nil
----@field comment_display "virtual_lines"|"virtual_text"|nil Initial comment and note display mode.
+---@field comment_display "virtual_lines"|"virtual_text"|nil Initial comment display mode.
 ---@field explorer AtlasPullsDiffExplorerConfig|nil
 ---@field review_panel AtlasPullsDiffReviewPanelConfig|nil
 
@@ -84,7 +78,6 @@
 ---@field git_transport AtlasGitTransport|nil Git transport for Atlas-managed repositories (default: "https").
 ---@field repo_config AtlasPullsRepoConfig|nil
 ---@field diff AtlasPullsDiffConfig|nil
----@field delete_notes boolean|nil
 ---@field default_merge_method "merge"|"squash"|nil
 ---@field default_delete_branch boolean|nil
 ---@field comment_templates AtlasPullsCommentTemplatesConfig|nil
@@ -113,7 +106,7 @@
 ---@class AtlasUIConfig
 ---@field statusline boolean|nil Show the Atlas statusline (default: true)
 ---@field picker AtlasPickerName|nil
----@field listed_buffer boolean|nil Make the main Atlas dashboard a listed buffer (default: false)
+---@field listed_buffer boolean|nil Make the main Atlas dashboard a listed buffer (default: true)
 
 ---@class AtlasConfig
 ---@field ui AtlasUIConfig|nil
@@ -131,11 +124,10 @@ M.options = {
 	ui = {
 		statusline = true,
 		picker = "auto",
-		listed_buffer = false,
+		listed_buffer = true,
 	},
 	pulls = {
 		git_transport = "https",
-		delete_notes = false,
 		default_merge_method = "merge",
 		default_delete_branch = false,
 		comment_templates = {
@@ -202,7 +194,6 @@ M.options = {
 				mark_done = "d",
 			},
 			toggle_subscription = "gS",
-			toggle_star = "*",
 			refresh = "r",
 			refresh_view = "R",
 			open_actions = "A",
@@ -255,13 +246,10 @@ M.options = {
 					toggle_comments = "gH",
 					next_comment = "]c",
 					previous_comment = "[c",
-					next_note = "]n",
-					previous_note = "[n",
 					add_comment = "c",
 					submit_comment = "C",
 					add_suggestion = "s",
 					submit_suggestion = "S",
-					add_note = "<leader>n",
 					toggle_resolved = "x",
 				},
 			},
@@ -320,7 +308,7 @@ local function migrate_legacy(opts)
 					section[id] = domain_config
 
 					for key, value in pairs(legacy_config) do
-						local domain_scoped = key == "views" or key == "bookmarks"
+						local domain_scoped = key == "views"
 						if domain_scoped then
 							if domain_config[key] == nil then
 								domain_config[key] = value

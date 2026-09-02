@@ -3,7 +3,6 @@ local M = {}
 local dashboard_host = require("atlas.ui.dashboard")
 local ui_state = require("atlas.ui.state")
 local statusline = require("atlas.ui.statusline")
-local starred = require("atlas.core.starred")
 local ns = vim.api.nvim_create_namespace("atlas.ui")
 
 ---@param buf integer
@@ -113,7 +112,6 @@ function M.init(provider, opts)
 	state.current_view = nil
 	state.reloading_pr_keys = {}
 	state.reload_spinner_frame = "⠋"
-	state.starred_items = starred.list("pulls", provider.id) or {}
 
 	local notifications = require("atlas.ui.notifications")
 	notifications.set_provider(provider)
@@ -124,8 +122,7 @@ function M.init(provider, opts)
 		ui.setup()
 	end
 
-	state.views =
-		require("atlas.ui.shared.bookmarks").views(provider.id, "pulls", state.provider_views, state.starred_items)
+	state.views = state.provider_views
 	state.active_view = (opts and opts.initial_view) or state.views[1]
 
 	statusline.clear_items()

@@ -8,7 +8,6 @@ local providers = require("atlas.pulls.ui.dashboard.providers")
 local state = require("atlas.pulls.state")
 local statusline = require("atlas.ui.statusline")
 local table_tree = require("atlas.ui.components.table_tree")
-local bookmarks = require("atlas.ui.shared.bookmarks")
 local ui_utils = require("atlas.ui.utils")
 local utils = require("atlas.ui.shared.utils")
 
@@ -16,7 +15,6 @@ local PR_ICON, PR_ICON_HL = icons.pulls("pr")
 local MERGED_PR_ICON, MERGED_PR_ICON_HL = icons.pulls("merged_pr")
 local DECLINED_PR_ICON, DECLINED_PR_ICON_HL = icons.pulls("declined_pr")
 local REPO_ICON = icons.pulls("repo")
-local STAR_ICON, STAR_ICON_HL = icons.general("star")
 
 local PR_STATE_ICON = {
 	open = { PR_ICON, PR_ICON_HL },
@@ -40,16 +38,6 @@ local function displayed_pr_icon(pr)
 	end
 	local icon = pr_icon(pr)
 	return icon
-end
-
----@param pulls PullRequest[]
----@return PullRequest[]
-local function starred_first(pulls)
-	local starred, rest = {}, {}
-	for _, pr in ipairs(pulls) do
-		table.insert(pr.is_starred and starred or rest, pr)
-	end
-	return vim.list_extend(starred, rest)
 end
 
 ---@param pulls PullRequest[]
@@ -118,9 +106,6 @@ local function cell_hl(row, col, ctx, display)
 	if provider_hl ~= nil then
 		return provider_hl
 	end
-	if col.key == "repo_pr" and ctx.text:find(STAR_ICON, 1, true) == 1 then
-		return { { start_col = 0, end_col = #STAR_ICON, hl_group = STAR_ICON_HL } }
-	end
 	if col.key == "name" and row.kind == "repo" then
 		return { { start_col = 0, end_col = #ctx.text, hl_group = "AtlasSectionHeader" } }
 	end
@@ -128,13 +113,6 @@ local function cell_hl(row, col, ctx, display)
 		local icon_hl = row._pr_reloading and "AtlasTextMuted" or (row._pr_icon_hl or "AtlasPROpen")
 		local icon = row._pr_icon_str or PR_ICON
 		local spans = {}
-		if ctx.text:find(icon .. " " .. STAR_ICON .. " ", 1, true) == 1 then
-			table.insert(spans, {
-				start_col = #icon + 1,
-				end_col = #icon + 1 + #STAR_ICON,
-				hl_group = STAR_ICON_HL,
-			})
-		end
 		local start = ctx.text:find(icon, 1, true)
 		if start ~= nil then
 			start = start - 1
@@ -189,11 +167,7 @@ local function compact_rows(pulls, display)
 			_pr_reloading = state.is_pr_reloading(pr.repo_full_name, pr.id),
 			_pr_icon_str = icon,
 			_pr_icon_hl = icon_hl,
-			repo_pr = (pr.is_starred and STAR_ICON .. " " or "")
-				.. display.reference
-				.. tostring(pr.id or "")
-				.. " "
-				.. tostring(pr.title or ""),
+			repo_pr = display.reference .. tostring(pr.id or "") .. " " .. tostring(pr.title or ""),
 			conversation = tostring(pr.comments_count or 0),
 			author = string.format("%s %s", icons.general("user"), utils.shorten_name(author, 20)),
 			author_hl = author,
@@ -254,9 +228,7 @@ local function list_rows(pulls, layout, display)
 				_pr_reloading = state.is_pr_reloading(pr.repo_full_name, pr.id),
 				_pr_icon_str = icon,
 				_pr_icon_hl = icon_hl,
-				name = icon .. " " .. (pr.is_starred and STAR_ICON .. " " or "") .. display.reference .. tostring(
-					pr.id or ""
-				) .. " " .. tostring(pr.title or ""),
+				name = icon .. " " .. display.reference .. tostring(pr.id or "") .. " " .. tostring(pr.title or ""),
 				conversation = tostring(pr.comments_count or 0),
 				author = string.format("%s %s", icons.general("user"), utils.shorten_name(author, 20)),
 				author_hl = author,
@@ -324,10 +296,7 @@ end
 ---@param spans table[]
 local function append_search_text(lines, spans)
 	local view = state.active_view
-	if view ~= nil and view._kind == "bookmarks" then
-		view = state.current_view
-	end
-	if view == nil or view._kind ~= nil or state.provider == nil then
+	if view == nil or state.provider == nil then
 		return
 	end
 	local states = {}
@@ -411,7 +380,7 @@ end
 ---@return string[], table[], table<integer, table>
 function M.render(opts)
 	local lines, spans, line_map = {}, {}, {}
-	local pulls = starred_first(state.pulls)
+	local pulls = state.pulls
 	local display = providers.get(state.provider and state.provider.id)
 	local loading = string.format("%s Loading...", state.reload_spinner_frame)
 	statusline.set_items(statusline_items(pulls))
@@ -419,41 +388,6 @@ function M.render(opts)
 	table.insert(lines, "")
 	render_header(lines, spans, opts.width)
 	table.insert(lines, "")
-
-	local active = state.active_view
-	if active ~= nil and active._kind == "bookmarks" then
-		append_search_text(lines, spans)
-		bookmarks.render(
-			lines,
-			spans,
-			line_map,
-			active._bookmarks or {},
-			opts.width,
-			active._starred,
-			state.starred_items
-		)
-		if state.error then
-			local text = "Error: " .. tostring(state.error):gsub("[\r\n]+", " | ")
-			table.insert(lines, "")
-			utils.append_block(lines, spans, {
-				lines = { text },
-				highlights = { { line = 0, start_col = 0, end_col = #text, hl_group = "AtlasLogError" } },
-			})
-		elseif state.is_loading then
-			table.insert(lines, "")
-			append_centered_loading(lines, loading, opts.width, opts.height)
-		elseif #pulls > 0 then
-			table.insert(lines, "")
-			local layout = state.current_view and state.current_view.layout or "compact"
-			local body_lines, body_spans, body_map = render_table(pulls, layout, opts.width, display)
-			local base = #lines
-			utils.append_block(lines, spans, { lines = body_lines, highlights = body_spans })
-			for lnum, item in pairs(body_map) do
-				line_map[base + lnum] = item
-			end
-		end
-		return lines, spans, line_map
-	end
 
 	append_search_text(lines, spans)
 	if state.error then

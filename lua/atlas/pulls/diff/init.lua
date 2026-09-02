@@ -6,7 +6,6 @@ local git = require("atlas.core.git")
 local keymaps = require("atlas.core.keymaps")
 local loading = require("atlas.pulls.diff.ui.loading")
 local logger = require("atlas.core.logger")
-local notes = require("atlas.pulls.diff.notes")
 local notify = require("atlas.core.notify")
 local providers = require("atlas.providers")
 local request_scope = require("atlas.core.requests")
@@ -154,7 +153,6 @@ local function make_session(session, viewer_id, source, review, commits)
 	session.help_key = (keymaps.resolve(help_action) or {})[1]
 	session.statusline = statusline.new({ help_key = session.help_key })
 	session.closed = false
-	session.note_target, session.notes = notes.load(review)
 	return session
 end
 

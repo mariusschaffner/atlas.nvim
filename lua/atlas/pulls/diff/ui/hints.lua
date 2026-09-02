@@ -5,13 +5,12 @@ local utils = require("atlas.ui.shared.utils")
 
 local namespace = vim.api.nvim_create_namespace("atlas_diff_hints")
 local comment_icon = icons.general("comment")
-local note_icon, note_icon_hl = icons.general("pin")
 local max_text_width = 48
 
 ---@class AtlasDiffHint
 ---@field buf integer
 ---@field line integer
----@field kind "comment"|"note"
+---@field kind "comment"
 ---@field text string
 
 ---@param items AtlasDiffHint[]
@@ -26,11 +25,7 @@ function M.chunks(items)
 		else
 			chunks[#chunks + 1] = { "   ", "AtlasTextMuted" }
 		end
-		if item.kind == "comment" then
-			chunks[#chunks + 1] = { comment_icon .. " ", "AtlasLogInfo" }
-		else
-			chunks[#chunks + 1] = { note_icon .. " ", note_icon_hl }
-		end
+		chunks[#chunks + 1] = { comment_icon .. " ", "AtlasLogInfo" }
 		chunks[#chunks + 1] = { text, "AtlasTextMuted" }
 	end
 	return chunks

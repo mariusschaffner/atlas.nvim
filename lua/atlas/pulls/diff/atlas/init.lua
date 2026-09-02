@@ -9,7 +9,6 @@ local git = require("atlas.pulls.diff.atlas.git")
 local keymaps = require("atlas.pulls.diff.atlas.keymaps")
 local logger = require("atlas.core.logger")
 local notify = require("atlas.core.notify")
-local notes = require("atlas.pulls.diff.notes")
 local position = require("atlas.pulls.diff.position")
 local pulls_highlights = require("atlas.pulls.ui.highlights")
 local review_panel = require("atlas.pulls.diff.ui.review_panel")
@@ -157,26 +156,15 @@ end
 ---@param focus_diff boolean
 local function focus_item(session, item, focus_diff)
 	local comment = item.comment
-	local note = item.note
 	local comment_target = comment and (comment.file or comment.inline) or nil
-	local path = note and note.file_path or (comment_target and (comment_target.path or comment_target.old_path))
+	local path = comment_target and (comment_target.path or comment_target.old_path)
 	local index = path and file_index(session, path) or nil
 	if not index then
 		session_api.notify(session, "info", "This review item's file is no longer in the diff")
 		return
 	end
 	with_file(session, index, function(document)
-		---@type AtlasDiffSide|nil
-		local side = note and "RIGHT" or nil
-		local line = note and note.line or nil
-		if note then
-			if document.binary or document.status == "deleted" then
-				session_api.notify(session, "info", "This note's file is no longer in the diff")
-				return
-			end
-		else
-			side, line = position.comment(document, comment)
-		end
+		local side, line = position.comment(document, comment)
 		if not side or not line then
 			session_api.notify(session, "info", "This review item no longer has a diff position")
 			return
@@ -378,7 +366,6 @@ local function register_keymaps(session)
 		end,
 		refresh_review = function()
 			review.reload(session)
-			notes.reload(session)
 		end,
 		toggle_layout = function()
 			local current, err = view.toggle_layout(session)
@@ -577,7 +564,7 @@ function M.open(session, loading_view, on_done)
 				end,
 			})
 			local panel
-			if session.review or session.note_target then
+			if session.review then
 				panel =
 					session_api.create_review_panel(session, string.format("atlas-diff://%d/review", session.tabpage))
 				review_panel.configure(panel)

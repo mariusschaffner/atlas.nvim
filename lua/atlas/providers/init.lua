@@ -27,8 +27,6 @@ local url = require("atlas.providers.url")
 ---@class AtlasProviderDomain
 ---@field module string
 ---@field icon AtlasIconStyle|nil
----@field bookmark_key string|nil
----@field bookmark_label string|nil
 
 ---@class AtlasProvider
 ---@field id AtlasProviderId
@@ -123,12 +121,10 @@ add({
 		pulls = {
 			module = "atlas.pulls.providers.gitlab",
 			icon = { icon = "", hl_group = "AtlasGitLabTheme" },
-			bookmark_key = "S",
 		},
 		issues = {
 			module = "atlas.issues.providers.gitlab",
 			icon = { icon = "", hl_group = "AtlasGLIssuesTheme" },
-			bookmark_key = "S",
 		},
 	},
 })

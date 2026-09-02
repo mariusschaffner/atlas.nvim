@@ -214,10 +214,6 @@ local function reveal_pending_selection(session)
 		return
 	end
 	state.pending_selection = nil
-	if pending.note and (document.binary or document.status == "deleted") then
-		notify(session, "info", "This note's file is no longer in the diff")
-		return
-	end
 	if pending.comment then
 		pending.side, pending.line = position.comment(document, pending.comment)
 	end
@@ -264,17 +260,15 @@ local function focus_item(session, item, focus_diff)
 	if state.closed or not session.current then
 		return
 	end
-	local note = item.kind == "note" and item.note or nil
 	local comment = item.comment
 	local target = comment and (comment.file or comment.inline) or nil
-	if not note and not target then
+	if not target then
 		notify(session, "info", "This comment is not attached to the diff")
 		return
 	end
-	local path = note and note.file_path or target.path
-	local side = note and "RIGHT" or nil
-	local line = note and note.line or nil
-	if comment and comment.inline then
+	local path = target.path
+	local side, line
+	if comment.inline then
 		side, line = position.location(comment.inline)
 	end
 	local file = find_review_file(session, path)
@@ -282,7 +276,7 @@ local function focus_item(session, item, focus_diff)
 		notify(session, "info", "This review item's file is no longer in the diff")
 		return
 	end
-	if (not comment or not comment.file) and (not side or type(line) ~= "number") then
+	if not comment.file and (not side or type(line) ~= "number") then
 		notify(session, "info", "This review item no longer has a diff position")
 		return
 	end
@@ -290,7 +284,6 @@ local function focus_item(session, item, focus_diff)
 		path = relative_path(session.source.root, path),
 		side = side,
 		line = line,
-		note = item.kind == "note",
 		comment = comment,
 		focus_diff = focus_diff,
 	}
@@ -560,8 +553,7 @@ local function attach(session, lifecycle, tabpage)
 		pending_selection = nil,
 		group = vim.api.nvim_create_augroup("AtlasCodeDiff" .. session.id, { clear = true }),
 		generation = 0,
-		auto_open_panel = diff_config.show_review_panel == true
-			and (session.review ~= nil or session.note_target ~= nil),
+		auto_open_panel = diff_config.show_review_panel == true and session.review ~= nil,
 		closed = false,
 		reloading = false,
 	}
@@ -586,7 +578,7 @@ local function attach(session, lifecycle, tabpage)
 	})
 
 	local panel
-	if session.review or session.note_target then
+	if session.review then
 		panel = session_api.create_review_panel(session, string.format("atlas-diff-codediff://%d/review", tabpage))
 		review_panel.configure(panel)
 		review_panel.register_keymaps(panel)

@@ -113,9 +113,7 @@ function M.init(provider, opts)
 		ui.setup()
 	end
 
-	state.starred_items = require("atlas.core.starred").list("issues", provider.id) or {}
-	state.views =
-		require("atlas.ui.shared.bookmarks").views(provider.id, "issues", state.provider_views, state.starred_items)
+	state.views = state.provider_views
 	state.active_view = (opts and opts.initial_view) or state.views[1]
 
 	statusline.clear_items()

@@ -17,7 +17,6 @@ local STATUS_MARKERS = {
 }
 
 local comment_icon = icons.general("comment")
-local note_icon, note_icon_hl = icons.general("pin")
 local folder_closed_icon, folder_closed_icon_hl = icons.general("folder_closed")
 local folder_open_icon, folder_open_icon_hl = icons.general("folder_open")
 
@@ -320,7 +319,7 @@ local function write(session, lines, highlights, headers, first_header)
 end
 
 ---@param session AtlasDiffSession
----@param annotated_paths? table<string, { comments: boolean, notes: boolean }>
+---@param annotated_paths? table<string, { comments: boolean }>
 function M.render(session, annotated_paths)
 	local buf = session.viewer_state.panel.buf
 	if not vim.api.nvim_buf_is_valid(buf) then
@@ -360,8 +359,6 @@ function M.render(session, annotated_paths)
 		local annotation = annotated_paths[file.path]
 		local old_annotation = file.old_path and annotated_paths[file.old_path]
 		local has_comments = (annotation and annotation.comments) or (old_annotation and old_annotation.comments)
-		local has_notes = file.status ~= "deleted"
-			and ((annotation and annotation.notes) or (old_annotation and old_annotation.notes))
 		local devicon, devicon_hl = web_icon(basename(file.path))
 		local status_part = { text = status, hl_group = status_highlight }
 		local suffix_parts = stat_parts(file)
@@ -375,9 +372,6 @@ function M.render(session, annotated_paths)
 		local prefix_parts = {}
 		if has_comments then
 			table.insert(prefix_parts, { text = comment_icon, hl_group = "AtlasLogInfo" })
-		end
-		if has_notes then
-			table.insert(prefix_parts, { text = note_icon, hl_group = note_icon_hl })
 		end
 		if devicon then
 			table.insert(prefix_parts, { text = devicon, hl_group = devicon_hl or "AtlasTextMuted" })

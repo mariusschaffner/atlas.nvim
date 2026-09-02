@@ -3,7 +3,6 @@ local M = {}
 local notify = require("atlas.core.notify")
 local resolver = require("atlas.core.keymaps")
 local utils = require("atlas.ui.shared.utils")
-local bookmarks = require("atlas.ui.shared.bookmarks")
 local actions = require("atlas.pulls.actions")
 local registrations = {}
 
@@ -67,7 +66,7 @@ function M.register(buf, views)
 	local items = {}
 
 	for _, view in ipairs(views) do
-		if view._kind ~= "bookmarks" and view.key ~= nil and view.key ~= "" then
+		if view.key ~= nil and view.key ~= "" then
 			local v = view
 			table.insert(items, {
 				key = v.key,
@@ -80,37 +79,6 @@ function M.register(buf, views)
 			})
 		end
 	end
-
-	local bookmark_key = state.provider and bookmarks.key("pulls", state.provider.id)
-	if bookmark_key then
-		table.insert(items, {
-			key = bookmark_key,
-			desc = "Switch to bookmarks",
-			hidden = true,
-			callback = function()
-				for _, view in ipairs(state.views) do
-					if view._kind == "bookmarks" then
-						require("atlas.pulls.ui.dashboard.controller").switch_view(view)
-						return
-					end
-				end
-			end,
-		})
-	end
-
-	utils.insert_if(
-		items,
-		item("ui.select", {
-			desc = "Run bookmark",
-			callback = function()
-				local navigation = require("atlas.ui.navigation")
-				local node = navigation.current_item()
-				if type(node) == "table" and node.kind == "bookmark" then
-					require("atlas.pulls.ui.dashboard.controller").run_bookmark(node.name, node.value)
-				end
-			end,
-		})
-	)
 
 	local STATUS_TOGGLES = {
 		{ status = "OPEN", action_id = "pulls.filters.open" },
@@ -196,21 +164,6 @@ function M.register(buf, views)
 			opts = { nowait = true },
 			callback = function()
 				require("atlas.pulls.ui.dashboard.controller").show_pr_details(buf)
-			end,
-		})
-	)
-
-	utils.insert_if(
-		items,
-		item("ui.toggle_star", {
-			desc = "Star or unstar PR",
-			callback = function()
-				local pr, repo = selected_pr()
-				if pr == nil or repo == nil then
-					notify.warn("No PR selected")
-					return
-				end
-				require("atlas.pulls.ui.dashboard.controller").toggle_star(pr, repo)
 			end,
 		})
 	)

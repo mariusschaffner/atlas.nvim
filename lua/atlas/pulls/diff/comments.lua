@@ -107,20 +107,16 @@ local function visible_threads(session, context, path, side)
 end
 
 ---@param session AtlasDiffSession
----@return table<string, { comments: boolean, notes: boolean }>
+---@return table<string, { comments: boolean }>
 function M.annotated_paths(session)
 	local paths = {}
 	local current_review = session.review
 	for _, comment in ipairs(current_review and current_review.data.comments or {}) do
 		local target = comment.file or comment.inline
 		if target then
-			paths[target.path] = paths[target.path] or { comments = false, notes = false }
+			paths[target.path] = paths[target.path] or { comments = false }
 			paths[target.path].comments = true
 		end
-	end
-	for _, note in ipairs(session.notes) do
-		paths[note.file_path] = paths[note.file_path] or { comments = false, notes = false }
-		paths[note.file_path].notes = true
 	end
 	return paths
 end

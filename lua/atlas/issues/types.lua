@@ -30,7 +30,6 @@
 ---@field updated_at string|nil
 ---@field closed_at string|nil
 ---@field comment_count integer|nil
----@field is_starred boolean|nil
 ---@field is_subscribed boolean|nil
 
 ---@class IssueDetails

@@ -8,9 +8,7 @@ local table_tree = require("atlas.ui.components.table_tree")
 local utils = require("atlas.ui.shared.utils")
 local statusline = require("atlas.ui.statusline")
 local icons = require("atlas.ui.shared.icons")
-local bookmarks = require("atlas.ui.shared.bookmarks")
 local providers = require("atlas.issues.ui.dashboard.providers")
-local STAR_ICON, STAR_ICON_HL = icons.general("star")
 
 ---@param view IssuesViewConfig|nil
 ---@return string
@@ -31,7 +29,7 @@ end
 ---@param view IssuesViewConfig|nil
 ---@return string
 local function search_text(view)
-	if view == nil or view._kind ~= nil or state.provider == nil then
+	if view == nil or state.provider == nil then
 		return ""
 	end
 	return state.provider.capabilities.core.search_query(view, {})
@@ -59,9 +57,6 @@ local function issue_to_row(issue, is_child, layout)
 	local display = providers.get(state.provider and state.provider.id)
 	local row_data = display.values(issue, is_child == true, layout)
 
-	if issue.is_starred then
-		row_data.name = STAR_ICON .. " " .. row_data.name
-	end
 	row_data._item = { kind = "issue", key = issue.key, _issue = issue }
 	row_data._issue = issue
 	row_data.children = row_data.children or {}
@@ -90,12 +85,7 @@ local function cell_hl(row, col, ctx)
 		return { { start_col = 0, end_col = #ctx.padded, hl_group = row._fold_icon_hl } }
 	end
 	local display = providers.get(state.provider and state.provider.id)
-	local spans = display.highlights and display.highlights(row, col, ctx) or nil
-	if col.key == "name" and row._issue and row._issue.is_starred then
-		spans = spans or {}
-		table.insert(spans, 1, { start_col = 0, end_col = #STAR_ICON, hl_group = STAR_ICON_HL })
-	end
-	return spans
+	return display.highlights and display.highlights(row, col, ctx) or nil
 end
 
 ---@param issue_groups IssuesGroup[]
@@ -353,55 +343,7 @@ function M.render(opts)
 
 	table.insert(lines, "")
 
-	if active and active._kind == "bookmarks" then
-		append_search_text(lines, spans, search_text(state.current_view))
-		bookmarks.render(
-			lines,
-			spans,
-			line_map,
-			active._bookmarks or {},
-			opts.width,
-			active._starred,
-			state.starred_items
-		)
-
-		local issues = state.issues
-		local issue_groups = state.issue_tree
-		if state.error then
-			local err_text = "Error: " .. state.error
-			table.insert(lines, "")
-			utils.append_block(lines, spans, {
-				lines = { err_text },
-				highlights = {
-					{ line = 0, start_col = 0, end_col = #err_text, hl_group = "AtlasLogError" },
-				},
-			})
-		elseif state.is_loading then
-			table.insert(lines, "")
-			table.insert(lines, string.format("%s Loading...", state.reload_spinner_frame))
-		else
-			local layout = state.current_view and state.current_view.layout or "plain"
-			local has_rows = #issue_groups > 0
-			if layout == "compact" then
-				has_rows = #issues > 0
-			end
-			if not has_rows then
-				return lines, spans, line_map
-			end
-			table.insert(lines, "")
-			local tbl_lines, tbl_map, tbl_spans
-			if layout == "compact" then
-				tbl_lines, tbl_map, tbl_spans = render_compact_table(opts, issues)
-			else
-				tbl_lines, tbl_map, tbl_spans = render_issue_table(opts, issue_groups)
-			end
-			local table_base = #lines
-			utils.append_block(lines, spans, { lines = tbl_lines, highlights = tbl_spans })
-			for lnum, node in pairs(tbl_map) do
-				line_map[table_base + lnum] = node
-			end
-		end
-	elseif state.error then
+	if state.error then
 		append_search_text(lines, spans, search_text(active))
 		local err_text = "Error: " .. state.error
 		utils.append_block(lines, spans, {

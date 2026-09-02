@@ -10,7 +10,6 @@
 ---@field provider IssuesProvider|nil
 ---@field provider_views IssuesViewConfig[]
 ---@field views IssuesViewConfig[]
----@field starred_items AtlasStarredItem[]
 ---@field reloading_issue_keys table<string, boolean>
 ---@field reload_spinner_frame string
 local M = {
@@ -25,23 +24,9 @@ local M = {
 	provider = nil,
 	provider_views = {},
 	views = {},
-	starred_items = {},
 	reloading_issue_keys = {},
 	reload_spinner_frame = "⠋",
 }
-
----@generic T
----@param items T[]
----@param is_starred fun(item: T): boolean
----@return T[]
-local function starred_first(items, is_starred)
-	local first, rest = {}, {}
-	for _, item in ipairs(items) do
-		table.insert(is_starred(item) and first or rest, item)
-	end
-	vim.list_extend(first, rest)
-	return first
-end
 
 ---@param issues Issue[]
 ---@return IssuesGroup[]
@@ -75,20 +60,8 @@ end
 
 ---@param issues Issue[]
 function M.set_issues(issues)
-	M.issues = starred_first(issues, function(issue)
-		return issue.is_starred == true
-	end)
-	M.issue_tree = starred_first(build_issue_tree(M.issues), function(group)
-		if group.issue.is_starred then
-			return true
-		end
-		for _, child in ipairs(group.children) do
-			if child.is_starred then
-				return true
-			end
-		end
-		return false
-	end)
+	M.issues = issues
+	M.issue_tree = build_issue_tree(M.issues)
 end
 
 ---@param issue_key string

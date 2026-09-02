@@ -18,7 +18,6 @@ local M = {}
 ---@field next_panel_tab? AtlasKeymapValue
 ---@field notifications? AtlasUINotificationKeymaps
 ---@field toggle_subscription? AtlasKeymapValue
----@field toggle_star? AtlasKeymapValue
 ---@field refresh? AtlasKeymapValue
 ---@field refresh_view? AtlasKeymapValue
 ---@field open_actions? AtlasKeymapValue
@@ -66,13 +65,10 @@ local M = {}
 ---@field toggle_comments? AtlasKeymapValue
 ---@field next_comment? AtlasKeymapValue
 ---@field previous_comment? AtlasKeymapValue
----@field next_note? AtlasKeymapValue
----@field previous_note? AtlasKeymapValue
 ---@field add_comment? AtlasKeymapValue
 ---@field submit_comment? AtlasKeymapValue
 ---@field add_suggestion? AtlasKeymapValue
 ---@field submit_suggestion? AtlasKeymapValue
----@field add_note? AtlasKeymapValue
 ---@field toggle_resolved? AtlasKeymapValue
 
 ---@class AtlasPullsReviewKeymaps
@@ -139,7 +135,6 @@ local M = {}
 ---| "ui.notifications.mark_read"
 ---| "ui.notifications.mark_done"
 ---| "ui.toggle_subscription"
----| "ui.toggle_star"
 ---| "ui.refresh"
 ---| "ui.refresh_view"
 ---| "ui.open_actions"
@@ -184,13 +179,10 @@ local M = {}
 ---| "pulls.review.diff.toggle_comments"
 ---| "pulls.review.diff.next_comment"
 ---| "pulls.review.diff.previous_comment"
----| "pulls.review.diff.next_note"
----| "pulls.review.diff.previous_note"
 ---| "pulls.review.diff.add_comment"
 ---| "pulls.review.diff.submit_comment"
 ---| "pulls.review.diff.add_suggestion"
 ---| "pulls.review.diff.submit_suggestion"
----| "pulls.review.diff.add_note"
 ---| "pulls.review.diff.toggle_resolved"
 ---| "pulls.filters.open"
 ---| "pulls.filters.merged"
@@ -254,25 +246,8 @@ function M.resolve(action_id)
 end
 
 ---@param section_path string[]
----@return { key?: string, label?: string, items?: table }|nil
-local function get_bookmarks(section_path)
-	local node = require("atlas.config").options ---@type any
-	for _, key in ipairs(section_path) do
-		if type(node) ~= "table" then
-			return nil
-		end
-		node = node[key]
-	end
-	if type(node) ~= "table" then
-		return nil
-	end
-	return node.bookmarks
-end
-
----@param section_path string[]
----@param default_bookmarks_key string
 ---@return table<string, string[]>
-local function view_key_conflicts(section_path, default_bookmarks_key)
+local function view_key_conflicts(section_path)
 	local node = require("atlas.config").options ---@type any
 	for _, key in ipairs(section_path) do
 		if type(node) ~= "table" then
@@ -291,16 +266,6 @@ local function view_key_conflicts(section_path, default_bookmarks_key)
 		if type(key) == "string" and key ~= "" then
 			seen[key] = seen[key] or {}
 			seen[key][tostring(view.name or "<view>")] = true
-		end
-	end
-
-	local bookmarks = get_bookmarks(section_path)
-	if default_bookmarks_key ~= "" then
-		local bk = tostring((type(bookmarks) == "table" and bookmarks.key) or default_bookmarks_key)
-		if bk ~= "" then
-			seen[bk] = seen[bk] or {}
-			seen[bk][tostring((type(bookmarks) == "table" and bookmarks.label) or default_bookmarks_key) .. " (bookmarks)"] =
-				true
 		end
 	end
 
@@ -417,8 +382,7 @@ function M.validate()
 
 	for _, domain in ipairs({ "issues", "pulls" }) do
 		for _, provider in ipairs(require("atlas.providers").list(domain)) do
-			local provider_domain = provider.domains[domain]
-			local conflicts = view_key_conflicts({ domain, provider.id }, provider_domain.bookmark_key or "S")
+			local conflicts = view_key_conflicts({ domain, provider.id })
 			if next(conflicts) ~= nil then
 				result[string.format("%s %s views", provider.name:lower(), domain)] = conflicts
 			end

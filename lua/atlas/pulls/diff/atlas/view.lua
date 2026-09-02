@@ -36,7 +36,7 @@ local session_api = require("atlas.pulls.diff.session")
 ---@field commit_items table<integer, PullsCommit>
 ---@field left AtlasDiffWindow
 ---@field right AtlasDiffWindow
----@field annotated_paths table<string, { comments: boolean, notes: boolean }>
+---@field annotated_paths table<string, { comments: boolean }>
 ---@field inline_deleted_lines boolean
 ---@field additions integer
 ---@field deletions integer

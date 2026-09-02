@@ -52,7 +52,7 @@ function M.win()
 	if win == nil then
 		return nil
 	end
-	if state.listed and vim.api.nvim_win_get_buf(win) ~= state.buf then
+	if vim.api.nvim_win_get_buf(win) ~= state.buf then
 		return nil
 	end
 	return win
@@ -200,7 +200,7 @@ local function close_session(session_id, reason, close_tab)
 end
 
 ---@param session_id string
-local function setup_listed_buffer(session_id)
+local function setup_buffer_lifecycle(session_id)
 	capture_options()
 	vim.api.nvim_create_autocmd("BufWinLeave", {
 		group = state.group,
@@ -252,9 +252,7 @@ local function create()
 	state.session_id = events.new_id("ui")
 	state.group = vim.api.nvim_create_augroup("AtlasDashboard" .. state.session_id, { clear = true })
 	state.closing = false
-	if state.listed then
-		setup_listed_buffer(state.session_id)
-	end
+	setup_buffer_lifecycle(state.session_id)
 	configure_window()
 
 	local session_id = state.session_id
@@ -302,7 +300,7 @@ function M.open(domain, provider)
 	if state.tab and vim.api.nvim_tabpage_is_valid(state.tab) then
 		vim.api.nvim_set_current_tabpage(state.tab)
 	end
-	if state.listed and window() and M.buf() then
+	if window() and M.buf() then
 		vim.api.nvim_set_current_win(state.win)
 		vim.api.nvim_win_set_buf(state.win, state.buf)
 	end

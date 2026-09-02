@@ -71,8 +71,8 @@ up and what's missing.
       statusline = true,
       -- "auto", "default", "snacks", or "fzf-lua".
       picker = "auto",
-      -- Make the main Atlas dashboard a listed buffer.
-      listed_buffer = false,
+      -- Make the main Atlas dashboard a listed buffer (default: true).
+      listed_buffer = true,
     },
 
     providers = {
@@ -183,9 +183,6 @@ Use `ctx.output(title)` to show output from a custom action:
         Open a Git range (`base...head`) or pull-request URL in native
         AtlasDiff. Without a target, Atlas prompts for one.
 
-:Atlas notes [target]
-        Open the local-notes manager, optionally filtered to a target.
-
 :Atlas create [pr|issue]
         Start the pull-request or issue creation flow. Without an argument,
         Atlas asks which one to create.
@@ -198,9 +195,8 @@ Use `ctx.output(title)` to show output from a custom action:
         repository. Use `.` to open the current repository. Without a
         target, Atlas prompts for one.
 
-:Atlas clear [cache|notes|stars]
-        Clear all Atlas data, or only cached data and cloned repositories,
-        local review notes, or locally starred items.
+:Atlas clear [cache]
+        Clear all Atlas data, or only cached data and cloned repositories.
 
 :Atlas logs
         Toggle the Atlas log buffer.
@@ -216,7 +212,7 @@ Use `ctx.output(title)` to show output from a custom action:
 Two-pane layout: PRs grouped by view on the left, detail tabs (overview,
 conversation, review, and commits) on the right.
 
-Atlas supports configurable views and bookmarks, comments and review threads,
+Atlas supports configurable views, comments and review threads,
 build and merge checks, commits and diffstats, notifications, and pull
 request actions, alongside the repository overview, branches, and tags.
 
@@ -229,7 +225,6 @@ Shared config that applies to the pulls provider:
 >lua
   require("atlas").setup({
     pulls = {
-      delete_notes = false, -- delete local notes after approval or merge
       default_merge_method = "merge", -- "merge" or "squash"
       default_delete_branch = false,
       git_transport = "https", -- "https" or "ssh" for Atlas-managed Git remotes.
@@ -306,14 +301,6 @@ project, or to a whole group.
         -- All projects in a group:
         { name = "GitLab Org", key = "O", group = "gitlab-org" },
       },
-      bookmarks = {
-        -- key   = "S",      -- default
-        -- label = "Search", -- default
-        items = {
-          ["Reviewing"]    = { scope = "all", extra_params = { reviewer_id = "Me" } },
-          ["Created by me"] = { scope = "all", author_username = "me" },
-        },
-      },
     },
   }
 <
@@ -336,33 +323,12 @@ configured `pulls.open_diff` key (`gd` by default) on a pull request.
     request changes.
   - Merge pull requests using the methods supported by GitLab.
   - Review GitLab tasks alongside their comments.
-  - Browse comments, tasks, and local notes in the review panel.
+  - Browse comments and tasks in the review panel.
   - Mark files reviewed in AtlasDiff.
 
 CodeDiff, sindrets/diffview.nvim, and dlyongemallo/diffview-plus.nvim can
-display Atlas comment, task, and local-note overlays, but their integrations
-rely on plugin internals and may break after upstream changes.
-
-LOCAL NOTES                                      *atlas-local-notes*
-                                                   *atlas-pulls-notes*
-
-Local notes let you leave something on a diff without posting it to the pull
-request. Each note is attached to a file and line and can be an `ISSUE`,
-`SUGGESTION`, `NOTE`, or `PRAISE`. Diff views mark notes as outdated when their
-saved line changes.
-
-For scripts, use `bin/atlas-notes`. Notes added there appear in AtlasDiff,
-CodeDiff, Diffview, Diffview-plus, and `:Atlas notes`:
->sh
-  ./bin/atlas-notes add \
-    --target https://gitlab.com/owner/repository/-/merge_requests/123 \
-    --file lua/review_queue.lua --line 19 \
-    --context "local item = queue[index]" \
-    --type suggestion --body "Should this be a bool?"
-<
-
-An example Pi integration is available here:
-https://github.com/emrearmagan/dotfiles/blob/main/config/pi/extensions/atlas-notes.ts
+display Atlas comment and task overlays, but their integrations rely on
+plugin internals and may break after upstream changes.
 
 ------------------------------------------------------------------------------
 CREATE PULL REQUESTS                         *atlas-create-pull-requests*
@@ -387,7 +353,7 @@ the draft state, or preview commits and diffstat before submitting.
 Same layout as |atlas-pulls|: list on the left, detail tabs (overview,
 conversation, activity) on the right.
 
-Atlas supports configurable views and bookmarks, comments, provider fields and
+Atlas supports configurable views, comments, provider fields and
 actions, notifications, custom actions, and issue creation.
 
 Shared provider authentication and endpoints are configured in
@@ -423,15 +389,6 @@ Same shared `providers.gitlab` auth as |atlas-pulls-gitlab|. Views take a `scope
         { name = "All open", key = "3",
           scope = "all", state = "opened",
           extra_params = { ["not[labels]"] = "wontfix" } },
-      },
-      bookmarks = {
-        -- key   = "S",      -- default
-        -- label = "Search", -- default
-        items = {
-          ["No labels"] = { scope = "all", state = "opened",
-                            extra_params = { ["not[labels]"] = "*" } },
-          ["Closed"]    = { scope = "created_by_me", state = "closed" },
-        },
       },
     },
   }
@@ -501,7 +458,6 @@ Defaults live under `keymaps` in `setup()`. Each entry accepts:
           mark_done = "d",
         },
         toggle_subscription     = "gS",
-        toggle_star             = "*",
         refresh                 = "r",
         refresh_view            = "R",
         open_actions            = "A",
@@ -562,13 +518,10 @@ Defaults live under `keymaps` in `setup()`. Each entry accepts:
             toggle_comments       = "gH",
             next_comment          = "]c",
             previous_comment      = "[c",
-            next_note             = "]n",
-            previous_note         = "[n",
             add_comment           = "c",
             submit_comment        = "C",
             add_suggestion        = "s",
             submit_suggestion     = "S",
-            add_note              = "<leader>n",
             toggle_resolved       = "x",
           },
         },

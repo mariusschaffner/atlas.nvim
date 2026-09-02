@@ -16,15 +16,6 @@
 --           { name = "Created",  key = "2", scope = "created_by_me",  state = "opened" },
 --           { name = "All open", key = "3", scope = "all",            state = "opened" },
 --         },
---         bookmarks = {
---           -- key   = "S",      -- default
---           -- label = "Search", -- default
---           items = {
---             ["No labels"] = { scope = "all", state = "opened",
---                               extra_params = { ["not[labels]"] = "*" } },
---             ["Closed"]    = { scope = "created_by_me", state = "closed" },
---           },
---         },
 --       },
 --     },
 --   })
@@ -54,11 +45,5 @@
 ---@class AtlasGitLabIssuesViewConfig : IssuesViewConfig, AtlasGitLabIssuesSearchConfig
 ---@field current_repo boolean|nil
 
----@class AtlasGitLabIssuesBookmarksConfig
----@field key string|nil    -- default "S"
----@field label string|nil  -- default "Search"
----@field items table<string, AtlasGitLabIssuesSearchConfig>|nil
-
 ---@class AtlasGitLabIssuesConfig
 ---@field views AtlasGitLabIssuesViewConfig[]|nil
----@field bookmarks AtlasGitLabIssuesBookmarksConfig|nil

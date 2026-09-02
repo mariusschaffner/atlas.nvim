@@ -17,14 +17,6 @@
 --           { name = "Reviewing", key = "3", scope = "all",
 --             extra_params = { reviewer_id = "Me" } },
 --         },
---         bookmarks = {
---           -- key   = "S",      -- default
---           -- label = "Search", -- default
---           items = {
---             ["Reviewing"]   = { scope = "all", extra_params = { reviewer_id = "Me" } },
---             ["Created by me"] = { scope = "all", author_username = "me" },
---           },
---         },
 --       },
 --     },
 --   })
@@ -54,11 +46,6 @@
 ---@class AtlasGitLabPullsViewConfig : AtlasPullsViewConfig, AtlasGitLabPullsSearchConfig
 ---@field current_repo boolean|nil
 
----@class AtlasGitLabPullsBookmarksConfig
----@field key string|nil    -- default "S"
----@field label string|nil  -- default "Search"
----@field items table<string, AtlasGitLabPullsSearchConfig>|nil
-
 ---@class AtlasGitLabConfig
 ---@field base_url string
 ---@field token string
@@ -66,4 +53,3 @@
 
 ---@class AtlasGitLabPullsConfig
 ---@field views AtlasGitLabPullsViewConfig[]|nil
----@field bookmarks AtlasGitLabPullsBookmarksConfig|nil

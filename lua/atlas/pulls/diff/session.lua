@@ -5,8 +5,6 @@ local config = require("atlas.config")
 local events = require("atlas.core.events")
 local icons = require("atlas.ui.shared.icons")
 local keymaps = require("atlas.core.keymaps")
-local note_popup = require("atlas.pulls.notes.ui.popup")
-local notes = require("atlas.pulls.diff.notes")
 local review_panel = require("atlas.pulls.diff.ui.review_panel")
 local hints = require("atlas.pulls.diff.ui.hints")
 local statusline = require("atlas.ui.statusline")
@@ -53,9 +51,8 @@ local review_progress = { "󰝦", "󰪞", "󰪟", "󰪠", "󰪡", "󰪢", "󰪣"
 ---@field head_revision string|nil Nil means the working tree.
 
 ---@class AtlasDiffReviewPanelSelection
----@field kind "comment"|"note"
+---@field kind "comment"
 ---@field comment PullsComment|nil
----@field note AtlasNote|nil
 
 ---@class AtlasDiffSessionCallbacks
 ---@field tabpage integer
@@ -70,14 +67,12 @@ local review_progress = { "󰝦", "󰪞", "󰪟", "󰪠", "󰪡", "󰪢", "󰪣"
 ---@field tabpage integer|nil
 ---@field source AtlasDiffSource
 ---@field review AtlasDiffReview|nil
----@field notes AtlasNote[]
 ---@field reviewed_files table<string, boolean>
 ---@field current AtlasDiffCurrent|nil
 ---@field commits PullsCommit[]
 ---@field statusline AtlasStatusline
 ---@field review_panel AtlasDiffReviewPanel|nil
 ---@field review_request { cancel: fun() }|nil
----@field note_target AtlasNoteTarget|nil
 ---@field viewer_state table
 ---@field expanded_threads table<string, boolean>
 ---@field expanded_overlays boolean
@@ -94,7 +89,7 @@ local review_progress = { "󰝦", "󰪞", "󰪟", "󰪠", "󰪡", "󰪢", "󰪣"
 ---@class AtlasDiffRenderOutput
 ---@field deleted_lines table<integer, [string, string][][]>
 ---@field deleted_hints table<integer, [string, string][]>
----@field annotated_paths table<string, { comments: boolean, notes: boolean }>
+---@field annotated_paths table<string, { comments: boolean }>
 
 ---@param session AtlasDiffSession
 ---@return AtlasStatuslineSegment[]
@@ -144,14 +139,6 @@ local function statusline_items(session)
 			priority = 30,
 		}
 	end
-	if #session.notes > 0 then
-		items[#items + 1] = {
-			text = string.format("%s %d", icons.general("pin"), #session.notes),
-			hl_group = "AtlasFooterNote",
-			align = "right",
-			priority = 20,
-		}
-	end
 	local pending = 0
 	for _, comment in ipairs(review_comments) do
 		if comment.state == "PENDING" then
@@ -174,7 +161,6 @@ end
 ---@param opts { viewer_id: string, source: AtlasDiffSource, review: AtlasDiffReview|nil, commits: PullsCommit[]|nil }
 ---@return AtlasDiffSession
 function M.new(opts)
-	local note_target, note_items = notes.load(opts.review)
 	local help_action = opts.viewer_id == "atlas" and "ui.help" or "pulls.external_help"
 	local help_key = (keymaps.resolve(help_action) or {})[1]
 	local session = {
@@ -183,14 +169,12 @@ function M.new(opts)
 		tabpage = nil,
 		source = opts.source,
 		review = opts.review,
-		notes = note_items,
 		reviewed_files = (opts.review and opts.review.context and opts.review.context.reviewed_files) or {},
 		current = nil,
 		commits = opts.commits or {},
 		statusline = statusline.new({ help_key = help_key }),
 		review_panel = nil,
 		review_request = nil,
-		note_target = note_target,
 		viewer_state = {},
 		expanded_threads = {},
 		expanded_overlays = ((config.options.pulls or {}).diff or {}).comment_display == "virtual_lines",
@@ -232,7 +216,6 @@ end
 function M.set_current(session, current)
 	if session.current then
 		ui_comments.clear(session.current)
-		notes.clear(session.current)
 		hints.clear(session.current)
 	end
 	session.current = current
@@ -249,12 +232,9 @@ function M.render(session)
 		if session.expanded_overlays then
 			hints.clear(session.current)
 			output.deleted_lines = comments.render(session, session.viewer_state.inline_deleted_lines == true)
-			notes.render(session)
 		else
 			ui_comments.clear(session.current)
-			notes.clear(session.current)
 			local items, deleted = comments.hints(session, session.viewer_state.inline_deleted_lines == true)
-			vim.list_extend(items, notes.hints(session))
 			hints.render(session.current, items)
 			for line, line_items in pairs(deleted) do
 				output.deleted_hints[line] = hints.chunks(line_items)
@@ -322,10 +302,8 @@ function M.detach(session, reason)
 		session.review_request = nil
 	end
 	ui_comments.close_popup(session.id)
-	note_popup.close(session.id)
 	if session.current then
 		ui_comments.clear(session.current)
-		notes.clear(session.current)
 		hints.clear(session.current)
 	end
 	review_panel.delete(session.review_panel)

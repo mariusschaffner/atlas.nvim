@@ -4,31 +4,14 @@ local notify = require("atlas.core.notify")
 local spinner = require("atlas.ui.components.spinner")
 local state = require("atlas.pulls.state")
 local dashboard_host = require("atlas.ui.dashboard")
-local presentation = require("atlas.pulls.ui.presentation")
 local navigation = require("atlas.ui.navigation")
 local info_popup = require("atlas.ui.popups.info")
 local requests = require("atlas.core.requests")
-local starred = require("atlas.core.starred")
-local bookmarks = require("atlas.ui.shared.bookmarks")
 
 local active_requests = requests.new()
 local pr_reload_requests = requests.new()
 
 local STATUS_ORDER = { "OPEN", "MERGED", "DECLINED" }
-
----@param pulls PullRequest[]
----@return PullRequest[]
-local function mark_starred(pulls)
-	local refs = {}
-	for _, record in ipairs(state.starred_items) do
-		refs[record.ref] = true
-	end
-
-	for _, pr in ipairs(pulls) do
-		pr.is_starred = refs[starred.ref(pr, state.provider.id)] == true
-	end
-	return pulls
-end
 
 ---@return PullsStateFilter[]
 local function selected_states()
@@ -68,25 +51,8 @@ local function replace_pr(updated)
 	if not replaced then
 		return false, nil
 	end
-	state.pulls = mark_starred(pulls)
-	if not updated.is_starred then
-		return true, nil
-	end
-	local saved, err = starred.add(updated, state.provider.id, presentation.repo(updated))
-	if saved ~= nil then
-		local replaced_snapshot = false
-		for index, record in ipairs(state.starred_items) do
-			if record.ref == saved.ref then
-				state.starred_items[index] = saved
-				replaced_snapshot = true
-				break
-			end
-		end
-		if not replaced_snapshot then
-			table.insert(state.starred_items, saved)
-		end
-	end
-	return true, err
+	state.pulls = pulls
+	return true, nil
 end
 
 local loading_spinner = spinner.create({
@@ -139,48 +105,6 @@ local function cancel_active_requests()
 	pr_reload_requests = requests.new()
 	stop_loading_spinner()
 	state.reloading_pr_keys = {}
-end
-
----@param view AtlasPullsViewConfig
----@param on_done fun()|nil
-local function load_starred(view, on_done)
-	state.is_loading = false
-	state.error = nil
-	state.current_view = view
-
-	local records, err = starred.list("pulls", state.provider.id)
-	if records == nil then
-		state.error = err
-		state.pulls = {}
-		render_if_active()
-		if on_done then
-			on_done()
-		end
-		return
-	end
-
-	state.starred_items = records
-	state.views = bookmarks.views(state.provider.id, "pulls", state.provider_views, records)
-	if #records == 0 then
-		if next(state.active_view._bookmarks or {}) == nil then
-			M.switch_view(state.provider_views[1])
-			return
-		end
-		state.current_view = state.active_view
-		state.pulls = {}
-	else
-		local pulls = {}
-		for _, record in ipairs(records) do
-			record.item.is_starred = true
-			table.insert(pulls, record.item)
-		end
-		state.pulls = pulls
-	end
-
-	render_if_active()
-	if on_done then
-		on_done()
-	end
 end
 
 ---@param scope AtlasRequestScope
@@ -243,29 +167,12 @@ local function load_view(view, force_load, on_done)
 		end)
 	end
 
-	if view._kind == "bookmarks" then
-		state.is_loading = false
-		state.error = nil
-		state.pulls = {}
-		state.current_view = view
-		render_if_active()
-		if on_done then
-			on_done()
-		end
-		return
-	end
-	if view._kind == "starred" then
-		load_starred(view, on_done)
-		return
-	end
-
 	state.is_loading = true
 	state.error = nil
 	state.pulls = {}
 	state.current_view = view
 	sync_loading_spinner()
-	local bookmark_query = state.active_view ~= nil and state.active_view._kind == "bookmarks"
-	notify.loading(bookmark_query and "Running query..." or "Loading pull requests...")
+	notify.loading("Loading pull requests...")
 	render_if_active()
 
 	load_requests.run(function(done)
@@ -282,7 +189,7 @@ local function load_view(view, force_load, on_done)
 		if first_err ~= nil then
 			if has_pulls then
 				state.error = nil
-				state.pulls = mark_starred(pulls)
+				state.pulls = pulls
 				notify.warn(string.format("Pull requests loaded with errors: %s", tostring(first_err)))
 			else
 				state.error = tostring(first_err)
@@ -291,7 +198,7 @@ local function load_view(view, force_load, on_done)
 			end
 		else
 			state.error = nil
-			state.pulls = mark_starred(pulls)
+			state.pulls = pulls
 			notify.success("Pull requests loaded", { timeout = 1200 })
 		end
 
@@ -414,53 +321,12 @@ function M.show_pr_details(source_buf)
 	})
 end
 
----@param pr PullRequest
----@param repo PullsRepo
-function M.toggle_star(pr, repo)
-	local now_starred, err = starred.toggle(pr, state.provider.id, repo)
-	if now_starred == nil then
-		notify.error(err or "Unable to update starred pull request")
-		return
-	end
-
-	pr.is_starred = now_starred
-	local records = starred.list("pulls", state.provider.id)
-	if records ~= nil then
-		state.starred_items = records
-		state.views = bookmarks.views(state.provider.id, "pulls", state.provider_views, records)
-	end
-	notify.success(now_starred and "Pull request starred" or "Pull request unstarred", { timeout = 1200 })
-
-	local current_view = state.current_view
-	if current_view and current_view._kind == "starred" then
-		load_view(current_view, false)
-		return
-	end
-
-	render_if_active()
-end
-
 ---@param view AtlasPullsViewConfig|nil
 function M.switch_view(view)
 	state.active_view = view
 	load_view(view, false, function()
 		navigation.focus_first_item()
 	end)
-end
-
----@param name string
----@param value any
-function M.run_bookmark(name, value)
-	local view = { name = name, layout = "compact" }
-	if type(value) == "string" then
-		view.search = value
-	elseif type(value) == "table" then
-		for k, v in pairs(value) do
-			view[k] = v
-		end
-	end
-
-	load_view(view, false)
 end
 
 ---@param status string

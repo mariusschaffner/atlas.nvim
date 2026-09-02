@@ -8,7 +8,6 @@
 ---@field pulls PullRequest[]
 ---@field provider PullsProvider|nil
 ---@field provider_views AtlasPullsViewConfig[]
----@field starred_items AtlasStarredItem[]
 ---@field reloading_pr_keys table<string, boolean>
 ---@field reload_spinner_frame string
 ---@field status_filters table<string, boolean>
@@ -22,7 +21,6 @@ local M = {
 	pulls = {},
 	provider = nil,
 	provider_views = {},
-	starred_items = {},
 	reloading_pr_keys = {},
 	reload_spinner_frame = "⠋",
 	status_filters = { OPEN = true, MERGED = false, DECLINED = false },

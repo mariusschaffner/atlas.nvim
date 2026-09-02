@@ -3,7 +3,6 @@ local M = {}
 local config = require("atlas.config")
 local keymaps = require("atlas.core.keymaps")
 local editor = require("atlas.ui.popups.editor")
-local notes = require("atlas.pulls.notes")
 local core_notify = require("atlas.core.notify")
 local picker = require("atlas.ui.picker")
 local ui_utils = require("atlas.ui.utils")
@@ -479,9 +478,6 @@ local function open_review_editor(context, capability, title, loading, success, 
 					return
 				end
 				notify(context, "success", success, 1200)
-				if capability == "approve" then
-					notes.clear_for_pull_request(context.pr)
-				end
 				on_done({ changed_pr = true, message = success }, nil)
 			end)
 		end,
