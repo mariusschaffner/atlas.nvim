@@ -4,7 +4,7 @@ local statusline = require("atlas.ui.statusline")
 local utils = require("atlas.ui.shared.utils")
 
 local MIN_HEADER_HEIGHT = 3
-local MAX_HEADER_RATIO = 0.6
+local MAX_HEADER_RATIO = 0.55
 
 local state = {
 	kind = nil,

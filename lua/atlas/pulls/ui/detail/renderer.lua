@@ -8,6 +8,7 @@ local chips = require("atlas.pulls.ui.components.chips")
 local detail_tabs = require("atlas.pulls.ui.components.tabs")
 local icons = require("atlas.ui.shared.icons")
 local spinner = require("atlas.ui.components.spinner")
+local box = require("atlas.ui.components.box")
 local presentation = require("atlas.pulls.ui.presentation")
 local detail_ui = require("atlas.ui.detail")
 
@@ -111,65 +112,64 @@ local MERGE_CHECK_PRIORITY = {
 }
 
 ---@param width integer
----@param lines string[]
----@param spans table[]
-local function render_reviewers_compact(width, lines, spans)
-	if state.reviewers == nil or state.reviewers == "loading" then
-		return
-	end
-
-	utils.push(lines, spans, "Reviewers", "AtlasColumnHeader", 0)
+---@return string[], table[]
+local function render_reviewers_box(width)
+	local body_lines, body_spans = {}, {}
 
 	if type(state.reviewers) == "string" then
-		utils.push(lines, spans, utils.truncate(state.reviewers, width), "AtlasLogError", 0)
-		return
+		utils.push(body_lines, body_spans, utils.truncate(state.reviewers, math.max(1, width - 4)), "AtlasLogError", 0)
+	elseif #state.reviewers == 0 then
+		utils.push(body_lines, body_spans, "no reviewers yet", "AtlasTextMuted", 0)
+	else
+		for _, reviewer in ipairs(state.reviewers) do
+			local style = DECISION_ICONS[reviewer.decision or "pending"] or DECISION_ICONS.pending
+			local name = presentation.user_handle(reviewer)
+			local name_width = math.max(1, width - 4 - vim.api.nvim_strwidth(style.icon) - 1)
+			local text = string.format("%s %s", style.icon, utils.truncate(name, name_width))
+			table.insert(body_lines, text)
+			table.insert(body_spans, { line = #body_lines - 1, start_col = 0, end_col = #style.icon, hl_group = style.hl })
+		end
 	end
 
-	if #state.reviewers == 0 then
-		utils.push(lines, spans, "no reviewers yet", "AtlasTextMuted", 0)
-		return
-	end
-
-	for _, reviewer in ipairs(state.reviewers) do
-		local style = DECISION_ICONS[reviewer.decision or "pending"] or DECISION_ICONS.pending
-		local name = presentation.user_handle(reviewer)
-		local name_width = math.max(1, width - vim.api.nvim_strwidth(style.icon) - 1)
-		local text = string.format("%s %s", style.icon, utils.truncate(name, name_width))
-		table.insert(lines, text)
-		table.insert(spans, { line = #lines - 1, start_col = 0, end_col = #style.icon, hl_group = style.hl })
-	end
+	local lines, spans = {}, {}
+	utils.push(lines, spans, "Reviewers", "AtlasColumnHeader", 0)
+	local rendered = box.render({ { lines = body_lines, spans = body_spans } }, { width = width, padding_x = 0 })
+	utils.append_block(lines, spans, { lines = rendered.lines, highlights = rendered.highlights })
+	return lines, spans
 end
 
 ---@param width integer
----@param lines string[]
----@param spans table[]
-local function render_merge_checks_compact(width, lines, spans)
-	if state.merge_checks == nil or state.merge_checks == "loading" then
-		return
-	end
-	if type(state.merge_checks) == "table" and #state.merge_checks == 0 then
-		return
-	end
-
-	utils.push(lines, spans, "Merge Checks", "AtlasColumnHeader", 0)
+---@return string[], table[]
+local function render_merge_checks_box(width)
+	local body_lines, body_spans = {}, {}
 
 	if type(state.merge_checks) == "string" then
-		utils.push(lines, spans, utils.truncate(state.merge_checks, width), "AtlasLogError", 0)
-		return
+		utils.push(
+			body_lines,
+			body_spans,
+			utils.truncate(state.merge_checks, math.max(1, width - 4)),
+			"AtlasLogError",
+			0
+		)
+	else
+		local checks = vim.list_slice(state.merge_checks --[[@as PullsMergeCheck[] ]])
+		table.sort(checks, function(a, b)
+			return (MERGE_CHECK_PRIORITY[a.state] or math.huge) < (MERGE_CHECK_PRIORITY[b.state] or math.huge)
+		end)
+		for _, check in ipairs(checks) do
+			local pair = MERGE_CHECK_STATE[check.state] or MERGE_CHECK_STATE.muted
+			local label_width = math.max(1, width - 4 - vim.api.nvim_strwidth(pair.icon) - 1)
+			local text = string.format("%s %s", pair.icon, utils.truncate(check.label, label_width))
+			table.insert(body_lines, text)
+			table.insert(body_spans, { line = #body_lines - 1, start_col = 0, end_col = #pair.icon, hl_group = pair.hl })
+		end
 	end
 
-	local checks = vim.list_slice(state.merge_checks --[[@as PullsMergeCheck[] ]])
-	table.sort(checks, function(a, b)
-		return (MERGE_CHECK_PRIORITY[a.state] or math.huge) < (MERGE_CHECK_PRIORITY[b.state] or math.huge)
-	end)
-
-	for _, check in ipairs(checks) do
-		local pair = MERGE_CHECK_STATE[check.state] or MERGE_CHECK_STATE.muted
-		local label_width = math.max(1, width - vim.api.nvim_strwidth(pair.icon) - 1)
-		local text = string.format("%s %s", pair.icon, utils.truncate(check.label, label_width))
-		table.insert(lines, text)
-		table.insert(spans, { line = #lines - 1, start_col = 0, end_col = #pair.icon, hl_group = pair.hl })
-	end
+	local lines, spans = {}, {}
+	utils.push(lines, spans, "Merge Checks", "AtlasColumnHeader", 0)
+	local rendered = box.render({ { lines = body_lines, spans = body_spans } }, { width = width, padding_x = 0 })
+	utils.append_block(lines, spans, { lines = rendered.lines, highlights = rendered.highlights })
+	return lines, spans
 end
 
 ---@param width integer
@@ -182,11 +182,18 @@ local function render_side_reviews(width)
 		return lines, spans
 	end
 
-	render_reviewers_compact(width, lines, spans)
-	if #lines > 0 then
-		table.insert(lines, "")
+	if state.reviewers ~= nil then
+		local reviewer_lines, reviewer_spans = render_reviewers_box(width)
+		utils.append_block(lines, spans, { lines = reviewer_lines, highlights = reviewer_spans })
 	end
-	render_merge_checks_compact(width, lines, spans)
+
+	if state.merge_checks ~= nil and not (type(state.merge_checks) == "table" and #state.merge_checks == 0) then
+		if #lines > 0 then
+			table.insert(lines, "")
+		end
+		local check_lines, check_spans = render_merge_checks_box(width)
+		utils.append_block(lines, spans, { lines = check_lines, highlights = check_spans })
+	end
 
 	return lines, spans
 end
