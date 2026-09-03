@@ -3,10 +3,9 @@ local M = {}
 local statusline = require("atlas.ui.statusline")
 local utils = require("atlas.ui.shared.utils")
 
-local HEIGHT_RATIO = 0.6
-local SIDEBAR_RATIO = 0.35
-local MIN_SIDEBAR_WIDTH = 30
-local MIN_CONTENT_WIDTH = 40
+local SIDEBAR_HEIGHT_RATIO = 0.3
+local MIN_SIDEBAR_HEIGHT = 6
+local MIN_CONTENT_HEIGHT = 10
 
 local state = {
 	kind = nil,
@@ -44,12 +43,12 @@ local function configure(win)
 	statusline.attach(win)
 end
 
----@param total_width integer
+---@param total_height integer
 ---@return integer
-local function sidebar_width(total_width)
-	local ideal = math.floor(total_width * SIDEBAR_RATIO)
-	local max_allowed = math.max(MIN_SIDEBAR_WIDTH, total_width - MIN_CONTENT_WIDTH)
-	return math.max(MIN_SIDEBAR_WIDTH, math.min(ideal, max_allowed))
+local function sidebar_height(total_height)
+	local ideal = math.floor(total_height * SIDEBAR_HEIGHT_RATIO)
+	local max_allowed = math.max(MIN_SIDEBAR_HEIGHT, total_height - MIN_CONTENT_HEIGHT)
+	return math.max(MIN_SIDEBAR_HEIGHT, math.min(ideal, max_allowed))
 end
 
 ---@param buf integer|nil
@@ -128,18 +127,26 @@ local function create_single()
 end
 
 local function create_split()
-	local source = dashboard_source()
-	local content_buf = utils.buffer.create("atlas://detail", "atlas.detail")
+	vim.cmd("tabnew")
+	local tab = vim.api.nvim_get_current_tabpage()
+	local placeholder_buf = vim.api.nvim_get_current_buf()
+
+	local content_buf = utils.buffer.create(string.format("atlas://detail/%d", tab), "atlas.detail")
 	vim.api.nvim_set_option_value("bufhidden", "wipe", { buf = content_buf })
-	local side_buf = utils.buffer.create("atlas://detail/side", "atlas.detail.side")
+	local side_buf = utils.buffer.create(string.format("atlas://detail/side/%d", tab), "atlas.detail.side")
 	vim.api.nvim_set_option_value("bufhidden", "wipe", { buf = side_buf })
 
-	local content_win = utils.window.create(source, "belowright split", content_buf, configure)
-	pcall(vim.api.nvim_win_set_height, content_win, math.max(math.floor(vim.o.lines * HEIGHT_RATIO), 10))
+	local side_win = vim.api.nvim_get_current_win()
+	vim.api.nvim_win_set_buf(side_win, side_buf)
+	configure(side_win)
 
-	local total_width = vim.api.nvim_win_get_width(content_win)
-	local side_win = utils.window.create(content_win, "leftabove vsplit", side_buf, configure)
-	pcall(vim.api.nvim_win_set_width, side_win, sidebar_width(total_width))
+	local content_win = utils.window.create(side_win, "belowright split", content_buf, configure)
+	local total_height = vim.api.nvim_win_get_height(side_win) + vim.api.nvim_win_get_height(content_win)
+	pcall(vim.api.nvim_win_set_height, side_win, sidebar_height(total_height))
+
+	if placeholder_buf ~= content_buf and placeholder_buf ~= side_buf and vim.api.nvim_buf_is_valid(placeholder_buf) then
+		utils.buffer.delete(placeholder_buf)
+	end
 
 	-- Focus always moves into the content pane, regardless of where the split was opened from.
 	vim.api.nvim_set_current_win(content_win)
@@ -156,10 +163,8 @@ local function create_split()
 				return
 			end
 			deactivate()
-			for _, w in ipairs({ content_win, side_win }) do
-				if utils.window.valid(w) then
-					pcall(vim.api.nvim_win_close, w, true)
-				end
+			if vim.api.nvim_tabpage_is_valid(tab) then
+				pcall(vim.cmd, "tabclose " .. vim.api.nvim_tabpage_get_number(tab))
 			end
 			state.win = nil
 			state.buf = nil
@@ -241,11 +246,17 @@ function M.close(tab)
 	local side_win = state.side_win
 	local buf = state.buf
 	local side_buf = state.side_buf
+	local layout = state.layout
 	deactivate()
 	state.win, state.buf, state.side_win, state.side_buf, state.layout = nil, nil, nil, nil, nil
-	for _, w in ipairs({ win, side_win }) do
-		if utils.window.valid(w) then
-			vim.api.nvim_win_close(w, true)
+	if layout == "split" and utils.window.valid(win) then
+		local tabpage = vim.api.nvim_win_get_tabpage(win)
+		pcall(vim.cmd, "tabclose " .. vim.api.nvim_tabpage_get_number(tabpage))
+	else
+		for _, w in ipairs({ win, side_win }) do
+			if utils.window.valid(w) then
+				vim.api.nvim_win_close(w, true)
+			end
 		end
 	end
 	utils.buffer.delete(buf)
@@ -260,10 +271,9 @@ vim.api.nvim_create_autocmd("VimResized", {
 			return
 		end
 		if state.layout == "split" then
-			pcall(vim.api.nvim_win_set_height, state.win, math.max(math.floor(vim.o.lines * HEIGHT_RATIO), 10))
 			if utils.window.valid(state.side_win) then
-				local total_width = vim.api.nvim_win_get_width(state.win) + vim.api.nvim_win_get_width(state.side_win)
-				pcall(vim.api.nvim_win_set_width, state.side_win, sidebar_width(total_width))
+				local total_height = vim.api.nvim_win_get_height(state.win) + vim.api.nvim_win_get_height(state.side_win)
+				pcall(vim.api.nvim_win_set_height, state.side_win, sidebar_height(total_height))
 			end
 		else
 			pcall(vim.api.nvim_win_set_width, state.win, math.max(math.floor(vim.o.columns * 0.45), 40))
