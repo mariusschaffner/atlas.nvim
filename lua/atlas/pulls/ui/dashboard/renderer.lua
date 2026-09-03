@@ -257,6 +257,15 @@ end
 
 ---@param lines string[]
 ---@param spans table[]
+---@param width integer
+local function append_separator(lines, spans, width)
+	local line = string.rep("─", math.max(0, width))
+	table.insert(lines, line)
+	table.insert(spans, { line = #lines - 1, start_col = 0, end_col = #line, hl_group = "AtlasFilterSeparator" })
+end
+
+---@param lines string[]
+---@param spans table[]
 local function append_search_text(lines, spans)
 	local view = state.active_view
 	if view == nil or state.provider == nil then
@@ -303,7 +312,7 @@ local function render_navbar(lines, spans, width)
 	for _, view in ipairs(views) do
 		table.insert(nav_items, {
 			label = view.key and string.format("%s (%s)", view.name, view.key) or view.name,
-			hl_group = (view_id(view) == active_id) and "AtlasLogInfo" or "AtlasTextMuted",
+			hl_group = (view_id(view) == active_id) and "AtlasFilterActive" or "AtlasTextMuted",
 		})
 	end
 	table.insert(nav_items, { label = "|", hl_group = "AtlasTextMuted" })
@@ -311,7 +320,7 @@ local function render_navbar(lines, spans, width)
 		local label = status:sub(1, 1):upper() .. status:sub(2):lower()
 		table.insert(nav_items, {
 			label = label,
-			hl_group = state.status_filters[status] and "AtlasLogInfo" or "AtlasTextMuted",
+			hl_group = state.status_filters[status] and "AtlasFilterActive" or "AtlasTextMuted",
 		})
 	end
 
@@ -349,6 +358,7 @@ function M.render(opts)
 
 	table.insert(lines, "")
 	render_navbar(lines, spans, opts.width)
+	append_separator(lines, spans, opts.width)
 	table.insert(lines, "")
 
 	append_search_text(lines, spans)

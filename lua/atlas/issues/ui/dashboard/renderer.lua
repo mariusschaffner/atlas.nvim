@@ -36,6 +36,15 @@ end
 
 ---@param lines string[]
 ---@param spans table[]
+---@param width integer
+local function append_separator(lines, spans, width)
+	local line = string.rep("─", math.max(0, width))
+	table.insert(lines, line)
+	table.insert(spans, { line = #lines - 1, start_col = 0, end_col = #line, hl_group = "AtlasFilterSeparator" })
+end
+
+---@param lines string[]
+---@param spans table[]
 ---@param text string
 local function append_search_text(lines, spans, text)
 	if text == "" then
@@ -263,14 +272,14 @@ function M.render(opts)
 		end
 		table.insert(nav_items, {
 			label = label,
-			hl_group = id == active_id and "AtlasLogInfo" or "AtlasTextMuted",
+			hl_group = id == active_id and "AtlasFilterActive" or "AtlasTextMuted",
 		})
 	end
 
 	if not active_is_listed and active ~= nil then
 		table.insert(nav_items, {
 			label = tostring(active.name or "-"),
-			hl_group = "AtlasLogInfo",
+			hl_group = "AtlasFilterActive",
 		})
 	end
 
@@ -313,6 +322,7 @@ function M.render(opts)
 			plain_items = true,
 		})
 	)
+	append_separator(lines, spans, opts.width)
 
 	table.insert(lines, "")
 
