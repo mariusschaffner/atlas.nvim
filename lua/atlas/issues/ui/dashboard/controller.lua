@@ -365,6 +365,19 @@ function M.apply_filter_text(text)
 	M.switch_view(view)
 end
 
+---@param status "OPEN"|"CLOSED"
+function M.set_status_filter(status)
+	if state.status_filters[status] then
+		return
+	end
+	state.status_filters.OPEN = status == "OPEN"
+	state.status_filters.CLOSED = status == "CLOSED"
+
+	local view = vim.tbl_extend("force", {}, state.active_view or {})
+	view.state = status == "OPEN" and "opened" or "closed"
+	M.switch_view(view)
+end
+
 ---@param source_buf integer|nil
 function M.show_issue_details(source_buf)
 	local node = navigation.current_item()

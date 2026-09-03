@@ -483,6 +483,10 @@ Defaults live under `keymaps` in `setup()`. Each entry accepts:
         edit_issue       = "ge",
         create_issue     = "c",
         toggle_description_mode = "m",
+        filters = {
+          open   = "gio",
+          closed = "gic",
+        },
       },
       pulls = {
         open_diff              = "gd",

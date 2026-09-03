@@ -100,6 +100,10 @@ local M = {}
 ---@field review? AtlasPullsReviewKeymaps
 ---@field filters? AtlasPullsFilterKeymaps
 
+---@class AtlasIssuesFilterKeymaps
+---@field open? AtlasKeymapValue
+---@field closed? AtlasKeymapValue
+
 ---@class AtlasIssuesKeymaps
 ---@field transition_issue? AtlasKeymapValue
 ---@field change_assignee? AtlasKeymapValue
@@ -107,6 +111,7 @@ local M = {}
 ---@field edit_issue? AtlasKeymapValue
 ---@field create_issue? AtlasKeymapValue
 ---@field toggle_description_mode? AtlasKeymapValue
+---@field filters? AtlasIssuesFilterKeymaps
 
 ---@class AtlasKeymapsConfig
 ---@field ui? AtlasUIKeymaps
@@ -197,6 +202,8 @@ local M = {}
 ---| "issues.edit_issue"
 ---| "issues.create_issue"
 ---| "issues.toggle_description_mode"
+---| "issues.filters.open"
+---| "issues.filters.closed"
 
 ---@param value AtlasKeymapValue
 ---@return string[]|nil

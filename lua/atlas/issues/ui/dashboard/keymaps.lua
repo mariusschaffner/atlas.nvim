@@ -70,6 +70,24 @@ function M.register(buf, views)
 		end
 	end
 
+	local STATUS_TOGGLES = {
+		{ status = "OPEN", action_id = "issues.filters.open" },
+		{ status = "CLOSED", action_id = "issues.filters.closed" },
+	}
+	for _, sf in ipairs(STATUS_TOGGLES) do
+		local s = sf
+		utils.insert_if(
+			items,
+			item(s.action_id, {
+				desc = string.format("Show %s issues", s.status:lower()),
+				opts = { nowait = true, silent = true },
+				callback = function()
+					controller.set_status_filter(s.status)
+				end,
+			})
+		)
+	end
+
 	utils.insert_if(
 		items,
 		item("ui.filter", {

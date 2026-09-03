@@ -268,6 +268,10 @@ M.options = {
 			edit_issue = "ge",
 			create_issue = "c",
 			toggle_description_mode = "m",
+			filters = {
+				open = "gio",
+				closed = "gic",
+			},
 		},
 	},
 }

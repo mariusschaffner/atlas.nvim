@@ -13,6 +13,7 @@
 ---@field reloading_issue_keys table<string, boolean>
 ---@field reload_spinner_frame string
 ---@field filter_text string Filter bar text mirroring `active_view` (e.g. "assignee:me").
+---@field status_filters table<string, boolean>
 local M = {
 	active_view = nil,
 	current_view = nil,
@@ -28,6 +29,7 @@ local M = {
 	reloading_issue_keys = {},
 	reload_spinner_frame = "⠋",
 	filter_text = "",
+	status_filters = { OPEN = true, CLOSED = false },
 }
 
 ---@param issues Issue[]

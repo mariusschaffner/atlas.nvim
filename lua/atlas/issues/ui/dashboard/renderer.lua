@@ -1,6 +1,7 @@
 local M = {}
 
 local state = require("atlas.issues.state")
+local navbar = require("atlas.ui.components.navbar")
 local table_tree = require("atlas.ui.components.table_tree")
 local utils = require("atlas.ui.shared.utils")
 local statusline = require("atlas.ui.statusline")
@@ -18,7 +19,8 @@ end
 
 ---@param lines string[]
 ---@param spans table[]
-local function render_filter_bar(lines, spans)
+---@param width integer
+local function render_filter_row(lines, spans, width)
 	local active_index = nil
 	for i, v in ipairs(state.views) do
 		if v == state.active_view then
@@ -28,12 +30,30 @@ local function render_filter_bar(lines, spans)
 	end
 	local badge = active_index and string.format("[%d]", active_index) or "[*]"
 	local search_icon = icons.general("search")
-	local prefix = string.format(" %s %s ", badge, search_icon)
-	local line = prefix .. (state.filter_text or "")
-	table.insert(lines, line)
-	table.insert(spans, { line = #lines - 1, start_col = 1, end_col = 1 + #badge, hl_group = "AtlasFilterActive" })
-	table.insert(spans, { line = #lines - 1, start_col = #prefix, end_col = #line, hl_group = "AtlasTextMuted" })
-	table.insert(lines, "")
+
+	local nav_items = {
+		{ label = badge, hl_group = "AtlasFilterActive" },
+		{ label = string.format("%s %s", search_icon, state.filter_text or ""), hl_group = "AtlasTextMuted" },
+	}
+
+	local status_items = {}
+	for _, status in ipairs({ "OPEN", "CLOSED" }) do
+		table.insert(status_items, {
+			label = status:sub(1, 1):upper() .. status:sub(2):lower(),
+			hl_group = state.status_filters[status] and "AtlasFilterActive" or "AtlasTextMuted",
+		})
+	end
+
+	utils.append_block(
+		lines,
+		spans,
+		navbar.render({
+			width = width,
+			items = nav_items,
+			actions = status_items,
+			plain_items = true,
+		})
+	)
 end
 
 ---@param issue Issue
@@ -240,7 +260,7 @@ function M.render(opts)
 	local line_map = {}
 
 	table.insert(lines, "")
-	render_filter_bar(lines, spans)
+	render_filter_row(lines, spans, opts.width)
 	append_separator(lines, spans, opts.width)
 
 	table.insert(lines, "")

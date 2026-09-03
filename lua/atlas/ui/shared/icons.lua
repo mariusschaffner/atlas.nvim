@@ -51,7 +51,7 @@ local ICONS = {
 		merged_pr = { icon = "", hl_group = "AtlasPRMerged" },
 		declined_pr = { icon = "", hl_group = "AtlasPRDeclined" },
 		tasks = { icon = "󰘽", hl_group = "AtlasTextWarning" },
-		pipeline = { icon = "󰐋", hl_group = "AtlasTextWarning" },
+		pipeline = { icon = "", hl_group = "AtlasTextWarning" },
 		commit = { icon = "", hl_group = "AtlasTextMuted" },
 		changes = { icon = "󱓉", hl_group = "AtlasTextMuted" },
 		file = { icon = "", hl_group = "AtlasTextMuted" },

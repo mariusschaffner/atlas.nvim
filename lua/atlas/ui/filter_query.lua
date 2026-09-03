@@ -152,17 +152,22 @@ function M.serialize(view, opts)
 		table.insert(parts, token("scope", view.scope))
 	end
 
-	if opts.domain == "pulls" and view.extra_params then
-		if view.extra_params.reviewer_id == "Me" then
-			table.insert(parts, token("reviewer", "me"))
-		elseif view.extra_params.reviewer_username then
-			table.insert(parts, token("reviewer", view.extra_params.reviewer_username))
+	if view.extra_params then
+		local skip = {}
+		if opts.domain == "pulls" then
+			if view.extra_params.reviewer_id == "Me" then
+				table.insert(parts, token("reviewer", "me"))
+				skip.reviewer_id = true
+			elseif view.extra_params.reviewer_username then
+				table.insert(parts, token("reviewer", view.extra_params.reviewer_username))
+				skip.reviewer_username = true
+			end
 		end
 		local extra_keys = vim.tbl_keys(view.extra_params)
 		table.sort(extra_keys)
 		for _, key in ipairs(extra_keys) do
 			local value = view.extra_params[key]
-			if key ~= "reviewer_id" and key ~= "reviewer_username" and value ~= nil and value ~= "" then
+			if not skip[key] and value ~= nil and value ~= "" then
 				table.insert(parts, token(key, value))
 			end
 		end
