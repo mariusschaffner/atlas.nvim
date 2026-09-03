@@ -11,6 +11,7 @@
 ---@field reloading_pr_keys table<string, boolean>
 ---@field reload_spinner_frame string
 ---@field status_filters table<string, boolean>
+---@field filter_text string Filter bar text mirroring `active_view` (e.g. "assignee:me").
 local M = {
 	active_view = nil,
 	current_view = nil,
@@ -24,6 +25,7 @@ local M = {
 	reloading_pr_keys = {},
 	reload_spinner_frame = "⠋",
 	status_filters = { OPEN = true, MERGED = false, DECLINED = false },
+	filter_text = "",
 }
 
 ---@param repo_id string

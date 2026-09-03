@@ -109,13 +109,13 @@ function M.tabs()
 	return {
 		{
 			key = "overview",
-			label = "Overview",
+			label = "Description",
 			icon = { icon = overview_icon, hl_group = overview_hl },
 			mod = require("atlas.issues.ui.detail.tabs.overview"),
 		},
 		{
 			key = "conversation",
-			label = "Conversation",
+			label = "Activity",
 			icon = { icon = conversation_icon, hl_group = conversation_hl },
 			mod = require("atlas.issues.ui.detail.tabs.conversation"),
 		},

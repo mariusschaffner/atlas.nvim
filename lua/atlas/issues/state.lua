@@ -12,6 +12,7 @@
 ---@field views IssuesViewConfig[]
 ---@field reloading_issue_keys table<string, boolean>
 ---@field reload_spinner_frame string
+---@field filter_text string Filter bar text mirroring `active_view` (e.g. "assignee:me").
 local M = {
 	active_view = nil,
 	current_view = nil,
@@ -26,6 +27,7 @@ local M = {
 	views = {},
 	reloading_issue_keys = {},
 	reload_spinner_frame = "⠋",
+	filter_text = "",
 }
 
 ---@param issues Issue[]

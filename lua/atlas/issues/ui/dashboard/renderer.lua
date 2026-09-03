@@ -1,30 +1,11 @@
 local M = {}
 
 local state = require("atlas.issues.state")
-local navbar = require("atlas.ui.components.navbar")
 local table_tree = require("atlas.ui.components.table_tree")
 local utils = require("atlas.ui.shared.utils")
 local statusline = require("atlas.ui.statusline")
 local icons = require("atlas.ui.shared.icons")
 local providers = require("atlas.issues.ui.dashboard.providers")
-
----@param view IssuesViewConfig|nil
----@return string
-local function view_id(view)
-	if view == nil then
-		return ""
-	end
-	return view.key or view.name or ""
-end
-
----@param view IssuesViewConfig|nil
----@return string
-local function search_text(view)
-	if view == nil or state.provider == nil then
-		return ""
-	end
-	return state.provider.capabilities.core.search_query(view, {})
-end
 
 ---@param lines string[]
 ---@param spans table[]
@@ -37,15 +18,21 @@ end
 
 ---@param lines string[]
 ---@param spans table[]
----@param text string
-local function append_search_text(lines, spans, text)
-	if text == "" then
-		return
+local function render_filter_bar(lines, spans)
+	local active_index = nil
+	for i, v in ipairs(state.views) do
+		if v == state.active_view then
+			active_index = i
+			break
+		end
 	end
-
-	local line = string.format(" %s %s", icons.general("search"), text)
+	local badge = active_index and string.format("[%d]", active_index) or "[*]"
+	local search_icon = icons.general("search")
+	local prefix = string.format(" %s %s ", badge, search_icon)
+	local line = prefix .. (state.filter_text or "")
 	table.insert(lines, line)
-	table.insert(spans, { line = #lines - 1, start_col = 0, end_col = #line, hl_group = "AtlasTextMuted" })
+	table.insert(spans, { line = #lines - 1, start_col = 1, end_col = 1 + #badge, hl_group = "AtlasFilterActive" })
+	table.insert(spans, { line = #lines - 1, start_col = #prefix, end_col = #line, hl_group = "AtlasTextMuted" })
 	table.insert(lines, "")
 end
 
@@ -242,62 +229,23 @@ end
 ---@param opts { width: integer }
 ---@return string[], table[], table<integer, table>
 function M.render(opts)
-	local provider = state.provider
-	local provider_hl = provider and provider.hl_group or "Title"
+	local active = state.active_view
 	local issue_count = #state.issues
 	local statusline_items = {
 		{ text = string.format("%d issues", issue_count), hl_group = "AtlasFooterText" },
 	}
 	statusline.set_items(statusline_items)
 
-	local views = state.views
-	local active = state.active_view
-	local active_id = view_id(active)
-
-	local nav_items = {}
-	local active_is_listed = false
-	for _, v in ipairs(views) do
-		local id = view_id(v)
-		local label = v.key and string.format("%s (%s)", v.name, v.key) or v.name
-		if id == active_id then
-			active_is_listed = true
-		end
-		table.insert(nav_items, {
-			label = label,
-			hl_group = id == active_id and "AtlasFilterActive" or "AtlasTextMuted",
-		})
-	end
-
-	if not active_is_listed and active ~= nil then
-		table.insert(nav_items, {
-			label = tostring(active.name or "-"),
-			hl_group = "AtlasFilterActive",
-		})
-	end
-
-	local actions = {}
-
 	local lines, spans = {}, {}
 	local line_map = {}
 
 	table.insert(lines, "")
-	utils.append_block(
-		lines,
-		spans,
-		navbar.render({
-			width = opts.width,
-			items = nav_items,
-			actions = actions,
-			active_hl = provider_hl,
-			plain_items = true,
-		})
-	)
+	render_filter_bar(lines, spans)
 	append_separator(lines, spans, opts.width)
 
 	table.insert(lines, "")
 
 	if state.error then
-		append_search_text(lines, spans, search_text(active))
 		local err_text = "Error: " .. state.error
 		utils.append_block(lines, spans, {
 			lines = { err_text },
@@ -312,7 +260,6 @@ function M.render(opts)
 			layout = "plain"
 		end
 		local issues = state.issues
-		append_search_text(lines, spans, search_text(active))
 
 		local has_rows = #issue_groups > 0
 		if layout == "compact" then

@@ -22,8 +22,6 @@ function M.render(_issue, details, _width)
 
 	local lines = {}
 	local spans = {}
-	utils.push(lines, spans, "Description", "AtlasColumnHeader", PADDING_X)
-	table.insert(lines, "")
 
 	local description = tostring(details.description or "")
 	if description == "" then

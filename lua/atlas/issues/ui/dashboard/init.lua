@@ -122,6 +122,7 @@ function M.init(provider, opts)
 
 	state.views = state.provider_views
 	state.active_view = (opts and opts.initial_view) or state.views[1]
+	state.filter_text = require("atlas.ui.filter_query").serialize(state.active_view, { domain = "issues" })
 
 	statusline.clear_items()
 

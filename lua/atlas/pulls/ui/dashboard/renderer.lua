@@ -266,56 +266,30 @@ end
 
 ---@param lines string[]
 ---@param spans table[]
-local function append_search_text(lines, spans)
-	local view = state.active_view
-	if view == nil or state.provider == nil then
-		return
-	end
-	local states = {}
-	for _, status in ipairs({ "OPEN", "MERGED", "DECLINED" }) do
-		if state.status_filters[status] then
-			table.insert(states, status:lower())
+local function render_filter_bar(lines, spans)
+	local active_index = nil
+	for i, v in ipairs(state.views) do
+		if v == state.active_view then
+			active_index = i
+			break
 		end
 	end
-	local text = state.provider.capabilities.core.search_query(view, { states = states })
-	if text == "" then
-		return
-	end
-	local line = string.format(" %s %s", icons.general("search"), text)
+	local badge = active_index and string.format("[%d]", active_index) or "[*]"
+	local search_icon = icons.general("search")
+	local prefix = string.format(" %s %s ", badge, search_icon)
+	local line = prefix .. (state.filter_text or "")
 	table.insert(lines, line)
-	table.insert(spans, { line = #lines - 1, start_col = 0, end_col = #line, hl_group = "AtlasTextMuted" })
+	table.insert(spans, { line = #lines - 1, start_col = 1, end_col = 1 + #badge, hl_group = "AtlasFilterActive" })
+	table.insert(spans, { line = #lines - 1, start_col = #prefix, end_col = #line, hl_group = "AtlasTextMuted" })
 	table.insert(lines, "")
 end
 
 ---@param lines string[]
 ---@param spans table[]
 ---@param width integer
-local function render_navbar(lines, spans, width)
-	local function view_id(view)
-		return view and tostring(view.key or view.name or "") or ""
-	end
+local function render_status_filters(lines, spans, width)
 	local hl = state.provider and state.provider.hl_group or "Title"
-
-	local views = vim.list_extend({}, state.views)
-	local active_id = view_id(state.active_view)
-	local found = false
-	for _, view in ipairs(views) do
-		if view_id(view) == active_id then
-			found = true
-			break
-		end
-	end
-	if state.active_view ~= nil and active_id ~= "" and not found then
-		table.insert(views, state.active_view)
-	end
 	local nav_items = {}
-	for _, view in ipairs(views) do
-		table.insert(nav_items, {
-			label = view.key and string.format("%s (%s)", view.name, view.key) or view.name,
-			hl_group = (view_id(view) == active_id) and "AtlasFilterActive" or "AtlasTextMuted",
-		})
-	end
-	table.insert(nav_items, { label = "|", hl_group = "AtlasTextMuted" })
 	for _, status in ipairs({ "OPEN", "MERGED", "DECLINED" }) do
 		local label = status:sub(1, 1):upper() .. status:sub(2):lower()
 		table.insert(nav_items, {
@@ -324,14 +298,13 @@ local function render_navbar(lines, spans, width)
 		})
 	end
 
-	local actions = {}
 	utils.append_block(
 		lines,
 		spans,
 		navbar.render({
 			width = width,
 			items = nav_items,
-			actions = actions,
+			actions = {},
 			active_hl = hl,
 			plain_items = true,
 		})
@@ -348,11 +321,11 @@ function M.render(opts)
 	statusline.set_items(statusline_items(pulls))
 
 	table.insert(lines, "")
-	render_navbar(lines, spans, opts.width)
+	render_status_filters(lines, spans, opts.width)
 	append_separator(lines, spans, opts.width)
 	table.insert(lines, "")
 
-	append_search_text(lines, spans)
+	render_filter_bar(lines, spans)
 	if state.error then
 		local text = "Error: " .. tostring(state.error):gsub("[\r\n]+", " | ")
 		utils.append_block(lines, spans, {

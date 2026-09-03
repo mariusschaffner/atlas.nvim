@@ -351,9 +351,18 @@ end
 ---@param view IssuesViewConfig|nil
 function M.switch_view(view)
 	state.active_view = view
+	state.filter_text = require("atlas.ui.filter_query").serialize(view, { domain = "issues" })
 	load_active_view(false, function()
 		navigation.focus_first_item()
 	end)
+end
+
+---@param text string
+function M.apply_filter_text(text)
+	local view = require("atlas.ui.filter_query").parse(text, { domain = "issues" })
+	view.name = "Custom"
+	view.state = view.state or "opened"
+	M.switch_view(view)
 end
 
 ---@param source_buf integer|nil

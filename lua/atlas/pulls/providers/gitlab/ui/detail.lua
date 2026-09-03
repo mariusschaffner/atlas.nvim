@@ -86,7 +86,7 @@ function M.tabs()
 		},
 		{
 			key = "conversation",
-			label = "Conversation",
+			label = "Activity",
 			icon = { icon = conversation_icon, hl_group = conversation_hl },
 			mod = require("atlas.pulls.ui.detail.tabs.conversation"),
 		},

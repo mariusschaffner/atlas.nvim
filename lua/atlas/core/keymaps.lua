@@ -27,6 +27,7 @@ local M = {}
 ---@field copy_url? AtlasKeymapValue
 ---@field show_details? AtlasKeymapValue
 ---@field search? AtlasKeymapValue
+---@field filter? AtlasKeymapValue
 
 ---@class AtlasUICommentKeymaps
 ---@field add? AtlasKeymapValue
@@ -145,6 +146,7 @@ local M = {}
 ---| "ui.copy_url"
 ---| "ui.show_details"
 ---| "ui.search"
+---| "ui.filter"
 ---| "picker.next_item"
 ---| "picker.previous_item"
 ---| "picker.select"

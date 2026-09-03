@@ -80,6 +80,22 @@ function M.register(buf, views)
 		end
 	end
 
+	utils.insert_if(
+		items,
+		item("ui.filter", {
+			desc = "Edit filter",
+			opts = { nowait = true, silent = true },
+			callback = function()
+				vim.ui.input({ prompt = "Filter: ", default = state.filter_text or "" }, function(input)
+					if input == nil then
+						return
+					end
+					require("atlas.pulls.ui.dashboard.controller").apply_filter_text(input)
+				end)
+			end,
+		})
+	)
+
 	local STATUS_TOGGLES = {
 		{ status = "OPEN", action_id = "pulls.filters.open" },
 		{ status = "MERGED", action_id = "pulls.filters.merged" },
