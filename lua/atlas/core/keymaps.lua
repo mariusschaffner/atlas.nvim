@@ -9,7 +9,6 @@ local M = {}
 ---@field submit? AtlasKeymapValue
 ---@field help? AtlasKeymapValue
 ---@field close? AtlasKeymapValue
----@field back? AtlasKeymapValue
 ---@field delete? AtlasKeymapValue
 ---@field comments? AtlasUICommentKeymaps
 ---@field toggle_panel? AtlasKeymapValue
@@ -128,7 +127,6 @@ local M = {}
 ---| "ui.submit"
 ---| "ui.help"
 ---| "ui.close"
----| "ui.back"
 ---| "ui.delete"
 ---| "ui.comments.add"
 ---| "ui.comments.reply"

@@ -1,59 +1,48 @@
 local request_scope = require("atlas.core.requests")
 
 ---@class PullsPipelinesTabState
----@field selected_pipeline_id string|nil
+---@field expanded_pipelines table<string, boolean>
+---@field expanded_jobs table<string, boolean>
 ---@field details_by_id table<string, PullsPipeline|"loading"|string>
----@field selected_job PullsPipelineJob|nil
----@field selected_job_stage PullsPipelineStage|nil
----@field log_by_job_id table<string, string|"loading"|string>
+---@field log_by_job_id table<string, { status: "loading"|"loaded"|"error", text: string|nil }>
 ---@field requests AtlasRequestScope
 local M = {
-	selected_pipeline_id = nil,
+	expanded_pipelines = {},
+	expanded_jobs = {},
 	details_by_id = {},
-	selected_job = nil,
-	selected_job_stage = nil,
 	log_by_job_id = {},
 	requests = request_scope.new(),
 }
 
 function M.reset()
-	M.selected_pipeline_id = nil
+	M.expanded_pipelines = {}
+	M.expanded_jobs = {}
 	M.details_by_id = {}
-	M.selected_job = nil
-	M.selected_job_stage = nil
 	M.log_by_job_id = {}
 	M.requests.cancel()
 	M.requests = request_scope.new()
 end
 
+---@param pipeline_id string
 ---@return boolean
-function M.at_pipeline_list()
-	return M.selected_pipeline_id == nil
+function M.is_pipeline_expanded(pipeline_id)
+	return M.expanded_pipelines[pipeline_id] == true
 end
 
----@return boolean
-function M.at_job_list()
-	return M.selected_pipeline_id ~= nil and M.selected_job == nil
+---@param pipeline_id string
+function M.toggle_pipeline(pipeline_id)
+	M.expanded_pipelines[pipeline_id] = not M.is_pipeline_expanded(pipeline_id) or nil
 end
 
+---@param job_id string
 ---@return boolean
-function M.at_job_log()
-	return M.selected_job ~= nil
+function M.is_job_expanded(job_id)
+	return M.expanded_jobs[job_id] == true
 end
 
----Go up one level: log -> job list -> pipeline list.
----@return boolean true if a level was popped
-function M.back()
-	if M.selected_job ~= nil then
-		M.selected_job = nil
-		M.selected_job_stage = nil
-		return true
-	end
-	if M.selected_pipeline_id ~= nil then
-		M.selected_pipeline_id = nil
-		return true
-	end
-	return false
+---@param job_id string
+function M.toggle_job(job_id)
+	M.expanded_jobs[job_id] = not M.is_job_expanded(job_id) or nil
 end
 
 return M

@@ -434,7 +434,6 @@ Defaults live under `keymaps` in `setup()`. Each entry accepts:
       ui = {
         help                    = "g?",    -- { "g?", "<leader>?" } for aliases
         close                   = "q",
-        back                    = "<BS>",
         next_item               = "j",
         previous_item           = "k",
         first_item              = "gg",

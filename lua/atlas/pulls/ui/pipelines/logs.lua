@@ -174,14 +174,55 @@ local function highlight_message(spans, line_index, line, start_col)
 end
 
 ---@param log string
----@return string[], table[]
-function M.render_log(log)
+---@return string[]
+function M.split_log_lines(log)
 	local text = tostring(log or ""):gsub("^\239\187\191", ""):gsub("\r\n", "\n"):gsub("\r", "\n")
 	text = strip_terminal_sequences(text)
 	local lines = vim.split(text, "\n", { plain = true })
 	if #lines > 1 and lines[#lines] == "" then
 		table.remove(lines)
 	end
+	return lines
+end
+
+--- Classifies a single log line as a whole (no sub-token spans) -- used where
+--- log lines are rendered as individual tree rows (e.g. the pipelines tab's
+--- inline job-log expansion) and per-token alignment isn't practical.
+---@param line string
+---@return string|nil hl_group
+function M.classify_log_line(line)
+	local timestamp_end = log_timestamp_end(line)
+	local message_start = line:find("%S", (timestamp_end or 0) + 1)
+	if not message_start then
+		return nil
+	end
+	local content = line:sub(message_start)
+
+	if content:match("^%d%d%u%+") or content:match("^%d%d%u%s") then
+		return "AtlasColumnHeader"
+	end
+	if content:match("^##%[group%]") then
+		return "AtlasColumnHeader"
+	end
+	if content:match("^##%[endgroup%]") then
+		return "AtlasTextMuted"
+	end
+	if
+		content:match("^##%[command%]")
+		or content:match("^%[command%]")
+		or content:match("^%$%s")
+		or content:match("^%+%s")
+	then
+		return "AtlasLogInfo"
+	end
+
+	return log_message_hl(content)
+end
+
+---@param log string
+---@return string[], table[]
+function M.render_log(log)
+	local lines = M.split_log_lines(log)
 
 	local spans = {}
 	for line_index, line in ipairs(lines) do
