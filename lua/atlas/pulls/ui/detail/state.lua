@@ -6,15 +6,13 @@ local request_scope = require("atlas.core.requests")
 ---@field current_tab string|nil
 ---@field tabs PullsDetailTab[]
 ---@field line_map table<integer, table>
----@field side_line_map table<integer, table>
+---@field content_offset integer Line count before the content section starts (0-indexed line where it begins).
 ---@field diffstat PullsDiffstatEntry[]|"loading"|string|nil
 ---@field pipelines PullsPipeline[]|"loading"|string|nil
 ---@field pr_loading boolean
 ---@field details_loading boolean
 ---@field win integer|nil
 ---@field buf integer|nil
----@field side_win integer|nil
----@field side_buf integer|nil
 ---@field provider PullsProvider|nil
 ---@field on_update fun(pr: PullRequest, result: PullsActionResult|nil)|nil
 ---@field requests AtlasRequestScope
@@ -25,15 +23,13 @@ local M = {
 	current_tab = nil,
 	tabs = {},
 	line_map = {},
-	side_line_map = {},
+	content_offset = 0,
 	diffstat = nil,
 	pipelines = nil,
 	pr_loading = false,
 	details_loading = false,
 	win = nil,
 	buf = nil,
-	side_win = nil,
-	side_buf = nil,
 	provider = nil,
 	on_update = nil,
 	requests = request_scope.new(),
@@ -46,15 +42,13 @@ function M.reset()
 	M.current_tab = nil
 	M.tabs = {}
 	M.line_map = {}
-	M.side_line_map = {}
+	M.content_offset = 0
 	M.diffstat = nil
 	M.pipelines = nil
 	M.pr_loading = false
 	M.details_loading = false
 	M.win = nil
 	M.buf = nil
-	M.side_win = nil
-	M.side_buf = nil
 	M.provider = nil
 	M.on_update = nil
 	M.requests.cancel()

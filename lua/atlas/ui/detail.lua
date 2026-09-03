@@ -3,17 +3,11 @@ local M = {}
 local statusline = require("atlas.ui.statusline")
 local utils = require("atlas.ui.shared.utils")
 
-local SIDEBAR_HEIGHT_RATIO = 0.3
-local MIN_SIDEBAR_HEIGHT = 6
-local MIN_CONTENT_HEIGHT = 10
-
 local state = {
 	kind = nil,
 	layout = nil, -- "single"|"split"
-	win = nil, -- content window (both layouts)
-	buf = nil, -- content buffer (both layouts)
-	side_win = nil, -- sidebar window (split layout only)
-	side_buf = nil, -- sidebar buffer (split layout only)
+	win = nil,
+	buf = nil,
 	previous_win = nil,
 	cleanup = nil,
 	render = nil,
@@ -43,14 +37,6 @@ local function configure(win)
 	statusline.attach(win)
 end
 
----@param total_height integer
----@return integer
-local function sidebar_height(total_height)
-	local ideal = math.floor(total_height * SIDEBAR_HEIGHT_RATIO)
-	local max_allowed = math.max(MIN_SIDEBAR_HEIGHT, total_height - MIN_CONTENT_HEIGHT)
-	return math.max(MIN_SIDEBAR_HEIGHT, math.min(ideal, max_allowed))
-end
-
 ---@param buf integer|nil
 ---@param filetype string
 local function reset_buffer(buf, filetype)
@@ -67,12 +53,8 @@ end
 
 local function reset_content()
 	reset_buffer(state.buf, "atlas.detail")
-	reset_buffer(state.side_buf, "atlas.detail.side")
 	if utils.window.valid(state.win) then
 		vim.api.nvim_set_option_value("winbar", "", { win = state.win, scope = "local" })
-	end
-	if utils.window.valid(state.side_win) then
-		vim.api.nvim_set_option_value("winbar", "", { win = state.side_win, scope = "local" })
 	end
 end
 
@@ -106,8 +88,6 @@ local function create_single()
 	state.layout = "single"
 	state.win = win
 	state.buf = buf
-	state.side_win = nil
-	state.side_buf = nil
 
 	vim.api.nvim_create_autocmd("WinClosed", {
 		pattern = tostring(win),
@@ -126,57 +106,48 @@ local function create_single()
 	})
 end
 
+-- Full-screen dedicated tab, single window/buffer. The sidebar/content split
+-- within that buffer is a purely visual separator drawn by the renderer, not
+-- an actual window split.
 local function create_split()
 	vim.cmd("tabnew")
 	local tab = vim.api.nvim_get_current_tabpage()
 	local placeholder_buf = vim.api.nvim_get_current_buf()
 
-	local content_buf = utils.buffer.create(string.format("atlas://detail/%d", tab), "atlas.detail")
-	vim.api.nvim_set_option_value("bufhidden", "wipe", { buf = content_buf })
-	local side_buf = utils.buffer.create(string.format("atlas://detail/side/%d", tab), "atlas.detail.side")
-	vim.api.nvim_set_option_value("bufhidden", "wipe", { buf = side_buf })
+	local buf = utils.buffer.create(string.format("atlas://detail/%d", tab), "atlas.detail")
+	vim.api.nvim_set_option_value("bufhidden", "wipe", { buf = buf })
 
-	local side_win = vim.api.nvim_get_current_win()
-	vim.api.nvim_win_set_buf(side_win, side_buf)
-	configure(side_win)
+	local win = vim.api.nvim_get_current_win()
+	vim.api.nvim_win_set_buf(win, buf)
+	configure(win)
 
-	local content_win = utils.window.create(side_win, "belowright split", content_buf, configure)
-	local total_height = vim.api.nvim_win_get_height(side_win) + vim.api.nvim_win_get_height(content_win)
-	pcall(vim.api.nvim_win_set_height, side_win, sidebar_height(total_height))
-
-	if placeholder_buf ~= content_buf and placeholder_buf ~= side_buf and vim.api.nvim_buf_is_valid(placeholder_buf) then
+	if placeholder_buf ~= buf and vim.api.nvim_buf_is_valid(placeholder_buf) then
 		utils.buffer.delete(placeholder_buf)
 	end
 
-	-- Focus always moves into the content pane, regardless of where the split was opened from.
-	vim.api.nvim_set_current_win(content_win)
-
 	state.layout = "split"
-	state.win = content_win
-	state.buf = content_buf
-	state.side_win = side_win
-	state.side_buf = side_buf
+	state.win = win
+	state.buf = buf
 
-	local function on_closed()
-		vim.schedule(function()
-			if state.win ~= content_win and state.side_win ~= side_win then
-				return
-			end
-			deactivate()
-			if vim.api.nvim_tabpage_is_valid(tab) then
-				pcall(vim.cmd, "tabclose " .. vim.api.nvim_tabpage_get_number(tab))
-			end
-			state.win = nil
-			state.buf = nil
-			state.side_win = nil
-			state.side_buf = nil
-			state.layout = nil
-			require("atlas.ui.dashboard").render()
-		end)
-	end
-
-	vim.api.nvim_create_autocmd("WinClosed", { pattern = tostring(content_win), once = true, callback = on_closed })
-	vim.api.nvim_create_autocmd("WinClosed", { pattern = tostring(side_win), once = true, callback = on_closed })
+	vim.api.nvim_create_autocmd("WinClosed", {
+		pattern = tostring(win),
+		once = true,
+		callback = function()
+			vim.schedule(function()
+				if state.win ~= win then
+					return
+				end
+				deactivate()
+				if vim.api.nvim_tabpage_is_valid(tab) then
+					pcall(vim.cmd, "tabclose " .. vim.api.nvim_tabpage_get_number(tab))
+				end
+				state.win = nil
+				state.buf = nil
+				state.layout = nil
+				require("atlas.ui.dashboard").render()
+			end)
+		end,
+	})
 end
 
 ---@param kind "issues"|"pulls"|"repo"
@@ -191,7 +162,7 @@ end
 ---@param kind "issues"|"pulls"|"repo"
 ---@param cleanup fun()
 ---@param render fun()
----@return integer win, integer buf, integer|nil side_win, integer|nil side_buf
+---@return integer win, integer buf
 function M.open(kind, cleanup, render)
 	require("atlas.ui.shared.highlights").setup()
 	local wanted_layout = layout_for(kind)
@@ -203,7 +174,7 @@ function M.open(kind, cleanup, render)
 	end
 	if not M.is_open() then
 		deactivate()
-		state.win, state.buf, state.side_win, state.side_buf = nil, nil, nil, nil
+		state.win, state.buf = nil, nil
 		if wanted_layout == "split" then
 			create_split()
 		else
@@ -217,7 +188,7 @@ function M.open(kind, cleanup, render)
 	state.kind = kind
 	state.cleanup = cleanup
 	state.render = render
-	return state.win, state.buf, state.side_win, state.side_buf
+	return state.win, state.buf
 end
 
 ---@param tab integer|nil
@@ -243,24 +214,17 @@ function M.close(tab)
 	end
 
 	local win = state.win
-	local side_win = state.side_win
 	local buf = state.buf
-	local side_buf = state.side_buf
 	local layout = state.layout
 	deactivate()
-	state.win, state.buf, state.side_win, state.side_buf, state.layout = nil, nil, nil, nil, nil
+	state.win, state.buf, state.layout = nil, nil, nil
 	if layout == "split" and utils.window.valid(win) then
 		local tabpage = vim.api.nvim_win_get_tabpage(win)
 		pcall(vim.cmd, "tabclose " .. vim.api.nvim_tabpage_get_number(tabpage))
-	else
-		for _, w in ipairs({ win, side_win }) do
-			if utils.window.valid(w) then
-				vim.api.nvim_win_close(w, true)
-			end
-		end
+	elseif utils.window.valid(win) then
+		vim.api.nvim_win_close(win, true)
 	end
 	utils.buffer.delete(buf)
-	utils.buffer.delete(side_buf)
 	require("atlas.ui.dashboard").render()
 end
 
@@ -270,12 +234,7 @@ vim.api.nvim_create_autocmd("VimResized", {
 		if not M.is_open() then
 			return
 		end
-		if state.layout == "split" then
-			if utils.window.valid(state.side_win) then
-				local total_height = vim.api.nvim_win_get_height(state.win) + vim.api.nvim_win_get_height(state.side_win)
-				pcall(vim.api.nvim_win_set_height, state.side_win, sidebar_height(total_height))
-			end
-		else
+		if state.layout ~= "split" then
 			pcall(vim.api.nvim_win_set_width, state.win, math.max(math.floor(vim.o.columns * 0.45), 40))
 		end
 		if state.render then

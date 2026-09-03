@@ -57,6 +57,15 @@ local function render()
 	renderer.render(state.tabs, tab_module)
 end
 
+local function move_cursor_to_content()
+	if not (state.win and vim.api.nvim_win_is_valid(state.win) and state.buf and vim.api.nvim_buf_is_valid(state.buf)) then
+		return
+	end
+	local last = vim.api.nvim_buf_line_count(state.buf)
+	local target = math.min((state.content_offset or 0) + 1, last)
+	vim.api.nvim_win_set_cursor(state.win, { target, 0 })
+end
+
 local function start_spinner()
 	if state.spinner_timer ~= nil then
 		return
@@ -196,6 +205,7 @@ local function show_issue(issue, force_refresh)
 	load_active_tab(issue, { force_refresh = force_refresh })
 	update_spinner()
 	render()
+	move_cursor_to_content()
 end
 
 ---@param provider IssuesProvider
@@ -215,20 +225,13 @@ local function set_provider(provider)
 	if state.buf and vim.api.nvim_buf_is_valid(state.buf) then
 		require("atlas.issues.ui.detail.keymaps").register(state.buf)
 	end
-	if state.side_buf and vim.api.nvim_buf_is_valid(state.side_buf) then
-		require("atlas.issues.ui.detail.keymaps").register(state.side_buf, { navigation = false })
-	end
 end
 
 local function cleanup()
 	local buf = state.buf
-	local side_buf = state.side_buf
 	set_tab(nil)
 	if buf and vim.api.nvim_buf_is_valid(buf) then
 		require("atlas.issues.ui.detail.keymaps").remove(buf)
-	end
-	if side_buf and vim.api.nvim_buf_is_valid(side_buf) then
-		require("atlas.issues.ui.detail.keymaps").remove(side_buf)
 	end
 	stop_spinner()
 	reset_tabs()
@@ -276,7 +279,7 @@ local function prepare_open(opts)
 		return nil, false
 	end
 
-	state.win, state.buf, state.side_win, state.side_buf = detail_ui.open("issues", cleanup, render)
+	state.win, state.buf = detail_ui.open("issues", cleanup, render)
 	set_provider(provider)
 	state.on_update = opts.on_update
 
@@ -389,9 +392,7 @@ local function change_tab(step)
 		update_spinner()
 	end
 	render()
-	if state.win and vim.api.nvim_win_is_valid(state.win) then
-		vim.api.nvim_win_set_cursor(state.win, { 1, 0 })
-	end
+	move_cursor_to_content()
 end
 
 function M.next_tab()

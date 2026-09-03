@@ -8,22 +8,20 @@ local tabs = require("atlas.ui.components.tabs")
 local state = require("atlas.issues.ui.detail.state")
 
 local ns = vim.api.nvim_create_namespace("atlas.issues.provider_detail")
-local side_ns = vim.api.nvim_create_namespace("atlas.issues.provider_detail.side")
 
 local PADDING_X = 1
 
 ---@param buf integer
----@param namespace integer
 ---@param spans table[]
-local function apply_spans(buf, namespace, spans)
-	vim.api.nvim_buf_clear_namespace(buf, namespace, 0, -1)
+local function apply_spans(buf, spans)
+	vim.api.nvim_buf_clear_namespace(buf, ns, 0, -1)
 	for _, span in ipairs(spans) do
 		if span.line ~= nil and span.line_hl_group ~= nil then
-			vim.api.nvim_buf_set_extmark(buf, namespace, span.line, 0, {
+			vim.api.nvim_buf_set_extmark(buf, ns, span.line, 0, {
 				line_hl_group = span.line_hl_group,
 			})
 		elseif span.line ~= nil and span.start_col ~= nil and span.end_col ~= nil and span.hl_group ~= nil then
-			vim.api.nvim_buf_set_extmark(buf, namespace, span.line, span.start_col, {
+			vim.api.nvim_buf_set_extmark(buf, ns, span.line, span.start_col, {
 				end_row = span.line,
 				end_col = span.end_col,
 				hl_group = span.hl_group,
@@ -81,6 +79,13 @@ local function render_sidebar(issue, tab_items, width)
 	return lines, spans
 end
 
+---@param width integer
+---@return string[], table[]
+local function render_separator(width)
+	local line = string.rep("─", math.max(0, width))
+	return { line }, { { line = 0, start_col = 0, end_col = #line, hl_group = "AtlasFilterSeparator" } }
+end
+
 ---@param tab_items IssuesDetailTabDefinition[]
 ---@param get_tab_module fun(key: string|nil): IssuesDetailTabModule|nil
 function M.render(tab_items, get_tab_module)
@@ -94,28 +99,27 @@ function M.render(tab_items, get_tab_module)
 	end
 
 	local issue = state.current_issue
-	local side_win = state.side_win
-	local side_buf = state.side_buf
-	local has_sidebar = utils.window.valid(side_win) and utils.buffer.valid(side_buf)
+	local width = vim.api.nvim_win_get_width(win)
 
-	if has_sidebar then
-		local side_lines, side_spans = {}, {}
-		if issue ~= nil then
-			side_lines, side_spans = render_sidebar(issue, tab_items, vim.api.nvim_win_get_width(side_win))
-		end
-		set_lines(side_buf, side_lines)
-		apply_spans(side_buf, side_ns, side_spans)
+	local lines, spans = {}, {}
+
+	if issue ~= nil then
+		local side_lines, side_spans = render_sidebar(issue, tab_items, width)
+		utils.append_block(lines, spans, { lines = side_lines, highlights = side_spans })
+
+		local sep_lines, sep_spans = render_separator(width)
+		utils.append_block(lines, spans, { lines = sep_lines, highlights = sep_spans })
+		table.insert(lines, "")
 	end
 
-	local width = vim.api.nvim_win_get_width(win)
-	local lines = {}
-	local spans = {}
+	state.content_offset = #lines
 
 	if issue == nil then
 		if state.issue_loading then
 			utils.push(lines, spans, spinner.with_text("Loading issue..."), "AtlasTextMuted", PADDING_X)
 		else
-			lines = { "", "  Nothing selected..." }
+			table.insert(lines, "")
+			table.insert(lines, "  Nothing selected...")
 		end
 		state.line_map = {}
 	else
@@ -124,8 +128,12 @@ function M.render(tab_items, get_tab_module)
 
 		if tab_mod and tab_mod.render then
 			local tab_lines, tab_spans, tab_line_map = tab_mod.render(issue, details, width)
-			lines, spans = tab_lines, tab_spans
-			state.line_map = tab_line_map or {}
+			local offset = #lines
+			utils.append_block(lines, spans, { lines = tab_lines, highlights = tab_spans })
+			state.line_map = {}
+			for lnum, entry in pairs(tab_line_map or {}) do
+				state.line_map[offset + lnum] = entry
+			end
 			if details == nil and state.current_tab == "overview" then
 				if #lines > 0 then
 					table.insert(lines, "")
@@ -139,13 +147,13 @@ function M.render(tab_items, get_tab_module)
 			utils.push(lines, spans, text, "AtlasTextMuted", PADDING_X)
 			state.line_map = {}
 		else
-			lines = { "  Unknown tab: " .. tostring(state.current_tab) }
+			table.insert(lines, "  Unknown tab: " .. tostring(state.current_tab))
 			state.line_map = {}
 		end
 	end
 
 	set_lines(buf, lines)
-	apply_spans(buf, ns, spans)
+	apply_spans(buf, spans)
 end
 
 return M

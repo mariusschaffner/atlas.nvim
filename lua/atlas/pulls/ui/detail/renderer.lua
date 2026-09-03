@@ -9,18 +9,16 @@ local icons = require("atlas.ui.shared.icons")
 local spinner = require("atlas.ui.components.spinner")
 
 local ns = vim.api.nvim_create_namespace("atlas.provider_detail")
-local side_ns = vim.api.nvim_create_namespace("atlas.provider_detail.side")
 
 local PADDING_X = 1
 
 ---@param buf integer
----@param namespace integer
 ---@param spans table[]
-local function apply_spans(buf, namespace, spans)
-	vim.api.nvim_buf_clear_namespace(buf, namespace, 0, -1)
+local function apply_spans(buf, spans)
+	vim.api.nvim_buf_clear_namespace(buf, ns, 0, -1)
 	for _, span in ipairs(spans) do
 		if span.line ~= nil and span.line_hl_group ~= nil then
-			vim.api.nvim_buf_set_extmark(buf, namespace, span.line, 0, {
+			vim.api.nvim_buf_set_extmark(buf, ns, span.line, 0, {
 				line_hl_group = span.line_hl_group,
 			})
 		elseif span.line ~= nil and span.start_col ~= nil and span.end_col ~= nil and span.hl_group ~= nil then
@@ -29,7 +27,7 @@ local function apply_spans(buf, namespace, spans)
 			local sc = math.min(span.start_col, max_col)
 			local ec = math.min(span.end_col, max_col)
 			if ec > sc then
-				vim.api.nvim_buf_set_extmark(buf, namespace, span.line, sc, {
+				vim.api.nvim_buf_set_extmark(buf, ns, span.line, sc, {
 					end_row = span.line,
 					end_col = ec,
 					hl_group = span.hl_group,
@@ -52,7 +50,7 @@ end
 
 ---@param win integer
 ---@param pr PullRequest|nil
-local function set_side_winbar(win, pr)
+local function set_winbar(win, pr)
 	local winbar_items = {}
 	if pr ~= nil then
 		if type(state.diffstat) == "table" then
@@ -125,7 +123,7 @@ local function render_sidebar(pr, tab_items, tab_mod, width)
 		table.insert(lines, "")
 	end
 
-	-- Tab-provided sidebar content (e.g. reviewers/merge checks/pipelines for Overview)
+	-- Tab-provided sidebar content (e.g. reviewers/merge checks for Overview)
 	local line_map = {}
 	if tab_mod and tab_mod.render_side then
 		local side_offset = #lines
@@ -137,6 +135,13 @@ local function render_sidebar(pr, tab_items, tab_mod, width)
 	end
 
 	return lines, spans, line_map
+end
+
+---@param width integer
+---@return string[], table[]
+local function render_separator(width)
+	local line = string.rep("─", math.max(0, width))
+	return { line }, { { line = 0, start_col = 0, end_col = #line, hl_group = "AtlasFilterSeparator" } }
 end
 
 ---@param tab_items PullsDetailTab[]
@@ -152,47 +157,48 @@ function M.render(tab_items, get_tab_module)
 	end
 
 	local pr = state.current_pr
-	local side_win = state.side_win
-	local side_buf = state.side_buf
-	local has_sidebar = utils.window.valid(side_win) and utils.buffer.valid(side_buf)
+	local width = vim.api.nvim_win_get_width(win)
 	local tab_mod = pr ~= nil and get_tab_module(state.current_tab) or nil
 
-	if has_sidebar then
-		set_side_winbar(side_win, pr)
-		local side_lines, side_spans, side_line_map = {}, {}, {}
-		if pr ~= nil then
-			side_lines, side_spans, side_line_map =
-				render_sidebar(pr, tab_items, tab_mod, vim.api.nvim_win_get_width(side_win))
+	set_winbar(win, pr)
+
+	local lines, spans, line_map = {}, {}, {}
+
+	if pr ~= nil then
+		local side_lines, side_spans, side_line_map = render_sidebar(pr, tab_items, tab_mod, width)
+		utils.append_block(lines, spans, { lines = side_lines, highlights = side_spans })
+		for lnum, entry in pairs(side_line_map) do
+			line_map[lnum] = entry
 		end
-		set_lines(side_buf, side_lines)
-		apply_spans(side_buf, side_ns, side_spans)
-		state.side_line_map = side_line_map
+
+		local sep_lines, sep_spans = render_separator(width)
+		utils.append_block(lines, spans, { lines = sep_lines, highlights = sep_spans })
+		table.insert(lines, "")
 	end
 
-	local width = vim.api.nvim_win_get_width(win)
-	local lines = {}
-	local spans = {}
+	state.content_offset = #lines
 
 	if pr == nil then
 		if state.pr_loading then
 			utils.push(lines, spans, spinner.with_text("Loading pull request..."), "AtlasTextMuted", PADDING_X)
 		else
-			lines = { "", "  Nothing selected..." }
+			table.insert(lines, "")
+			table.insert(lines, "  Nothing selected...")
 		end
-		state.line_map = {}
+	elseif tab_mod then
+		local tab_lines, tab_spans, tab_line_map = tab_mod.render(pr, state.current_details, width)
+		local offset = #lines
+		utils.append_block(lines, spans, { lines = tab_lines, highlights = tab_spans })
+		for lnum, entry in pairs(tab_line_map or {}) do
+			line_map[offset + lnum] = entry
+		end
 	else
-		if tab_mod then
-			local tab_lines, tab_spans, tab_line_map = tab_mod.render(pr, state.current_details, width)
-			lines, spans = tab_lines, tab_spans
-			state.line_map = tab_line_map or {}
-		else
-			lines = { "  Unknown tab: " .. tostring(state.current_tab) }
-			state.line_map = {}
-		end
+		table.insert(lines, "  Unknown tab: " .. tostring(state.current_tab))
 	end
 
+	state.line_map = line_map
 	set_lines(buf, lines)
-	apply_spans(buf, ns, spans)
+	apply_spans(buf, spans)
 end
 
 return M

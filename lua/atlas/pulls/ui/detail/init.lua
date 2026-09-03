@@ -43,6 +43,15 @@ local function render()
 	renderer.render(state.tabs, tab_module)
 end
 
+local function move_cursor_to_content()
+	if not (state.win and vim.api.nvim_win_is_valid(state.win) and state.buf and vim.api.nvim_buf_is_valid(state.buf)) then
+		return
+	end
+	local last = vim.api.nvim_buf_line_count(state.buf)
+	local target = math.min((state.content_offset or 0) + 1, last)
+	vim.api.nvim_win_set_cursor(state.win, { target, 0 })
+end
+
 -- Loading spinner
 
 local function stop_spinner()
@@ -254,6 +263,7 @@ local function show_pr(pr, force_refresh)
 	load_pr(pr, force_refresh)
 	update_spinner()
 	render()
+	move_cursor_to_content()
 end
 
 ---@param provider PullsProvider
@@ -274,20 +284,13 @@ local function set_provider(provider)
 	if state.buf and vim.api.nvim_buf_is_valid(state.buf) then
 		detail_keymaps.register(state.buf)
 	end
-	if state.side_buf and vim.api.nvim_buf_is_valid(state.side_buf) then
-		detail_keymaps.register(state.side_buf)
-	end
 end
 
 local function cleanup()
 	local buf = state.buf
-	local side_buf = state.side_buf
 	set_tab(nil)
 	if buf and vim.api.nvim_buf_is_valid(buf) then
 		detail_keymaps.remove(buf)
-	end
-	if side_buf and vim.api.nvim_buf_is_valid(side_buf) then
-		detail_keymaps.remove(side_buf)
 	end
 	stop_spinner()
 	reset_tabs()
@@ -340,7 +343,7 @@ function M.open(input, opts)
 		notify.error("Pull request provider unavailable")
 		return
 	end
-	state.win, state.buf, state.side_win, state.side_buf = detail_ui.open("pulls", cleanup, render)
+	state.win, state.buf = detail_ui.open("pulls", cleanup, render)
 	set_provider(provider)
 	state.on_update = opts.on_update
 
@@ -449,9 +452,7 @@ local function change_tab(step)
 	end
 
 	render()
-	if state.win and vim.api.nvim_win_is_valid(state.win) then
-		vim.api.nvim_win_set_cursor(state.win, { 1, 0 })
-	end
+	move_cursor_to_content()
 end
 
 function M.next_tab()

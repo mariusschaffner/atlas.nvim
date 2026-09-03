@@ -8,15 +8,6 @@ local function active_pane()
 	if current == state.win and vim.api.nvim_win_is_valid(state.win) and vim.api.nvim_buf_is_valid(state.buf) then
 		return state.win, state.buf, state.line_map
 	end
-	if
-		current == state.side_win
-		and state.side_win ~= nil
-		and vim.api.nvim_win_is_valid(state.side_win)
-		and state.side_buf ~= nil
-		and vim.api.nvim_buf_is_valid(state.side_buf)
-	then
-		return state.side_win, state.side_buf, state.side_line_map
-	end
 	return nil, nil, nil
 end
 
