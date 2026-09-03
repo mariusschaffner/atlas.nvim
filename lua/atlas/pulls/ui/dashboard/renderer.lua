@@ -1,6 +1,5 @@
 local M = {}
 
-local header = require("atlas.ui.components.header")
 local icons = require("atlas.ui.shared.icons")
 local navbar = require("atlas.ui.components.navbar")
 local presentation = require("atlas.pulls.ui.presentation")
@@ -130,7 +129,7 @@ local function cell_hl(row, col, ctx, display)
 		local hl = row.kind == "pr" and (row._pr_reloading and "AtlasTextMuted" or row._pr_icon_hl) or "AtlasTextMuted"
 		return { { start_col = 0, end_col = #ctx.padded, hl_group = hl } }
 	end
-	if col.key == "created" or col.key == "updated" or (row.kind == "meta" and col.key == "repo_pr") then
+	if col.key == "created" or col.key == "updated" then
 		return { { start_col = 0, end_col = #ctx.padded, hl_group = "AtlasTextMuted" } }
 	end
 	if col.key == "author" then
@@ -173,17 +172,11 @@ local function compact_rows(pulls, display)
 			author_hl = author,
 			created = utils.relative_time(pr.created_on),
 			updated = utils.relative_time(pr.updated_on),
+			separator = true,
 			_item = { kind = "pr", id = pr.id, repo = repo, pr = pr },
 		}
 		add_values(row, display.values(pr))
 		table.insert(rows, row)
-		table.insert(rows, {
-			kind = "meta",
-			pr_icon = "",
-			repo_pr = repo.name,
-			separator = true,
-			_item = { kind = "pr_meta", id = pr.id, repo = repo, pr = pr },
-		})
 	end
 	return rows
 end
@@ -318,14 +311,11 @@ end
 ---@param lines string[]
 ---@param spans table[]
 ---@param width integer
-local function render_header(lines, spans, width)
+local function render_navbar(lines, spans, width)
 	local function view_id(view)
 		return view and tostring(view.key or view.name or "") or ""
 	end
-	local icon = state.provider and state.provider.icon or icons.fallback()
-	local title = state.provider and state.provider.name or "Atlas"
 	local hl = state.provider and state.provider.hl_group or "Title"
-	utils.append_block(lines, spans, header.render({ width = width, icon = icon, title = title, hl_group = hl }))
 
 	local views = vim.list_extend({}, state.views)
 	local active_id = view_id(state.active_view)
@@ -386,7 +376,7 @@ function M.render(opts)
 	statusline.set_items(statusline_items(pulls))
 
 	table.insert(lines, "")
-	render_header(lines, spans, opts.width)
+	render_navbar(lines, spans, opts.width)
 	table.insert(lines, "")
 
 	append_search_text(lines, spans)

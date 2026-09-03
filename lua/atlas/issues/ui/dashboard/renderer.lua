@@ -2,7 +2,6 @@ local M = {}
 
 local resolver = require("atlas.core.keymaps")
 local state = require("atlas.issues.state")
-local header = require("atlas.ui.components.header")
 local navbar = require("atlas.ui.components.navbar")
 local table_tree = require("atlas.ui.components.table_tree")
 local utils = require("atlas.ui.shared.utils")
@@ -89,9 +88,8 @@ local function cell_hl(row, col, ctx)
 end
 
 ---@param issue_groups IssuesGroup[]
----@param columns table[]
 ---@return table[]
-local function issues_to_rows(issue_groups, columns)
+local function issues_to_rows(issue_groups)
 	local rows = {}
 	for i, group in ipairs(issue_groups) do
 		local children = group.children
@@ -106,14 +104,10 @@ local function issues_to_rows(issue_groups, columns)
 			root_row.icon, root_row._fold_icon_hl = icons.general(collapsed and "fold_closed" or "fold_open")
 		end
 
-		table.insert(rows, root_row)
-
 		if i < #issue_groups then
-			local separator = blank_row(columns)
-			separator.kind = "separator"
-			separator.children = {}
-			table.insert(rows, separator)
+			root_row.separator = true
 		end
+		table.insert(rows, root_row)
 	end
 	return rows
 end
@@ -135,7 +129,7 @@ end
 local function render_issue_table(opts, issue_groups)
 	local display = providers.get(state.provider and state.provider.id)
 	local columns = display.columns("plain")
-	local rows = issues_to_rows(issue_groups, columns)
+	local rows = issues_to_rows(issue_groups)
 	if state.is_loading then
 		table.insert(rows, blank_row(columns))
 		local loading = blank_row(columns)
@@ -248,8 +242,6 @@ end
 ---@return string[], table[], table<integer, table>
 function M.render(opts)
 	local provider = state.provider
-	local provider_icon = provider and provider.icon or icons.fallback()
-	local provider_name = provider and provider.name or "Issues"
 	local provider_hl = provider and provider.hl_group or "Title"
 	local issue_count = #state.issues
 	local statusline_items = {
@@ -319,17 +311,6 @@ function M.render(opts)
 	local line_map = {}
 
 	table.insert(lines, "")
-	utils.append_block(
-		lines,
-		spans,
-		header.render({
-			width = opts.width,
-			icon = provider_icon,
-			title = provider_name,
-			hl_group = provider_hl,
-		})
-	)
-
 	utils.append_block(
 		lines,
 		spans,
