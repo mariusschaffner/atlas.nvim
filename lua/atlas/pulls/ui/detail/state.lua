@@ -12,6 +12,8 @@ local request_scope = require("atlas.core.requests")
 ---@field details_loading boolean
 ---@field win integer|nil
 ---@field buf integer|nil
+---@field side_win integer|nil
+---@field side_buf integer|nil
 ---@field provider PullsProvider|nil
 ---@field on_update fun(pr: PullRequest, result: PullsActionResult|nil)|nil
 ---@field requests AtlasRequestScope
@@ -28,6 +30,8 @@ local M = {
 	details_loading = false,
 	win = nil,
 	buf = nil,
+	side_win = nil,
+	side_buf = nil,
 	provider = nil,
 	on_update = nil,
 	requests = request_scope.new(),
@@ -46,6 +50,8 @@ function M.reset()
 	M.details_loading = false
 	M.win = nil
 	M.buf = nil
+	M.side_win = nil
+	M.side_buf = nil
 	M.provider = nil
 	M.on_update = nil
 	M.requests.cancel()

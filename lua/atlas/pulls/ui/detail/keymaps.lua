@@ -107,32 +107,36 @@ local function open_current_line()
 end
 
 ---@param buf integer
-function M.register(buf)
+---@param opts { navigation: boolean|nil }|nil
+function M.register(buf, opts)
+	opts = opts or {}
 	local items = {}
 	local nav = require("atlas.pulls.ui.detail.navigation")
 
-	utils.insert_if(
-		items,
-		item("ui.next_item", {
-			desc = "Next selectable item",
-			opts = { nowait = true, silent = true },
-			hidden = true,
-			callback = function()
-				nav.move_cursor("down")
-			end,
-		})
-	)
-	utils.insert_if(
-		items,
-		item("ui.previous_item", {
-			desc = "Previous selectable item",
-			opts = { nowait = true, silent = true },
-			hidden = true,
-			callback = function()
-				nav.move_cursor("up")
-			end,
-		})
-	)
+	if opts.navigation ~= false then
+		utils.insert_if(
+			items,
+			item("ui.next_item", {
+				desc = "Next selectable item",
+				opts = { nowait = true, silent = true },
+				hidden = true,
+				callback = function()
+					nav.move_cursor("down")
+				end,
+			})
+		)
+		utils.insert_if(
+			items,
+			item("ui.previous_item", {
+				desc = "Previous selectable item",
+				opts = { nowait = true, silent = true },
+				hidden = true,
+				callback = function()
+					nav.move_cursor("up")
+				end,
+			})
+		)
+	end
 	utils.insert_if(
 		items,
 		item("ui.open_in_browser", {

@@ -215,13 +215,20 @@ local function set_provider(provider)
 	if state.buf and vim.api.nvim_buf_is_valid(state.buf) then
 		require("atlas.issues.ui.detail.keymaps").register(state.buf)
 	end
+	if state.side_buf and vim.api.nvim_buf_is_valid(state.side_buf) then
+		require("atlas.issues.ui.detail.keymaps").register(state.side_buf, { navigation = false })
+	end
 end
 
 local function cleanup()
 	local buf = state.buf
+	local side_buf = state.side_buf
 	set_tab(nil)
 	if buf and vim.api.nvim_buf_is_valid(buf) then
 		require("atlas.issues.ui.detail.keymaps").remove(buf)
+	end
+	if side_buf and vim.api.nvim_buf_is_valid(side_buf) then
+		require("atlas.issues.ui.detail.keymaps").remove(side_buf)
 	end
 	stop_spinner()
 	reset_tabs()
@@ -269,7 +276,7 @@ local function prepare_open(opts)
 		return nil, false
 	end
 
-	state.win, state.buf = detail_ui.open("issues", cleanup, render)
+	state.win, state.buf, state.side_win, state.side_buf = detail_ui.open("issues", cleanup, render)
 	set_provider(provider)
 	state.on_update = opts.on_update
 

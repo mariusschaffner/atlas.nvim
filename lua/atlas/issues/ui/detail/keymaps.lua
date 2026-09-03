@@ -80,7 +80,9 @@ local function remove_item(action_id)
 end
 
 ---@param buf integer
-function M.register(buf)
+---@param opts { navigation: boolean|nil }|nil
+function M.register(buf, opts)
+	opts = opts or {}
 	local items = {}
 	local nav = require("atlas.issues.ui.detail.navigation")
 	local provider = assert(state.provider)
@@ -88,28 +90,30 @@ function M.register(buf)
 		return { provider = provider, issue = issue }
 	end
 
-	utils.insert_if(
-		items,
-		item("ui.next_item", {
-			desc = "Next item",
-			opts = { nowait = true, silent = true },
-			hidden = true,
-			callback = function()
-				nav.move_cursor("down")
-			end,
-		})
-	)
-	utils.insert_if(
-		items,
-		item("ui.previous_item", {
-			desc = "Previous item",
-			opts = { nowait = true, silent = true },
-			hidden = true,
-			callback = function()
-				nav.move_cursor("up")
-			end,
-		})
-	)
+	if opts.navigation ~= false then
+		utils.insert_if(
+			items,
+			item("ui.next_item", {
+				desc = "Next item",
+				opts = { nowait = true, silent = true },
+				hidden = true,
+				callback = function()
+					nav.move_cursor("down")
+				end,
+			})
+		)
+		utils.insert_if(
+			items,
+			item("ui.previous_item", {
+				desc = "Previous item",
+				opts = { nowait = true, silent = true },
+				hidden = true,
+				callback = function()
+					nav.move_cursor("up")
+				end,
+			})
+		)
+	end
 	local refresh_item = {
 		desc = "Refresh issue",
 		opts = { nowait = true, silent = true },

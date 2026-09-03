@@ -3,6 +3,8 @@ local request_scope = require("atlas.core.requests")
 ---@class IssuesDetailState
 ---@field win integer|nil
 ---@field buf integer|nil
+---@field side_win integer|nil
+---@field side_buf integer|nil
 ---@field provider IssuesProvider|nil
 ---@field provider_detail IssuesProviderDetail|nil
 ---@field current_issue Issue|nil
@@ -18,6 +20,8 @@ local request_scope = require("atlas.core.requests")
 local M = {
 	win = nil,
 	buf = nil,
+	side_win = nil,
+	side_buf = nil,
 	provider = nil,
 	provider_detail = nil,
 	current_issue = nil,
@@ -35,6 +39,8 @@ local M = {
 function M.reset()
 	M.win = nil
 	M.buf = nil
+	M.side_win = nil
+	M.side_buf = nil
 	M.provider = nil
 	M.provider_detail = nil
 	M.current_issue = nil
