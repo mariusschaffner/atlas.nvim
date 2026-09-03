@@ -132,8 +132,9 @@ end
 ---@param pr PullRequest
 ---@param width integer
 ---@param extra_fields PullsDetailHeaderField[]|nil
+---@param trailing_fields PullsDetailHeaderField[]|nil Appended after Branch (e.g. Reviewers, Checks), still part of the same two-column grid.
 ---@return string[], table[]
-function M.render_fields(pr, width, extra_fields)
+function M.render_fields(pr, width, extra_fields, trailing_fields)
 	local repo_name = pr.repo_full_name
 	local src = pr.source.branch
 	local dst = pr.destination.branch
@@ -160,14 +161,27 @@ function M.render_fields(pr, width, extra_fields)
 		value = string.format("%s %s → %s", icons.pulls("branch"), src, dst),
 		hl = "AtlasTextMuted",
 	})
+	for _, field in ipairs(trailing_fields or {}) do
+		table.insert(fields, field)
+	end
 
 	local rows = {}
-	for _, field in ipairs(fields) do
-		table.insert(rows, {
-			k1 = field.label .. ":",
-			v1 = field.value,
-			v1_hl = field.hl,
-		})
+	for index = 1, #fields, 2 do
+		local first = fields[index]
+		local second = fields[index + 1]
+		local row = {
+			k1 = first.label .. ":",
+			v1 = first.value,
+			v1_hl = first.hl,
+			k2 = "",
+			v2 = "",
+		}
+		if second then
+			row.k2 = second.label .. ":"
+			row.v2 = second.value
+			row.v2_hl = second.hl
+		end
+		table.insert(rows, row)
 	end
 
 	local tbl_lines, _, tbl_spans = table_tree.render({
@@ -178,15 +192,21 @@ function M.render_fields(pr, width, extra_fields)
 		fill = true,
 		columns = {
 			{ key = "k1", name = "", can_grow = false },
-			{ key = "v1", name = "", can_grow = true, grow_last = true },
+			{ key = "v1", name = "", can_grow = true },
+			{ key = "k2", name = "", can_grow = false },
+			{ key = "v2", name = "", can_grow = true, grow_last = true },
 		},
 		rows = rows,
 		cell_hl = function(row, col, _ctx)
-			if col.key == "k1" then
-				return { { start_col = 0, end_col = #row.k1, hl_group = "AtlasTextMuted" } }
+			if col.key == "k1" or col.key == "k2" then
+				local label = col.key == "k1" and row.k1 or row.k2
+				return { { start_col = 0, end_col = #label, hl_group = "AtlasTextMuted" } }
 			end
 			if col.key == "v1" then
 				return value_hl_spans(row.v1, row.v1_hl)
+			end
+			if col.key == "v2" then
+				return value_hl_spans(row.v2, row.v2_hl)
 			end
 			return nil
 		end,
