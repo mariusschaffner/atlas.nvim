@@ -247,15 +247,6 @@ function M.render(opts)
 	local statusline_items = {
 		{ text = string.format("%d issues", issue_count), hl_group = "AtlasFooterText" },
 	}
-	local user_name = (state.current_user and state.current_user.display_name) or ""
-	if user_name ~= "" then
-		statusline_items[#statusline_items + 1] = {
-			text = "| @" .. user_name,
-			hl_group = "AtlasFooterText",
-			priority = 50,
-			min_width = 8,
-		}
-	end
 	statusline.set_items(statusline_items)
 
 	local views = state.views

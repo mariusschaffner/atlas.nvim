@@ -127,7 +127,7 @@ function M.get_version()
 		)
 	end)
 
-	if ok and type(version) == "string" and version ~= "" then
+	if ok and type(version) == "string" and version ~= "" and vim.v.shell_error == 0 then
 		_cached_version = version:gsub("%s+", "")
 	else
 		_cached_version = "dev"
