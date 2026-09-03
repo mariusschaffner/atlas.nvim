@@ -389,10 +389,13 @@ function M.on_select(pr, refresh, opts)
 end
 
 ---@param _lnum integer
----@param entry table
+---@param _entry table
 ---@return boolean
-function M.is_selectable_line(_lnum, entry)
-	return entry.kind == "pipeline" or entry.kind == "job"
+function M.is_selectable_line(_lnum, _entry)
+	-- Every row in the tree (stages, jobs, log lines, ...) is meaningful content,
+	-- so navigation should step through them one at a time rather than snapping
+	-- to the next pipeline/job row and skipping expanded content in between.
+	return true
 end
 
 ---@param pr PullRequest
