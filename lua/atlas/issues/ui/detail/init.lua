@@ -57,15 +57,6 @@ local function render()
 	renderer.render(state.tabs, tab_module)
 end
 
-local function move_cursor_to_content()
-	if not (state.win and vim.api.nvim_win_is_valid(state.win) and state.buf and vim.api.nvim_buf_is_valid(state.buf)) then
-		return
-	end
-	local last = vim.api.nvim_buf_line_count(state.buf)
-	local target = math.min((state.content_offset or 0) + 1, last)
-	vim.api.nvim_win_set_cursor(state.win, { target, 0 })
-end
-
 local function start_spinner()
 	if state.spinner_timer ~= nil then
 		return
@@ -205,7 +196,6 @@ local function show_issue(issue, force_refresh)
 	load_active_tab(issue, { force_refresh = force_refresh })
 	update_spinner()
 	render()
-	move_cursor_to_content()
 end
 
 ---@param provider IssuesProvider
@@ -279,7 +269,7 @@ local function prepare_open(opts)
 		return nil, false
 	end
 
-	state.win, state.buf = detail_ui.open("issues", cleanup, render)
+	state.win, state.buf, state.header_win, state.header_buf = detail_ui.open("issues", cleanup, render)
 	set_provider(provider)
 	state.on_update = opts.on_update
 
@@ -392,7 +382,9 @@ local function change_tab(step)
 		update_spinner()
 	end
 	render()
-	move_cursor_to_content()
+	if state.win and vim.api.nvim_win_is_valid(state.win) then
+		vim.api.nvim_win_set_cursor(state.win, { 1, 0 })
+	end
 end
 
 function M.next_tab()

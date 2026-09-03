@@ -14,7 +14,7 @@ local function author_completion(pr)
 	if not comments_capability or not comments_capability.comment_completion then
 		return nil
 	end
-	local reviewers = require("atlas.pulls.ui.detail.tabs.overview.state").reviewers
+	local reviewers = detail.reviewers
 	local conversation = state.comments(false)
 	return comments_capability.comment_completion({
 		pr = pr,

@@ -85,12 +85,6 @@ function M.tabs()
 			mod = require("atlas.pulls.ui.detail.tabs.overview"),
 		},
 		{
-			key = "pipelines",
-			label = "Pipelines",
-			icon = { icon = pipeline_icon, hl_group = pipeline_hl },
-			mod = require("atlas.pulls.ui.detail.tabs.pipelines"),
-		},
-		{
 			key = "conversation",
 			label = "Conversation",
 			icon = { icon = conversation_icon, hl_group = conversation_hl },
@@ -107,6 +101,12 @@ function M.tabs()
 			label = "Commits",
 			icon = { icon = commit_icon, hl_group = commit_hl },
 			mod = require("atlas.pulls.ui.detail.tabs.commits"),
+		},
+		{
+			key = "pipelines",
+			label = "Pipelines",
+			icon = { icon = pipeline_icon, hl_group = pipeline_hl },
+			mod = require("atlas.pulls.ui.detail.tabs.pipelines"),
 		},
 	}
 end

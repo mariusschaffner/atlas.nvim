@@ -43,15 +43,6 @@ local function render()
 	renderer.render(state.tabs, tab_module)
 end
 
-local function move_cursor_to_content()
-	if not (state.win and vim.api.nvim_win_is_valid(state.win) and state.buf and vim.api.nvim_buf_is_valid(state.buf)) then
-		return
-	end
-	local last = vim.api.nvim_buf_line_count(state.buf)
-	local target = math.min((state.content_offset or 0) + 1, last)
-	vim.api.nvim_win_set_cursor(state.win, { target, 0 })
-end
-
 -- Loading spinner
 
 local function stop_spinner()
@@ -63,7 +54,14 @@ local function stop_spinner()
 end
 
 local function is_loading()
-	if state.pr_loading or state.details_loading or state.diffstat == "loading" or state.pipelines == "loading" then
+	if
+		state.pr_loading
+		or state.details_loading
+		or state.diffstat == "loading"
+		or state.pipelines == "loading"
+		or state.reviewers == "loading"
+		or state.merge_checks == "loading"
+	then
 		return true
 	end
 	if state.current_pr == nil then
@@ -238,6 +236,32 @@ local function load_pr(pr, force_refresh)
 			tab_refresh()
 		end)
 	end
+
+	if core.fetch_reviewers then
+		state.reviewers = "loading"
+		state.requests.run(function(done)
+			return core.fetch_reviewers(pr, { force_refresh = force_refresh }, done)
+		end, function(reviewers, err)
+			if not same_ref(state.current_pr, pr) then
+				return
+			end
+			state.reviewers = err and err or (reviewers or {})
+			tab_refresh()
+		end)
+	end
+
+	if core.fetch_merge_checks then
+		state.merge_checks = "loading"
+		state.requests.run(function(done)
+			return core.fetch_merge_checks(pr, { force_refresh = force_refresh }, done)
+		end, function(checks, err)
+			if not same_ref(state.current_pr, pr) then
+				return
+			end
+			state.merge_checks = err and err or (checks or {})
+			tab_refresh()
+		end)
+	end
 end
 
 local function clear_pr()
@@ -249,6 +273,8 @@ local function clear_pr()
 	state.current_details = nil
 	state.diffstat = nil
 	state.pipelines = nil
+	state.reviewers = nil
+	state.merge_checks = nil
 	state.pr_loading = false
 	state.details_loading = false
 	state.line_map = {}
@@ -263,7 +289,6 @@ local function show_pr(pr, force_refresh)
 	load_pr(pr, force_refresh)
 	update_spinner()
 	render()
-	move_cursor_to_content()
 end
 
 ---@param provider PullsProvider
@@ -343,7 +368,7 @@ function M.open(input, opts)
 		notify.error("Pull request provider unavailable")
 		return
 	end
-	state.win, state.buf = detail_ui.open("pulls", cleanup, render)
+	state.win, state.buf, state.header_win, state.header_buf = detail_ui.open("pulls", cleanup, render)
 	set_provider(provider)
 	state.on_update = opts.on_update
 
@@ -452,7 +477,9 @@ local function change_tab(step)
 	end
 
 	render()
-	move_cursor_to_content()
+	if state.win and vim.api.nvim_win_is_valid(state.win) then
+		vim.api.nvim_win_set_cursor(state.win, { 1, 0 })
+	end
 end
 
 function M.next_tab()

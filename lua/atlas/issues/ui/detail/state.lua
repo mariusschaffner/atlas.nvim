@@ -3,6 +3,8 @@ local request_scope = require("atlas.core.requests")
 ---@class IssuesDetailState
 ---@field win integer|nil
 ---@field buf integer|nil
+---@field header_win integer|nil
+---@field header_buf integer|nil
 ---@field provider IssuesProvider|nil
 ---@field provider_detail IssuesProviderDetail|nil
 ---@field current_issue Issue|nil
@@ -11,7 +13,6 @@ local request_scope = require("atlas.core.requests")
 ---@field tabs IssuesDetailTabDefinition[]
 ---@field on_update fun(issue: Issue|nil, result: IssuesActionResult|nil)|nil
 ---@field line_map table<integer, table>
----@field content_offset integer Line count before the content section starts (0-indexed line where it begins).
 ---@field details_loading boolean
 ---@field issue_loading boolean
 ---@field requests AtlasRequestScope
@@ -19,6 +20,8 @@ local request_scope = require("atlas.core.requests")
 local M = {
 	win = nil,
 	buf = nil,
+	header_win = nil,
+	header_buf = nil,
 	provider = nil,
 	provider_detail = nil,
 	current_issue = nil,
@@ -27,7 +30,6 @@ local M = {
 	tabs = {},
 	on_update = nil,
 	line_map = {},
-	content_offset = 0,
 	details_loading = false,
 	issue_loading = false,
 	requests = request_scope.new(),
@@ -37,6 +39,8 @@ local M = {
 function M.reset()
 	M.win = nil
 	M.buf = nil
+	M.header_win = nil
+	M.header_buf = nil
 	M.provider = nil
 	M.provider_detail = nil
 	M.current_issue = nil
@@ -45,7 +49,6 @@ function M.reset()
 	M.tabs = {}
 	M.on_update = nil
 	M.line_map = {}
-	M.content_offset = 0
 	M.details_loading = false
 	M.issue_loading = false
 	M.requests.cancel()

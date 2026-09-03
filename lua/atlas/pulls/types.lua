@@ -316,7 +316,6 @@
 
 ---@class PullsDetailTabModule
 ---@field render fun(pr: PullRequest, details: PullRequestDetails|nil, width: integer): string[], table[], table<integer, table>|nil
----@field render_side (fun(pr: PullRequest, width: integer): string[], table[], table<integer, table>|nil)|nil Optional content rendered in the sidebar, below the tab bar, alongside this tab's main content.
 ---@field on_select (fun(pr: PullRequest, refresh: fun(), opts: { force_refresh: boolean|nil }|nil))|nil
 ---@field reset (fun())|nil
 ---@field activate (fun(buf: integer, refresh: fun()))|nil
