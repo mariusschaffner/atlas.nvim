@@ -128,7 +128,7 @@ local function create_single()
 end
 
 local function create_split()
-	local source, beside_dashboard = dashboard_source()
+	local source = dashboard_source()
 	local content_buf = utils.buffer.create("atlas://detail", "atlas.detail")
 	vim.api.nvim_set_option_value("bufhidden", "wipe", { buf = content_buf })
 	local side_buf = utils.buffer.create("atlas://detail/side", "atlas.detail.side")
@@ -141,9 +141,8 @@ local function create_split()
 	local side_win = utils.window.create(content_win, "leftabove vsplit", side_buf, configure)
 	pcall(vim.api.nvim_win_set_width, side_win, sidebar_width(total_width))
 
-	if not beside_dashboard then
-		vim.api.nvim_set_current_win(content_win)
-	end
+	-- Focus always moves into the content pane, regardless of where the split was opened from.
+	vim.api.nvim_set_current_win(content_win)
 
 	state.layout = "split"
 	state.win = content_win

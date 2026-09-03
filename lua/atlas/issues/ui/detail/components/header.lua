@@ -49,16 +49,11 @@ function M.render(issue, width, fields)
 	end
 
 	local rows = {}
-	for index = 1, #(fields or {}), 2 do
-		local left = fields[index]
-		local right = fields[index + 1]
+	for _, field in ipairs(fields or {}) do
 		table.insert(rows, {
-			k1 = left.label .. ":",
-			v1 = left.value,
-			v1_hl = left.hl,
-			k2 = right and (right.label .. ":") or "",
-			v2 = right and right.value or "",
-			v2_hl = right and right.hl or nil,
+			k1 = field.label .. ":",
+			v1 = field.value,
+			v1_hl = field.hl,
 		})
 	end
 
@@ -67,9 +62,7 @@ function M.render(issue, width, fields)
 		local rendered_lines, _, rendered_spans = table_tree.render({
 			columns = {
 				{ key = "k1", name = "", can_grow = false },
-				{ key = "v1", name = "", can_grow = true },
-				{ key = "k2", name = "", can_grow = false },
-				{ key = "v2", name = "", can_grow = true, grow_last = true },
+				{ key = "v1", name = "", can_grow = true, grow_last = true },
 			},
 			rows = rows,
 			width = width,
@@ -78,17 +71,13 @@ function M.render(issue, width, fields)
 			column_gap = 2,
 			fill = true,
 			cell_hl = function(row, col)
-				if col.key == "k1" or col.key == "k2" then
-					local label = col.key == "k1" and row.k1 or row.k2
+				if col.key == "k1" then
 					return {
-						{ start_col = 0, end_col = #label, hl_group = "AtlasTextMuted" },
+						{ start_col = 0, end_col = #row.k1, hl_group = "AtlasTextMuted" },
 					}
 				end
 				if col.key == "v1" then
 					return value_hl_spans(row.v1, row.v1_hl)
-				end
-				if col.key == "v2" and row.v2 ~= "" then
-					return value_hl_spans(row.v2, row.v2_hl)
 				end
 				return nil
 			end,

@@ -138,16 +138,11 @@ function M.render(pr, width, extra_fields)
 	})
 
 	local rows = {}
-	for index = 1, #fields, 2 do
-		local left = fields[index]
-		local right = fields[index + 1]
+	for _, field in ipairs(fields) do
 		table.insert(rows, {
-			k1 = left.label .. ":",
-			v1 = left.value,
-			v1_hl = left.hl,
-			k2 = right and (right.label .. ":") or "",
-			v2 = right and right.value or "",
-			v2_hl = right and right.hl or nil,
+			k1 = field.label .. ":",
+			v1 = field.value,
+			v1_hl = field.hl,
 		})
 	end
 
@@ -159,21 +154,15 @@ function M.render(pr, width, extra_fields)
 		fill = true,
 		columns = {
 			{ key = "k1", name = "", can_grow = false },
-			{ key = "v1", name = "", can_grow = true },
-			{ key = "k2", name = "", can_grow = false },
-			{ key = "v2", name = "", can_grow = true, grow_last = true },
+			{ key = "v1", name = "", can_grow = true, grow_last = true },
 		},
 		rows = rows,
 		cell_hl = function(row, col, _ctx)
-			if col.key == "k1" or col.key == "k2" then
-				local label = col.key == "k1" and row.k1 or row.k2
-				return { { start_col = 0, end_col = #label, hl_group = "AtlasTextMuted" } }
+			if col.key == "k1" then
+				return { { start_col = 0, end_col = #row.k1, hl_group = "AtlasTextMuted" } }
 			end
 			if col.key == "v1" then
 				return value_hl_spans(row.v1, row.v1_hl)
-			end
-			if col.key == "v2" and row.v2 ~= "" then
-				return value_hl_spans(row.v2, row.v2_hl)
 			end
 			return nil
 		end,

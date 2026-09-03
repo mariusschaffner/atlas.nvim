@@ -87,13 +87,21 @@ end
 
 ---@return boolean
 local function open_current_line()
-	local win = state.win
+	local current = vim.api.nvim_get_current_win()
+	local win, line_map
+	if current == state.win then
+		win, line_map = state.win, state.line_map
+	elseif current == state.side_win then
+		win, line_map = state.side_win, state.side_line_map
+	else
+		return false
+	end
 	if win == nil or not vim.api.nvim_win_is_valid(win) then
 		return false
 	end
 
 	local lnum = vim.api.nvim_win_get_cursor(win)[1]
-	local entry = state.line_map[lnum]
+	local entry = (line_map or {})[lnum]
 	local pr = state.current_pr
 	if not entry or not pr then
 		return false

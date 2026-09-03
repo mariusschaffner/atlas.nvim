@@ -275,7 +275,7 @@ local function set_provider(provider)
 		detail_keymaps.register(state.buf)
 	end
 	if state.side_buf and vim.api.nvim_buf_is_valid(state.side_buf) then
-		detail_keymaps.register(state.side_buf, { navigation = false })
+		detail_keymaps.register(state.side_buf)
 	end
 end
 

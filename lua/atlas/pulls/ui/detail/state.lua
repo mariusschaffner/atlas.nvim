@@ -6,6 +6,7 @@ local request_scope = require("atlas.core.requests")
 ---@field current_tab string|nil
 ---@field tabs PullsDetailTab[]
 ---@field line_map table<integer, table>
+---@field side_line_map table<integer, table>
 ---@field diffstat PullsDiffstatEntry[]|"loading"|string|nil
 ---@field pipelines PullsPipeline[]|"loading"|string|nil
 ---@field pr_loading boolean
@@ -24,6 +25,7 @@ local M = {
 	current_tab = nil,
 	tabs = {},
 	line_map = {},
+	side_line_map = {},
 	diffstat = nil,
 	pipelines = nil,
 	pr_loading = false,
@@ -44,6 +46,7 @@ function M.reset()
 	M.current_tab = nil
 	M.tabs = {}
 	M.line_map = {}
+	M.side_line_map = {}
 	M.diffstat = nil
 	M.pipelines = nil
 	M.pr_loading = false

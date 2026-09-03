@@ -84,9 +84,10 @@ end
 
 ---@param pr PullRequest
 ---@param tab_items PullsDetailTab[]
+---@param tab_mod PullsDetailTabModule|nil
 ---@param width integer
----@return string[], table[]
-local function render_sidebar(pr, tab_items, width)
+---@return string[], table[], table<integer, table>
+local function render_sidebar(pr, tab_items, tab_mod, width)
 	local lines, spans = {}, {}
 	local details = state.current_details
 	local provider = state.provider
@@ -121,9 +122,21 @@ local function render_sidebar(pr, tab_items, width)
 		local tab_lines, tab_spans =
 			detail_tabs.render(tab_items, state.current_tab, { width = width, padding_x = PADDING_X })
 		utils.append_block(lines, spans, { lines = tab_lines, highlights = tab_spans })
+		table.insert(lines, "")
 	end
 
-	return lines, spans
+	-- Tab-provided sidebar content (e.g. reviewers/merge checks/pipelines for Overview)
+	local line_map = {}
+	if tab_mod and tab_mod.render_side then
+		local side_offset = #lines
+		local extra_lines, extra_spans, extra_line_map = tab_mod.render_side(pr, width)
+		utils.append_block(lines, spans, { lines = extra_lines, highlights = extra_spans })
+		for lnum, entry in pairs(extra_line_map or {}) do
+			line_map[side_offset + lnum] = entry
+		end
+	end
+
+	return lines, spans, line_map
 end
 
 ---@param tab_items PullsDetailTab[]
@@ -142,15 +155,18 @@ function M.render(tab_items, get_tab_module)
 	local side_win = state.side_win
 	local side_buf = state.side_buf
 	local has_sidebar = utils.window.valid(side_win) and utils.buffer.valid(side_buf)
+	local tab_mod = pr ~= nil and get_tab_module(state.current_tab) or nil
 
 	if has_sidebar then
 		set_side_winbar(side_win, pr)
-		local side_lines, side_spans = {}, {}
+		local side_lines, side_spans, side_line_map = {}, {}, {}
 		if pr ~= nil then
-			side_lines, side_spans = render_sidebar(pr, tab_items, vim.api.nvim_win_get_width(side_win))
+			side_lines, side_spans, side_line_map =
+				render_sidebar(pr, tab_items, tab_mod, vim.api.nvim_win_get_width(side_win))
 		end
 		set_lines(side_buf, side_lines)
 		apply_spans(side_buf, side_ns, side_spans)
+		state.side_line_map = side_line_map
 	end
 
 	local width = vim.api.nvim_win_get_width(win)
@@ -165,7 +181,6 @@ function M.render(tab_items, get_tab_module)
 		end
 		state.line_map = {}
 	else
-		local tab_mod = get_tab_module(state.current_tab)
 		if tab_mod then
 			local tab_lines, tab_spans, tab_line_map = tab_mod.render(pr, state.current_details, width)
 			lines, spans = tab_lines, tab_spans

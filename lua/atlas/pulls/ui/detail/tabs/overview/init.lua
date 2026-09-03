@@ -651,32 +651,39 @@ local function render_merge_checks(width, lines, spans)
 	table.insert(lines, "")
 end
 
----@param pr PullRequest
+---@param _pr PullRequest
 ---@param details PullRequestDetails|nil
 ---@param width integer
 ---@return string[], table[], table<integer, table>|nil
-function M.render(pr, details, width)
+function M.render(_pr, details, width)
 	local lines = {}
 	local spans = {}
 	local line_map = {}
 
 	if details then
 		render_description(details, width, lines, spans, line_map)
-	elseif not detail.details_loading then
+	elseif detail.details_loading then
+		utils.push(lines, spans, spinner.with_text("Loading description..."), "AtlasTextMuted", PADDING_X)
+	else
 		utils.push(lines, spans, "Pull request details unavailable.", "AtlasTextMuted", PADDING_X)
-		table.insert(lines, "")
 	end
+
+	return lines, spans, line_map
+end
+
+---@param pr PullRequest
+---@param width integer
+---@return string[], table[], table<integer, table>|nil
+function M.render_side(pr, width)
+	local lines = {}
+	local spans = {}
+	local line_map = {}
+
 	render_reviewers(width, lines, spans)
 	render_merge_checks(width, lines, spans)
 	render_pipelines(pr, width, lines, spans, line_map)
 
-	if
-		state.reviewers == "loading"
-		or state.merge_checks == "loading"
-		or detail.details_loading
-		or detail.pipelines == "loading"
-		or detail.diffstat == "loading"
-	then
+	if state.reviewers == "loading" or state.merge_checks == "loading" or detail.pipelines == "loading" then
 		utils.push(lines, spans, spinner.with_text("Loading overview..."), "AtlasTextMuted", PADDING_X)
 	end
 

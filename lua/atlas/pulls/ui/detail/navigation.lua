@@ -2,18 +2,22 @@ local M = {}
 
 local state = require("atlas.pulls.ui.detail.state")
 
----@return integer|nil win
----@return integer|nil buf
-local function detail_win_buf()
-	local win = state.win
-	local buf = state.buf
-	if win == nil or not vim.api.nvim_win_is_valid(win) then
-		return nil, nil
+---@return integer|nil win, integer|nil buf, table<integer, table>|nil line_map
+local function active_pane()
+	local current = vim.api.nvim_get_current_win()
+	if current == state.win and vim.api.nvim_win_is_valid(state.win) and vim.api.nvim_buf_is_valid(state.buf) then
+		return state.win, state.buf, state.line_map
 	end
-	if buf == nil or not vim.api.nvim_buf_is_valid(buf) then
-		return nil, nil
+	if
+		current == state.side_win
+		and state.side_win ~= nil
+		and vim.api.nvim_win_is_valid(state.side_win)
+		and state.side_buf ~= nil
+		and vim.api.nvim_buf_is_valid(state.side_buf)
+	then
+		return state.side_win, state.side_buf, state.side_line_map
 	end
-	return win, buf
+	return nil, nil, nil
 end
 
 ---@return PullsDetailTabModule|nil
@@ -26,9 +30,10 @@ local function current_tab_mod()
 end
 
 ---@param lnum integer
+---@param line_map table<integer, table>
 ---@return boolean
-local function is_selectable(lnum)
-	local entry = state.line_map[lnum]
+local function is_selectable(lnum, line_map)
+	local entry = line_map[lnum]
 	if entry == nil then
 		return false
 	end
@@ -43,10 +48,11 @@ end
 
 ---@param direction "up"|"down"
 function M.move_cursor(direction)
-	local win, buf = detail_win_buf()
+	local win, buf, line_map = active_pane()
 	if win == nil or buf == nil then
 		return
 	end
+	line_map = line_map or {}
 
 	local current = vim.api.nvim_win_get_cursor(win)
 	local line = current[1]
@@ -56,9 +62,9 @@ function M.move_cursor(direction)
 	local bound = direction == "up" and 1 or max_line
 
 	-- On a selectable line -> try to snap to next selectable
-	if is_selectable(line) then
+	if is_selectable(line, line_map) then
 		for lnum = line + step, bound, step do
-			if is_selectable(lnum) then
+			if is_selectable(lnum, line_map) then
 				vim.api.nvim_win_set_cursor(win, { lnum, col })
 				return
 			end
