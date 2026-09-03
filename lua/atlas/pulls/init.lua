@@ -8,6 +8,11 @@ function M.init(provider, opts)
 	dashboard.init(provider, opts)
 end
 
+---@param provider PullsProvider
+function M.activate(provider)
+	dashboard.activate(provider)
+end
+
 function M.render()
 	dashboard.render()
 end

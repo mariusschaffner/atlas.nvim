@@ -7,6 +7,11 @@ function M.init(provider, opts)
 	dashboard.init(provider, opts)
 end
 
+---@param provider IssuesProvider
+function M.activate(provider)
+	require("atlas.issues.ui.dashboard").activate(provider)
+end
+
 function M.render()
 	require("atlas.issues.ui.dashboard").render()
 end

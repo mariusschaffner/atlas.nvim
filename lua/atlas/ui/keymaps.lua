@@ -129,13 +129,10 @@ function M.register(buf)
 	utils.insert_if(
 		items,
 		item("ui.next_panel_tab", {
-			desc = "Next panel tab",
+			desc = "Next dashboard tab (Issues/Pulls)",
 			opts = { nowait = true },
 			callback = function()
-				local dashboard = domain_dashboard()
-				if dashboard then
-					dashboard.next_detail_tab()
-				end
+				require("atlas.ui.dashboard").next_domain()
 			end,
 		})
 	)
@@ -143,13 +140,10 @@ function M.register(buf)
 	utils.insert_if(
 		items,
 		item("ui.previous_panel_tab", {
-			desc = "Previous panel tab",
+			desc = "Previous dashboard tab (Issues/Pulls)",
 			opts = { nowait = true },
 			callback = function()
-				local dashboard = domain_dashboard()
-				if dashboard then
-					dashboard.prev_detail_tab()
-				end
+				require("atlas.ui.dashboard").prev_domain()
 			end,
 		})
 	)

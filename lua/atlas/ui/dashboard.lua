@@ -5,6 +5,8 @@ local events = require("atlas.core.events")
 local statusline = require("atlas.ui.statusline")
 local utils = require("atlas.ui.shared.utils")
 
+local DOMAIN_ORDER = { "issues", "pulls" }
+
 ---@class AtlasDashboardState
 ---@field win integer|nil
 ---@field buf integer|nil
@@ -17,6 +19,8 @@ local utils = require("atlas.ui.shared.utils")
 ---@field listed boolean
 ---@field options table<string, boolean|string>|nil
 ---@field closing boolean
+---@field initialized table<AtlasDomain, boolean>
+---@field provider_ids table<AtlasDomain, AtlasProviderId>
 ---@type AtlasDashboardState
 local state = {
 	win = nil,
@@ -30,6 +34,8 @@ local state = {
 	listed = false,
 	options = nil,
 	closing = false,
+	initialized = {},
+	provider_ids = {},
 }
 
 local resize_group = vim.api.nvim_create_augroup("AtlasDashboardResize", { clear = true })
@@ -192,6 +198,8 @@ local function close_session(session_id, reason, close_tab)
 	state.listed = false
 	state.options = nil
 	state.closing = false
+	state.initialized = {}
+	state.provider_ids = {}
 	statusline.reset()
 	if close_tab and utils.window.valid(previous_win) then
 		vim.api.nvim_set_current_win(previous_win)
@@ -283,19 +291,21 @@ end
 
 ---@param domain AtlasDomain
 ---@param provider AtlasProviderId
+---@return boolean already_initialized True if this domain was already loaded before (e.g. an earlier tab switch), so callers should re-activate rather than re-init.
 function M.open(domain, provider)
 	if window() == nil or M.buf() == nil then
 		if state.session_id then
 			close_session(state.session_id, "replaced", true)
 		end
 		create()
-	elseif state.domain then
+	elseif state.domain and state.domain ~= domain then
 		require("atlas.ui.detail").close(state.tab)
 		dispose_domain()
 	end
 
 	state.domain = domain
 	state.provider = provider
+	state.provider_ids[domain] = provider
 	require("atlas.ui.state").domain = domain
 	if state.tab and vim.api.nvim_tabpage_is_valid(state.tab) then
 		vim.api.nvim_set_current_tabpage(state.tab)
@@ -305,12 +315,45 @@ function M.open(domain, provider)
 		vim.api.nvim_win_set_buf(state.win, state.buf)
 	end
 	require("atlas.ui.keymaps").register(state.buf)
+
+	local already_initialized = state.initialized[domain] == true
+	state.initialized[domain] = true
+	return already_initialized
 end
 
 function M.render()
 	if M.is_active() and state.domain then
 		require("atlas." .. state.domain).render()
 	end
+end
+
+---@return AtlasDomain|nil
+function M.domain()
+	return state.domain
+end
+
+---@param step 1|-1
+local function switch_domain(step)
+	if state.domain == nil then
+		return
+	end
+	local idx = 1
+	for i, domain in ipairs(DOMAIN_ORDER) do
+		if domain == state.domain then
+			idx = i
+			break
+		end
+	end
+	local target = DOMAIN_ORDER[(idx - 1 + step) % #DOMAIN_ORDER + 1]
+	require("atlas").open(target, state.provider_ids[target])
+end
+
+function M.next_domain()
+	switch_domain(1)
+end
+
+function M.prev_domain()
+	switch_domain(-1)
 end
 
 ---@param domain AtlasDomain|nil

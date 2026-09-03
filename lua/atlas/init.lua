@@ -60,14 +60,13 @@ local function open_with_provider(domain, id, opts)
 		return
 	end
 
-	require("atlas.ui.dashboard").open(domain, provider.id)
+	local already_initialized = require("atlas.ui.dashboard").open(domain, provider.id)
 	bootstrap_common()
-	if domain == "pulls" then
-		---@cast provider PullsProvider
-		require("atlas.pulls").init(provider, opts)
+	local module = domain == "pulls" and require("atlas.pulls") or require("atlas.issues")
+	if already_initialized then
+		module.activate(provider)
 	else
-		---@cast provider IssuesProvider
-		require("atlas.issues").init(provider, opts)
+		module.init(provider, opts)
 	end
 end
 
