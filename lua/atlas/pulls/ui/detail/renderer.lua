@@ -52,38 +52,6 @@ local function set_lines(buf, lines)
 	vim.api.nvim_set_option_value("modifiable", false, { buf = buf })
 end
 
----@param win integer
----@param pr PullRequest|nil
-local function set_winbar(win, pr)
-	local winbar_items = {}
-	if pr ~= nil then
-		if type(state.diffstat) == "table" then
-			local additions, deletions = 0, 0
-			for _, entry in ipairs(state.diffstat) do
-				additions = additions + (tonumber(entry.lines_added) or 0)
-				deletions = deletions + (tonumber(entry.lines_removed) or 0)
-			end
-			if additions + deletions > 0 then
-				winbar_items[#winbar_items + 1] = string.format("%%#AtlasTextPositive#+%d%%*", additions)
-				winbar_items[#winbar_items + 1] = string.format("%%#AtlasLogError#-%d%%*", deletions)
-			end
-		end
-		local details = state.current_details
-		if details and details.is_subscribed ~= nil then
-			local bell, bell_hl = icons.general(details.is_subscribed and "bell" or "bell_no")
-			if details.is_subscribed then
-				bell_hl = "AtlasLogInfo"
-			end
-			winbar_items[#winbar_items + 1] = string.format("%%#%s#%s%%*", bell_hl, bell)
-		end
-	end
-	vim.api.nvim_set_option_value(
-		"winbar",
-		#winbar_items > 0 and ("%=" .. table.concat(winbar_items, "  ") .. " ") or " ",
-		{ win = win }
-	)
-end
-
 -- Reviewers / merge checks (folded into the header fields, two-column grid)
 
 local DECISION_ICONS = {
@@ -199,7 +167,7 @@ local function render_header(pr, tab_items, width)
 	if checks then
 		table.insert(trailing_fields, checks)
 	end
-	local field_lines, field_spans = header.render_fields(pr, width, extra_fields, trailing_fields)
+	local field_lines, field_spans = header.render_fields(pr, width, extra_fields, trailing_fields, state.diffstat)
 	utils.append_block(lines, spans, { lines = field_lines, highlights = field_spans })
 	table.insert(lines, "")
 
@@ -244,7 +212,6 @@ function M.render(tab_items, get_tab_module)
 	local tab_mod = pr ~= nil and get_tab_module(state.current_tab) or nil
 
 	if has_header then
-		set_winbar(header_win, pr)
 		local header_lines, header_spans = {}, {}
 		if pr ~= nil then
 			header_lines, header_spans = render_header(pr, tab_items, vim.api.nvim_win_get_width(header_win))

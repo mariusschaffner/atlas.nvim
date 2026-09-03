@@ -129,12 +129,50 @@ function M.render_title(pr, width)
 	return lines, spans
 end
 
+---@param src string
+---@param dst string
+---@param diffstat PullsDiffstatEntry[]|"loading"|string|nil
+---@return PullsDetailHeaderField
+local function branch_field(src, dst, diffstat)
+	local branch_icon = icons.pulls("branch")
+	local arrow = " → "
+	local value = string.format("%s %s%s%s", branch_icon, src, arrow, dst)
+
+	local src_start = #branch_icon + 1
+	local dst_start = src_start + #src + #arrow
+	local spans = {
+		{ start_col = src_start, end_col = src_start + #src, hl_group = highlights.dynamic_for(src) or "AtlasTextMuted" },
+		{ start_col = dst_start, end_col = dst_start + #dst, hl_group = highlights.dynamic_for(dst) or "AtlasTextMuted" },
+	}
+
+	if type(diffstat) == "table" then
+		local additions, deletions = 0, 0
+		for _, entry in ipairs(diffstat) do
+			additions = additions + (tonumber(entry.lines_added) or 0)
+			deletions = deletions + (tonumber(entry.lines_removed) or 0)
+		end
+		if additions + deletions > 0 then
+			local sep = "  |  "
+			local plus = string.format("+%d", additions)
+			local minus = string.format("-%d", deletions)
+			local base = #value + #sep
+			table.insert(spans, { start_col = base, end_col = base + #plus, hl_group = "AtlasTextPositive" })
+			local minus_start = base + #plus + 2
+			table.insert(spans, { start_col = minus_start, end_col = minus_start + #minus, hl_group = "AtlasLogError" })
+			value = value .. sep .. plus .. ", " .. minus
+		end
+	end
+
+	return { label = "Branch", value = value, hl = spans }
+end
+
 ---@param pr PullRequest
 ---@param width integer
 ---@param extra_fields PullsDetailHeaderField[]|nil
 ---@param trailing_fields PullsDetailHeaderField[]|nil Appended after Branch (e.g. Reviewers, Checks), still part of the same two-column grid.
+---@param diffstat PullsDiffstatEntry[]|"loading"|string|nil
 ---@return string[], table[]
-function M.render_fields(pr, width, extra_fields, trailing_fields)
+function M.render_fields(pr, width, extra_fields, trailing_fields, diffstat)
 	local repo_name = pr.repo_full_name
 	local src = pr.source.branch
 	local dst = pr.destination.branch
@@ -156,11 +194,7 @@ function M.render_fields(pr, width, extra_fields, trailing_fields)
 	for _, field in ipairs(extra_fields or {}) do
 		table.insert(fields, field)
 	end
-	table.insert(fields, {
-		label = "Branch",
-		value = string.format("%s %s → %s", icons.pulls("branch"), src, dst),
-		hl = "AtlasTextMuted",
-	})
+	table.insert(fields, branch_field(src, dst, diffstat))
 	for _, field in ipairs(trailing_fields or {}) do
 		table.insert(fields, field)
 	end
