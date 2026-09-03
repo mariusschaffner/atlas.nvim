@@ -42,6 +42,33 @@ local function configure(win)
 	statusline.attach(win)
 end
 
+--- Same as `configure`, but for the sticky header window: no cursorline (it's
+--- never meant to hold the cursor) and no atlas statusline of its own -- only
+--- the content window at the bottom should show one.
+---@param win integer
+local function configure_header(win)
+	for name, value in pairs({
+		number = false,
+		relativenumber = false,
+		signcolumn = "no",
+		statuscolumn = "",
+		foldcolumn = "0",
+		foldmethod = "manual",
+		foldenable = false,
+		wrap = true,
+		breakindent = true,
+		cursorline = false,
+		scrollbind = false,
+		cursorbind = false,
+		diff = false,
+		winbar = "",
+		winhighlight = "Normal:Normal,NormalFloat:Normal,FloatBorder:FloatBorder,CursorLine:CursorLine,StatusLine:Normal,StatusLineNC:Normal",
+		statusline = " ",
+	}) do
+		vim.api.nvim_set_option_value(name, value, { win = win, scope = "local" })
+	end
+end
+
 ---@param buf integer|nil
 ---@param filetype string
 local function reset_buffer(buf, filetype)
@@ -129,7 +156,7 @@ local function create_split()
 
 	local header_win = vim.api.nvim_get_current_win()
 	vim.api.nvim_win_set_buf(header_win, header_buf)
-	configure(header_win)
+	configure_header(header_win)
 
 	local content_win = utils.window.create(header_win, "belowright split", content_buf, configure)
 	pcall(vim.api.nvim_win_set_height, header_win, MIN_HEADER_HEIGHT)
@@ -146,12 +173,26 @@ local function create_split()
 	state.header_win = header_win
 	state.header_buf = header_buf
 
+	-- The header is purely informational: never let it hold focus, so tab
+	-- navigation and other content-window keymaps always work regardless of
+	-- where the cursor happened to land.
+	local focus_guard = vim.api.nvim_create_augroup("AtlasDetailHeaderFocusGuard" .. tostring(tab), { clear = true })
+	vim.api.nvim_create_autocmd("WinEnter", {
+		group = focus_guard,
+		callback = function()
+			if vim.api.nvim_get_current_win() == header_win and utils.window.valid(content_win) then
+				vim.api.nvim_set_current_win(content_win)
+			end
+		end,
+	})
+
 	local function on_closed()
 		vim.schedule(function()
 			if state.win ~= content_win and state.header_win ~= header_win then
 				return
 			end
 			deactivate()
+			pcall(vim.api.nvim_del_augroup_by_id, focus_guard)
 			if vim.api.nvim_tabpage_is_valid(tab) then
 				pcall(vim.cmd, "tabclose " .. vim.api.nvim_tabpage_get_number(tab))
 			end

@@ -1,13 +1,13 @@
 local M = {}
 
 local utils = require("atlas.ui.shared.utils")
+local ui_utils = require("atlas.ui.utils")
 local state = require("atlas.pulls.ui.detail.state")
 local header = require("atlas.pulls.ui.components.header")
 local chips = require("atlas.pulls.ui.components.chips")
 local detail_tabs = require("atlas.pulls.ui.components.tabs")
 local icons = require("atlas.ui.shared.icons")
 local spinner = require("atlas.ui.components.spinner")
-local box = require("atlas.ui.components.box")
 local presentation = require("atlas.pulls.ui.presentation")
 local detail_ui = require("atlas.ui.detail")
 
@@ -85,10 +85,7 @@ local function set_winbar(win, pr)
 	)
 end
 
--- Reviewers
-
-local DECISION_GROUPS = { "approved", "changes_requested", "reviewed", "pending" }
-local OTHER_DECISION_GROUPS = { "approved", "changes_requested" }
+-- Reviewers / merge checks (compact, rendered beside the header fields)
 
 local DECISION_ICONS = {
 	approved = { icon = icons.pulls_status("successful"), hl = "AtlasTextPositive" },
@@ -96,143 +93,6 @@ local DECISION_ICONS = {
 	reviewed = { icon = icons.pulls("review"), hl = "AtlasTextMuted" },
 	pending = { icon = icons.pulls_status("inprogress"), hl = "AtlasTextMuted" },
 }
-
----@param decisions PullsReviewer[]
----@param groups string[]
----@param width integer
----@return BoxContentGroup
-local function decision_content(decisions, groups, width)
-	local box_lines = {}
-	local box_spans = {}
-	local grouped = { approved = {}, changes_requested = {}, reviewed = {}, pending = {} }
-	for _, decision in ipairs(decisions) do
-		local decision_state = decision.decision or "pending"
-		if grouped[decision_state] == nil then
-			decision_state = "pending"
-		end
-		table.insert(grouped[decision_state], presentation.user_handle(decision))
-	end
-
-	local box_inner = math.max(10, width - (PADDING_X * 2) - 4)
-	for _, decision_state in ipairs(groups) do
-		local names = grouped[decision_state]
-		if #names > 0 then
-			table.sort(names)
-			local display = DECISION_ICONS[decision_state] or DECISION_ICONS.pending
-			local label = table.concat(names, ", ")
-			local icon_prefix = display.icon .. " "
-			local icon_prefix_width = vim.api.nvim_strwidth(icon_prefix)
-			local label_width = math.max(1, box_inner - icon_prefix_width)
-			local wrapped = utils.wrap_line(label, label_width)
-
-			local line_text = icon_prefix .. wrapped[1]
-			table.insert(box_lines, line_text)
-			table.insert(box_spans, {
-				line = #box_lines - 1,
-				start_col = 0,
-				end_col = #display.icon,
-				hl_group = display.hl,
-			})
-
-			local continuation_prefix = string.rep(" ", icon_prefix_width)
-			for i = 2, #wrapped do
-				table.insert(box_lines, continuation_prefix .. wrapped[i])
-			end
-		end
-	end
-
-	return { lines = box_lines, spans = box_spans }
-end
-
----@param width integer
----@param lines string[]
----@param spans table[]
-local function render_reviewers(width, lines, spans)
-	if state.reviewers == nil or state.reviewers == "loading" then
-		return
-	end
-
-	if type(state.reviewers) == "string" then
-		utils.push(lines, spans, "Reviewers", "AtlasColumnHeader", PADDING_X)
-		local err_text = state.reviewers
-		utils.append_block(
-			lines,
-			spans,
-			box.render({
-				{
-					lines = { err_text },
-					spans = { { line = 0, start_col = 0, end_col = #err_text, hl_group = "AtlasLogError" } },
-				},
-			}, { width = width, padding_x = PADDING_X })
-		)
-		table.insert(lines, "")
-		return
-	end
-
-	local decisions = {}
-	local others = {}
-	for _, reviewer in ipairs(state.reviewers) do
-		table.insert(reviewer.role == "participant" and others or decisions, reviewer)
-	end
-	local approved_count = 0
-	for _, r in ipairs(decisions) do
-		if r.decision == "approved" then
-			approved_count = approved_count + 1
-		end
-	end
-
-	local header_text = string.format("Reviewers (%d/%d)", approved_count, #decisions)
-	utils.push(lines, spans, header_text, "AtlasColumnHeader", PADDING_X)
-	local count_text = string.format("(%d/%d)", approved_count, #decisions)
-	table.insert(spans, {
-		line = #lines - 1,
-		start_col = PADDING_X + #header_text - #count_text,
-		end_col = PADDING_X + #header_text,
-		hl_group = "AtlasTextMuted",
-	})
-
-	local content
-	if #decisions == 0 then
-		local empty_text = "no reviewers yet"
-		content = {
-			lines = { empty_text },
-			spans = { { line = 0, start_col = 0, end_col = #empty_text, hl_group = "AtlasTextMuted" } },
-		}
-	else
-		content = decision_content(decisions, DECISION_GROUPS, width)
-	end
-
-	if #others > 0 then
-		table.insert(content.lines, "")
-		local label = "Other decisions"
-		table.insert(content.lines, label)
-		table.insert(content.spans, {
-			line = #content.lines - 1,
-			start_col = 0,
-			end_col = #label,
-			hl_group = "AtlasColumnHeader",
-		})
-
-		local other_content = decision_content(others, OTHER_DECISION_GROUPS, width)
-		local line_offset = #content.lines
-		for _, line in ipairs(other_content.lines) do
-			table.insert(content.lines, line)
-		end
-		for _, span in ipairs(other_content.spans) do
-			table.insert(content.spans, {
-				line = line_offset + span.line,
-				start_col = span.start_col,
-				end_col = span.end_col,
-				hl_group = span.hl_group,
-			})
-		end
-	end
-
-	utils.append_block(lines, spans, box.render({ content }, { width = width, padding_x = PADDING_X }))
-	table.insert(lines, "")
-end
-
--- Merge checks
 
 local MERGE_CHECK_STATE = {
 	successful = { icon = icons.pulls_status("successful"), hl = "AtlasTextPositive" },
@@ -250,58 +110,40 @@ local MERGE_CHECK_PRIORITY = {
 	muted = 5,
 }
 
----@param check PullsMergeCheck
 ---@param width integer
----@return BoxContentGroup
-local function render_merge_check_group(check, width)
-	local pair = MERGE_CHECK_STATE[check.state] or MERGE_CHECK_STATE.muted
-	local lines = {}
-	local spans = {}
-	local content_width = math.max(2, width - (PADDING_X * 2) - 3)
-
-	local icon_prefix = pair.icon .. " "
-	local icon_width = vim.api.nvim_strwidth(icon_prefix)
-	local title_width = math.max(2, content_width - icon_width)
-	local title_lines = utils.wrap_line(check.label, title_width)
-	for index, title in ipairs(title_lines) do
-		local prefix = index == 1 and icon_prefix or string.rep(" ", icon_width)
-		table.insert(lines, prefix .. title)
-		if index == 1 then
-			table.insert(spans, { line = #lines - 1, start_col = 0, end_col = #pair.icon, hl_group = pair.hl })
-		end
+---@param lines string[]
+---@param spans table[]
+local function render_reviewers_compact(width, lines, spans)
+	if state.reviewers == nil or state.reviewers == "loading" then
+		return
 	end
 
-	for _, message in ipairs(check.details or {}) do
-		local indent = "  "
-		local detail_width = math.max(2, content_width - vim.api.nvim_strwidth(indent))
-		for _, detail_line in ipairs(utils.wrap_line(message, detail_width)) do
-			local text = indent .. detail_line
-			table.insert(lines, text)
-			table.insert(spans, { line = #lines - 1, start_col = 0, end_col = #text, hl_group = "AtlasTextMuted" })
-		end
+	utils.push(lines, spans, "Reviewers", "AtlasColumnHeader", 0)
+
+	if type(state.reviewers) == "string" then
+		utils.push(lines, spans, utils.truncate(state.reviewers, width), "AtlasLogError", 0)
+		return
 	end
 
-	return { lines = lines, spans = spans }
-end
-
----@param text string
----@param hl_group string
----@param width integer
----@return BoxContentGroup
-local function render_merge_check_message_group(text, hl_group, width)
-	local content_width = math.max(2, width - (PADDING_X * 2) - 3)
-	local lines = utils.wrap_line(text, content_width)
-	local spans = {}
-	for index, line in ipairs(lines) do
-		table.insert(spans, { line = index - 1, start_col = 0, end_col = #line, hl_group = hl_group })
+	if #state.reviewers == 0 then
+		utils.push(lines, spans, "no reviewers yet", "AtlasTextMuted", 0)
+		return
 	end
-	return { lines = lines, spans = spans }
+
+	for _, reviewer in ipairs(state.reviewers) do
+		local style = DECISION_ICONS[reviewer.decision or "pending"] or DECISION_ICONS.pending
+		local name = presentation.user_handle(reviewer)
+		local name_width = math.max(1, width - vim.api.nvim_strwidth(style.icon) - 1)
+		local text = string.format("%s %s", style.icon, utils.truncate(name, name_width))
+		table.insert(lines, text)
+		table.insert(spans, { line = #lines - 1, start_col = 0, end_col = #style.icon, hl_group = style.hl })
+	end
 end
 
 ---@param width integer
 ---@param lines string[]
 ---@param spans table[]
-local function render_merge_checks(width, lines, spans)
+local function render_merge_checks_compact(width, lines, spans)
 	if state.merge_checks == nil or state.merge_checks == "loading" then
 		return
 	end
@@ -309,19 +151,10 @@ local function render_merge_checks(width, lines, spans)
 		return
 	end
 
-	utils.push(lines, spans, "Merge Checks", "AtlasColumnHeader", PADDING_X)
+	utils.push(lines, spans, "Merge Checks", "AtlasColumnHeader", 0)
 
 	if type(state.merge_checks) == "string" then
-		local err_text = state.merge_checks --[[@as string]]
-		utils.append_block(
-			lines,
-			spans,
-			box.render(
-				{ render_merge_check_message_group(err_text, "AtlasLogError", width) },
-				{ width = width, padding_x = PADDING_X }
-			)
-		)
-		table.insert(lines, "")
+		utils.push(lines, spans, utils.truncate(state.merge_checks, width), "AtlasLogError", 0)
 		return
 	end
 
@@ -330,13 +163,65 @@ local function render_merge_checks(width, lines, spans)
 		return (MERGE_CHECK_PRIORITY[a.state] or math.huge) < (MERGE_CHECK_PRIORITY[b.state] or math.huge)
 	end)
 
-	local groups = {}
 	for _, check in ipairs(checks) do
-		table.insert(groups, render_merge_check_group(check, width))
+		local pair = MERGE_CHECK_STATE[check.state] or MERGE_CHECK_STATE.muted
+		local label_width = math.max(1, width - vim.api.nvim_strwidth(pair.icon) - 1)
+		local text = string.format("%s %s", pair.icon, utils.truncate(check.label, label_width))
+		table.insert(lines, text)
+		table.insert(spans, { line = #lines - 1, start_col = 0, end_col = #pair.icon, hl_group = pair.hl })
+	end
+end
+
+---@param width integer
+---@return string[], table[]
+local function render_side_reviews(width)
+	local lines, spans = {}, {}
+
+	if state.reviewers == "loading" or state.merge_checks == "loading" then
+		utils.push(lines, spans, spinner.with_text("Loading..."), "AtlasTextMuted", 0)
+		return lines, spans
 	end
 
-	utils.append_block(lines, spans, box.render(groups, { width = width, padding_x = PADDING_X }))
-	table.insert(lines, "")
+	render_reviewers_compact(width, lines, spans)
+	if #lines > 0 then
+		table.insert(lines, "")
+	end
+	render_merge_checks_compact(width, lines, spans)
+
+	return lines, spans
+end
+
+--- Pads every left-column line to `left_col_width` and appends the matching
+--- right-column line, offsetting the right column's spans per row (byte
+--- lengths vary between rows once icons/glyphs are involved).
+---@param left_lines string[]
+---@param left_spans table[]
+---@param left_col_width integer
+---@param right_lines string[]
+---@param right_spans table[]
+---@return string[], table[]
+local function merge_columns(left_lines, left_spans, left_col_width, right_lines, right_spans)
+	local lines, spans = {}, {}
+	local row_count = math.max(#left_lines, #right_lines)
+	local right_starts = {}
+	for i = 1, row_count do
+		local padded_left = ui_utils.pad_right(left_lines[i] or "", left_col_width)
+		table.insert(lines, padded_left .. (right_lines[i] or ""))
+		right_starts[i] = #padded_left
+	end
+	for _, span in ipairs(left_spans) do
+		table.insert(spans, span)
+	end
+	for _, span in ipairs(right_spans) do
+		local col_offset = right_starts[span.line + 1] or 0
+		table.insert(spans, {
+			line = span.line,
+			start_col = col_offset + span.start_col,
+			end_col = col_offset + span.end_col,
+			hl_group = span.hl_group,
+		})
+	end
+	return lines, spans
 end
 
 ---@param pr PullRequest
@@ -357,9 +242,21 @@ local function render_header(pr, tab_items, width)
 			and provider_detail.chips(pr, details, state.details_loading)
 		or {}
 
-	-- Header
-	local h_lines, h_spans = header.render(pr, width, extra_fields)
-	utils.append_block(lines, spans, { lines = h_lines, highlights = h_spans })
+	-- Title
+	local title_lines, title_spans = header.render_title(pr, width)
+	utils.append_block(lines, spans, { lines = title_lines, highlights = title_spans })
+	table.insert(lines, "")
+
+	-- Fields (left) + reviewers/checks (right), side by side
+	local gap = 2
+	local right_width = math.max(18, math.floor(width * 0.32))
+	local left_width = math.max(20, width - right_width - gap)
+
+	local field_lines, field_spans = header.render_fields(pr, left_width, extra_fields)
+	local side_lines, side_spans = render_side_reviews(right_width)
+	local merged_lines, merged_spans = merge_columns(field_lines, field_spans, left_width + gap, side_lines, side_spans)
+	utils.append_block(lines, spans, { lines = merged_lines, highlights = merged_spans })
+	table.insert(lines, "")
 
 	-- Chips
 	local chip_lines, chip_spans = chips.render(pr, {
@@ -378,14 +275,6 @@ local function render_header(pr, tab_items, width)
 		local tab_lines, tab_spans =
 			detail_tabs.render(tab_items, state.current_tab, { width = width, padding_x = PADDING_X })
 		utils.append_block(lines, spans, { lines = tab_lines, highlights = tab_spans })
-		table.insert(lines, "")
-	end
-
-	-- Reviewers / merge checks (global, independent of the active tab)
-	render_reviewers(width, lines, spans)
-	render_merge_checks(width, lines, spans)
-	if state.reviewers == "loading" or state.merge_checks == "loading" then
-		utils.push(lines, spans, spinner.with_text("Loading overview..."), "AtlasTextMuted", PADDING_X)
 	end
 
 	return lines, spans

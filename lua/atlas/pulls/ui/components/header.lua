@@ -89,14 +89,10 @@ end
 
 ---@param pr PullRequest
 ---@param width integer
----@param extra_fields PullsDetailHeaderField[]|nil
 ---@return string[], table[]
-function M.render(pr, width, extra_fields)
+function M.render_title(pr, width)
 	local author_name = presentation.user_handle(pr.author)
 	local created_text = utils.relative_time_text(pr.created_on)
-	local repo_name = pr.repo_full_name
-	local src = pr.source.branch
-	local dst = pr.destination.branch
 
 	local id_text = string.format("#%s", pr.id)
 	local title_text = pr.title
@@ -111,8 +107,36 @@ function M.render(pr, width, extra_fields)
 	local byline = by_prefix .. author_name .. by_sep .. created_text
 
 	local lines = vim.list_extend({}, title_lines)
-	vim.list_extend(lines, { byline, "" })
+	vim.list_extend(lines, { byline })
 
+	local spans = {}
+	for line = 0, #title_lines do
+		table.insert(spans, { line = line, line_hl_group = "AtlasTabInactive" })
+	end
+
+	add_span(spans, lines, 0, 1, 1 + #id_text, "AtlasTextMuted")
+	local author_line = #title_lines
+	add_span(spans, lines, author_line, 1, 1 + #author_icon, author_icon_hl)
+
+	local author_start = #by_prefix - 1
+	local author_end = author_start + #("@" .. author_name)
+	add_span(spans, lines, author_line, author_start, author_end, presentation.author_hl(author_name))
+
+	local ts_start = author_end + #by_sep
+	local ts_end = ts_start + #created_text
+	add_span(spans, lines, author_line, ts_start, ts_end, "AtlasTextMuted")
+
+	return lines, spans
+end
+
+---@param pr PullRequest
+---@param width integer
+---@param extra_fields PullsDetailHeaderField[]|nil
+---@return string[], table[]
+function M.render_fields(pr, width, extra_fields)
+	local repo_name = pr.repo_full_name
+	local src = pr.source.branch
+	local dst = pr.destination.branch
 	local updated_text = utils.relative_time_text(pr.updated_on)
 
 	local fields = {
@@ -168,37 +192,31 @@ function M.render(pr, width, extra_fields)
 		end,
 	})
 
-	for _, l in ipairs(tbl_lines) do
-		table.insert(lines, l)
-	end
+	return tbl_lines, tbl_spans
+end
+
+---@param pr PullRequest
+---@param width integer
+---@param extra_fields PullsDetailHeaderField[]|nil
+---@return string[], table[]
+function M.render(pr, width, extra_fields)
+	local lines, spans = M.render_title(pr, width)
 	table.insert(lines, "")
 
-	-- Spans
-	local spans = {}
-	for line = 0, #title_lines do
-		table.insert(spans, { line = line, line_hl_group = "AtlasTabInactive" })
+	local field_lines, field_spans = M.render_fields(pr, width, extra_fields)
+	local offset = #lines
+	for _, l in ipairs(field_lines) do
+		table.insert(lines, l)
 	end
-
-	add_span(spans, lines, 0, 1, 1 + #id_text, "AtlasTextMuted")
-	local author_line = #title_lines
-	add_span(spans, lines, author_line, 1, 1 + #author_icon, author_icon_hl)
-
-	local author_start = #by_prefix - 1
-	local author_end = author_start + #("@" .. author_name)
-	add_span(spans, lines, author_line, author_start, author_end, presentation.author_hl(author_name))
-
-	local ts_start = author_end + #by_sep
-	local ts_end = ts_start + #created_text
-	add_span(spans, lines, author_line, ts_start, ts_end, "AtlasTextMuted")
-
-	for _, span in ipairs(tbl_spans) do
+	for _, span in ipairs(field_spans) do
 		table.insert(spans, {
-			line = span.line + #title_lines + 2,
+			line = offset + span.line,
 			start_col = span.start_col,
 			end_col = span.end_col,
 			hl_group = span.hl_group,
 		})
 	end
+	table.insert(lines, "")
 
 	return lines, spans
 end
