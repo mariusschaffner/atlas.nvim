@@ -147,6 +147,16 @@ function M.register(buf, opts)
 	end
 	utils.insert_if(
 		items,
+		item("ui.select", {
+			desc = "Select item",
+			opts = { nowait = true, silent = true },
+			callback = function()
+				open_current_line()
+			end,
+		})
+	)
+	utils.insert_if(
+		items,
 		item("ui.open_in_browser", {
 			desc = "Open in browser",
 			opts = { nowait = true, silent = true },
@@ -378,6 +388,7 @@ function M.remove(buf)
 	utils.insert_if(general, remove_item("ui.refresh"))
 	utils.insert_if(general, remove_item("ui.refresh_view"))
 	utils.insert_if(general, remove_item("ui.open_actions"))
+	utils.insert_if(general, remove_item("ui.select"))
 	utils.insert_if(general, remove_item("ui.open_in_browser"))
 	utils.insert_if(general, remove_item("pulls.open_diff"))
 	utils.insert_if(general, remove_item("pulls.checkout"))

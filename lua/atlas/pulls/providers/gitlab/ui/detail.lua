@@ -73,6 +73,7 @@ end
 ---@return PullsDetailTab[]
 function M.tabs()
 	local overview_icon, overview_hl = icons.general("overview")
+	local pipeline_icon, pipeline_hl = icons.pulls("pipeline")
 	local conversation_icon, conversation_hl = icons.general("conversation")
 	local review_icon, review_hl = icons.pulls("review")
 	local commit_icon, commit_hl = icons.pulls("commit")
@@ -82,6 +83,12 @@ function M.tabs()
 			label = "Overview",
 			icon = { icon = overview_icon, hl_group = overview_hl },
 			mod = require("atlas.pulls.ui.detail.tabs.overview"),
+		},
+		{
+			key = "pipelines",
+			label = "Pipelines",
+			icon = { icon = pipeline_icon, hl_group = pipeline_hl },
+			mod = require("atlas.pulls.ui.detail.tabs.pipelines"),
 		},
 		{
 			key = "conversation",

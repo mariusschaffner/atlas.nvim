@@ -7,13 +7,11 @@ local box = require("atlas.ui.components.box")
 local table_tree = require("atlas.ui.components.table_tree")
 local state = require("atlas.pulls.ui.detail.tabs.overview.state")
 local detail = require("atlas.pulls.ui.detail.state")
-local keymaps = require("atlas.pulls.ui.detail.tabs.overview.keymaps")
 local presentation = require("atlas.pulls.ui.presentation")
 local request_scope = require("atlas.core.requests")
 
 local PADDING_X = 1
 local PADDING = string.rep(" ", PADDING_X)
-local MAX_DESCRIPTION_LINES = 10
 
 ---@param pr PullRequest
 ---@return boolean
@@ -244,236 +242,6 @@ local function render_reviewers(width, lines, spans)
 	table.insert(lines, "")
 end
 
--- Pipelines
-
-local PIPELINE_HL = {
-	SUCCESSFUL = "AtlasPipelineLinkSuccess",
-	FAILED = "AtlasPipelineLinkFailed",
-	INPROGRESS = "AtlasPipelineLinkInProgress",
-	STOPPED = "AtlasPipelineLinkMuted",
-}
-
-local PIPELINE_STATUS_LABEL = {
-	SUCCESSFUL = "Passed",
-	FAILED = "Failed",
-	INPROGRESS = "Running",
-	STOPPED = "Stopped",
-}
-
-local PIPELINE_STATUS_PRIORITY = {
-	FAILED = 1,
-	INPROGRESS = 2,
-	STOPPED = 3,
-	UNKNOWN = 4,
-	SUCCESSFUL = 5,
-}
-
-local MAX_OVERVIEW_JOBS = 5
-
----@param status string
----@return string
-local function status_label(status)
-	return PIPELINE_STATUS_LABEL[tostring(status or ""):upper()] or "Unknown"
-end
-
----@generic T: { state: string }
----@param items T[]
----@return T[]
-local function sort_by_status(items)
-	local indexed = {}
-	for index, item in ipairs(items) do
-		table.insert(indexed, { item = item, index = index })
-	end
-	table.sort(indexed, function(a, b)
-		local a_state = tostring(a.item.state or "UNKNOWN"):upper()
-		local b_state = tostring(b.item.state or "UNKNOWN"):upper()
-		local a_priority = PIPELINE_STATUS_PRIORITY[a_state] or PIPELINE_STATUS_PRIORITY.UNKNOWN
-		local b_priority = PIPELINE_STATUS_PRIORITY[b_state] or PIPELINE_STATUS_PRIORITY.UNKNOWN
-		if a_priority == b_priority then
-			return a.index < b.index
-		end
-		return a_priority < b_priority
-	end)
-
-	local sorted = {}
-	for _, entry in ipairs(indexed) do
-		table.insert(sorted, entry.item)
-	end
-	return sorted
-end
-
----@param _pr PullRequest
----@param width integer
----@param lines string[]
----@param spans table[]
----@param line_map table<integer, table>
-local function render_pipelines(_pr, width, lines, spans, line_map)
-	if detail.pipelines == nil or detail.pipelines == "loading" then
-		return
-	end
-
-	if type(detail.pipelines) == "string" then
-		utils.push(lines, spans, "Pipelines", "AtlasColumnHeader", PADDING_X)
-		local err_text = detail.pipelines
-		utils.append_block(
-			lines,
-			spans,
-			box.render({
-				{
-					lines = { err_text },
-					spans = { { line = 0, start_col = 0, end_col = #err_text, hl_group = "AtlasLogError" } },
-				},
-			}, { width = width, padding_x = PADDING_X })
-		)
-		table.insert(lines, "")
-		return
-	end
-
-	local entries = sort_by_status(detail.pipelines)
-
-	if #entries == 0 then
-		return
-	end
-
-	utils.push(lines, spans, "Pipelines", "AtlasColumnHeader", PADDING_X)
-
-	local rows = {}
-	for _, pipeline in ipairs(entries) do
-		if #rows > 0 then
-			table.insert(rows, { kind = "separator" })
-		end
-		local state_value = tostring(pipeline.state or "UNKNOWN"):upper()
-		local icon = icons.pulls_status(state_value:lower())
-		local label = pipeline.name
-		local job_count = tonumber(pipeline.job_count)
-		if job_count ~= nil then
-			label = string.format("%s  %d %s", label, job_count, job_count == 1 and "job" or "jobs")
-		end
-		local row = {
-			label = label,
-			status = string.format("%s %s", icon, status_label(state_value)),
-			status_hl = PIPELINE_HL[state_value] or "AtlasPipelineLinkMuted",
-			kind = "pipeline",
-			pipeline = pipeline,
-			url = tostring(pipeline.url or ""),
-			children = {},
-		}
-		local unnamed_jobs = {}
-		local has_named_stage = false
-		for _, pipeline_stage in ipairs(pipeline.stages) do
-			if pipeline_stage.name == nil then
-				for _, job in ipairs(pipeline_stage.jobs) do
-					table.insert(unnamed_jobs, { state = job.state, stage = pipeline_stage, job = job })
-				end
-			else
-				has_named_stage = true
-			end
-		end
-		for _, pipeline_stage in ipairs(sort_by_status(pipeline.stages)) do
-			if pipeline_stage.name ~= nil then
-				local stage_state = tostring(pipeline_stage.state or "UNKNOWN"):upper()
-				local stage_icon = icons.pulls_status(stage_state:lower())
-				table.insert(row.children, {
-					label = string.format("%s %s", stage_icon, pipeline_stage.name),
-					status = "",
-					status_icon = stage_icon,
-					status_hl = PIPELINE_HL[stage_state] or "AtlasPipelineLinkMuted",
-					kind = "stage",
-					pipeline = pipeline,
-					stage = pipeline_stage,
-				})
-			end
-		end
-		local sorted_jobs = sort_by_status(unnamed_jobs)
-		local visible_jobs = math.min(#sorted_jobs, MAX_OVERVIEW_JOBS)
-		for index = 1, visible_jobs do
-			local entry = sorted_jobs[index]
-			local job = entry.job
-			local job_state = tostring(job.state or "UNKNOWN"):upper()
-			local job_icon = icons.pulls_status(job_state:lower())
-			table.insert(row.children, {
-				label = string.format("%s %s", job_icon, job.name),
-				status = "",
-				status_icon = job_icon,
-				status_hl = PIPELINE_HL[job_state] or "AtlasPipelineLinkMuted",
-				kind = "pipeline",
-				pipeline = pipeline,
-				stage = entry.stage,
-				job = job,
-				url = tostring(job.url or pipeline.url or ""),
-			})
-		end
-		local total_unnamed_jobs = #unnamed_jobs
-		if not has_named_stage then
-			total_unnamed_jobs = math.max(tonumber(pipeline.job_count) or 0, total_unnamed_jobs)
-		end
-		if total_unnamed_jobs > visible_jobs then
-			table.insert(row.children, {
-				label = string.format("+%d more", total_unnamed_jobs - visible_jobs),
-				status = "",
-				muted = true,
-			})
-		end
-		table.insert(rows, row)
-	end
-
-	local box_lines, box_lmap, box_spans = table_tree.render({
-		width = math.max(10, width - (PADDING_X * 2) - 4),
-		margin = 0,
-		show_header = false,
-		column_gap = 1,
-		columns = {
-			{ key = "label", name = "", can_grow = true },
-			{ key = "status", name = "", can_grow = false },
-		},
-		rows = rows,
-		tree = {
-			column_key = "label",
-			leaf_prefix = "",
-			show_indicator = false,
-			is_expanded = function(row)
-				return state.is_pipeline_expanded(row.pipeline)
-			end,
-		},
-		cell_hl = function(row, column, context)
-			if row.kind == "separator" then
-				return nil
-			end
-			if row.muted then
-				return "AtlasTextMuted"
-			end
-			if column.key == "label" and row.status_icon then
-				local start_col = context.text:find(row.status_icon, 1, true)
-				if start_col then
-					return {
-						{
-							start_col = start_col - 1,
-							end_col = start_col - 1 + #row.status_icon,
-							hl_group = row.status_hl,
-						},
-					}
-				end
-			end
-			if column.key == "status" then
-				return row.status_hl
-			end
-			return nil
-		end,
-	})
-
-	utils.append_block(
-		lines,
-		spans,
-		box.render({ { lines = box_lines, spans = box_spans, line_map = box_lmap } }, {
-			width = width,
-			padding_x = PADDING_X,
-			line_map = line_map,
-			line_offset = #lines,
-		})
-	)
-	table.insert(lines, "")
-end
-
 -- Description
 
 ---@param details PullRequestDetails
@@ -482,20 +250,12 @@ end
 ---@param spans table[]
 ---@param line_map table<integer, table>
 local function render_description(details, width, lines, spans, line_map)
-	local start_line = #lines + 1
-	local function map_lines()
-		for lnum = start_line, #lines do
-			line_map[lnum] = { kind = "description" }
-		end
-	end
-
 	utils.push(lines, spans, "Description", "AtlasColumnHeader", PADDING_X)
 
 	local desc_text = utils.strip_markup(details.description)
 	if desc_text == "" then
 		utils.push(lines, spans, "No description provided.", "AtlasTextMuted", PADDING_X)
 		table.insert(lines, "")
-		map_lines()
 		return
 	end
 
@@ -504,44 +264,11 @@ local function render_description(details, width, lines, spans, line_map)
 		table.remove(desc_lines)
 	end
 
-	local truncated = false
-	if not state.description_expanded and #desc_lines > MAX_DESCRIPTION_LINES then
-		desc_lines = vim.list_slice(desc_lines, 1, MAX_DESCRIPTION_LINES)
-		truncated = true
-	end
-
 	for _, line in ipairs(desc_lines) do
 		table.insert(lines, PADDING .. line)
 	end
 
-	if truncated then
-		local keys = require("atlas.core.keymaps").resolve("ui.toggle_fold") or {}
-		local key = keys[1] or "za"
-		local prefix = "Press "
-		local suffix = " to expand"
-		local hint = prefix .. key .. suffix
-		local pad = math.max(0, math.floor((width - #hint) / 2))
-		local hint_line = string.rep(" ", pad) .. hint
-		table.insert(lines, "")
-		table.insert(lines, hint_line)
-		local line_idx = #lines - 1
-		local prefix_start = pad
-		local key_start = prefix_start + #prefix
-		local suffix_start = key_start + #key
-		local hint_end = suffix_start + #suffix
-		table.insert(
-			spans,
-			{ line = line_idx, start_col = prefix_start, end_col = key_start, hl_group = "AtlasTextMuted" }
-		)
-		table.insert(spans, { line = line_idx, start_col = key_start, end_col = suffix_start, hl_group = "Normal" })
-		table.insert(
-			spans,
-			{ line = line_idx, start_col = suffix_start, end_col = hint_end, hl_group = "AtlasTextMuted" }
-		)
-	end
-
 	table.insert(lines, "")
-	map_lines()
 end
 
 -- Merge checks
@@ -677,34 +404,15 @@ end
 function M.render_side(pr, width)
 	local lines = {}
 	local spans = {}
-	local line_map = {}
 
 	render_reviewers(width, lines, spans)
 	render_merge_checks(width, lines, spans)
-	render_pipelines(pr, width, lines, spans, line_map)
 
-	if state.reviewers == "loading" or state.merge_checks == "loading" or detail.pipelines == "loading" then
+	if state.reviewers == "loading" or state.merge_checks == "loading" then
 		utils.push(lines, spans, spinner.with_text("Loading overview..."), "AtlasTextMuted", PADDING_X)
 	end
 
-	return lines, spans, line_map
-end
-
----@param _lnum integer
----@param entry table
----@return boolean
-function M.is_selectable_line(_lnum, entry)
-	return entry.pipeline ~= nil
-end
-
----@param _pr PullRequest
----@param entry table
----@return boolean|nil
-function M.on_enter(_pr, entry)
-	if entry.kind == "pipeline" and entry.url and entry.url ~= "" then
-		vim.ui.open(entry.url)
-		return true
-	end
+	return lines, spans, {}
 end
 
 ---@return boolean
@@ -712,22 +420,18 @@ function M.is_loading()
 	return state.reviewers == "loading" or state.merge_checks == "loading"
 end
 
-function M.activate(buf, refresh)
+function M.activate(buf, _refresh)
 	if not (buf and vim.api.nvim_buf_is_valid(buf)) then
 		return
 	end
 	vim.api.nvim_set_option_value("filetype", "markdown", { buf = buf })
 	vim.api.nvim_set_option_value("syntax", "markdown", { buf = buf })
-	if refresh ~= nil then
-		keymaps.setup(buf, refresh)
-	end
 end
 
 function M.deactivate(buf)
 	if not (buf and vim.api.nvim_buf_is_valid(buf)) then
 		return
 	end
-	keymaps.teardown(buf)
 	vim.api.nvim_set_option_value("filetype", "atlas.detail", { buf = buf })
 	vim.api.nvim_set_option_value("syntax", "OFF", { buf = buf })
 	pcall(vim.treesitter.stop, buf)

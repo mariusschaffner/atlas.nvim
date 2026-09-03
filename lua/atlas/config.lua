@@ -176,6 +176,7 @@ M.options = {
 			submit = "<C-s>",
 			help = "g?",
 			close = "q",
+			back = "<BS>",
 			delete = "dd",
 			comments = {
 				add = { "a", "i" },

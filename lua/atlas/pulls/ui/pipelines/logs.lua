@@ -175,7 +175,7 @@ end
 
 ---@param log string
 ---@return string[], table[]
-local function render_log(log)
+function M.render_log(log)
 	local text = tostring(log or ""):gsub("^\239\187\191", ""):gsub("\r\n", "\n"):gsub("\r", "\n")
 	text = strip_terminal_sequences(text)
 	local lines = vim.split(text, "\n", { plain = true })
@@ -329,7 +329,7 @@ local function render(session)
 			hl_group = "AtlasLogError",
 		})
 	else
-		local log_lines, log_spans = render_log(session.log)
+		local log_lines, log_spans = M.render_log(session.log)
 		local offset = #lines
 		for _, line in ipairs(log_lines) do
 			table.insert(lines, line)
