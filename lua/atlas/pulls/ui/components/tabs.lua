@@ -8,7 +8,7 @@ local tabs = require("atlas.ui.components.tabs")
 ---@return string[], table[]
 function M.render(items, active_tab, opts)
 	return tabs.render(items, active_tab, opts.width, {
-		active_hl = nil,
+		active_hl = "AtlasFilterActive",
 		inactive_hl = "AtlasTextMuted",
 		gap = " ",
 		padding_x = opts.padding_x,

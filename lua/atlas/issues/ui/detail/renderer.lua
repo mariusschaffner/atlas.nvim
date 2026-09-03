@@ -72,6 +72,7 @@ local function render_header(issue, tab_items, width)
 
 	if #tab_items > 1 then
 		local tab_lines, tab_spans = tabs.render(tab_items, state.current_tab, width, {
+			active_hl = "AtlasFilterActive",
 			inactive_hl = "AtlasTextMuted",
 			gap = " ",
 			padding_x = PADDING_X,

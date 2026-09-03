@@ -55,7 +55,10 @@ local function configure_header(win)
 		foldcolumn = "0",
 		foldmethod = "manual",
 		foldenable = false,
-		wrap = true,
+		-- Never wrap: resize_header() sizes the window from the logical line
+		-- count, so a wrapped line would silently push content (like the tab
+		-- bar, always last) below the visible area.
+		wrap = false,
 		breakindent = true,
 		cursorline = false,
 		scrollbind = false,
