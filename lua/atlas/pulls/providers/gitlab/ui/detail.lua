@@ -80,7 +80,7 @@ function M.tabs()
 	return {
 		{
 			key = "overview",
-			label = "Overview",
+			label = "Description",
 			icon = { icon = overview_icon, hl_group = overview_hl },
 			mod = require("atlas.pulls.ui.detail.tabs.overview"),
 		},

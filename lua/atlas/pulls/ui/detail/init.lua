@@ -15,7 +15,7 @@ local SPINNER_INTERVAL_MS = 100
 local DEFAULT_TABS = {
 	{
 		key = "overview",
-		label = "Overview",
+		label = "Description",
 		icon = { icon = overview_icon, hl_group = overview_icon_hl },
 		mod = require("atlas.pulls.ui.detail.tabs.overview"),
 	},

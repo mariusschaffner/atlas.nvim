@@ -12,8 +12,6 @@ local PADDING = string.rep(" ", PADDING_X)
 ---@param lines string[]
 ---@param spans table[]
 local function render_description(details, width, lines, spans)
-	utils.push(lines, spans, "Description", "AtlasColumnHeader", PADDING_X)
-
 	local desc_text = utils.strip_markup(details.description)
 	if desc_text == "" then
 		utils.push(lines, spans, "No description provided.", "AtlasTextMuted", PADDING_X)
