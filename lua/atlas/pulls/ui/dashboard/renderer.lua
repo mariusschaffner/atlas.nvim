@@ -303,7 +303,7 @@ local function render_navbar(lines, spans, width)
 	for _, view in ipairs(views) do
 		table.insert(nav_items, {
 			label = view.key and string.format("%s (%s)", view.name, view.key) or view.name,
-			active = view_id(view) == active_id,
+			hl_group = (view_id(view) == active_id) and "AtlasLogInfo" or "AtlasTextMuted",
 		})
 	end
 	table.insert(nav_items, { label = "|", hl_group = "AtlasTextMuted" })
@@ -311,7 +311,7 @@ local function render_navbar(lines, spans, width)
 		local label = status:sub(1, 1):upper() .. status:sub(2):lower()
 		table.insert(nav_items, {
 			label = label,
-			active = state.status_filters[status],
+			hl_group = state.status_filters[status] and "AtlasLogInfo" or "AtlasTextMuted",
 		})
 	end
 

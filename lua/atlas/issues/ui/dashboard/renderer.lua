@@ -263,14 +263,14 @@ function M.render(opts)
 		end
 		table.insert(nav_items, {
 			label = label,
-			active = id == active_id,
+			hl_group = id == active_id and "AtlasLogInfo" or "AtlasTextMuted",
 		})
 	end
 
 	if not active_is_listed and active ~= nil then
 		table.insert(nav_items, {
 			label = tostring(active.name or "-"),
-			active = true,
+			hl_group = "AtlasLogInfo",
 		})
 	end
 
