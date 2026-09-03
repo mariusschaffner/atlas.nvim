@@ -218,7 +218,7 @@ local function render_header(pr, tab_items, width)
 	-- Tab bar
 	if #tab_items > 1 then
 		local tab_lines, tab_spans =
-			detail_tabs.render(tab_items, state.current_tab, { width = width, padding_x = PADDING_X })
+			detail_tabs.render(tab_items, state.current_tab, { width = width, padding_x = PADDING_X, divider = false })
 		utils.append_block(lines, spans, { lines = tab_lines, highlights = tab_spans })
 	end
 

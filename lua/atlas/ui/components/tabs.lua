@@ -5,7 +5,7 @@ local M = {}
 ---@param items { key: string, label: string, icon: AtlasIconStyle|nil }[]
 ---@param active_tab string
 ---@param width integer
----@param opts? { inactive_hl?: string, active_hl?: string, gap?: string, divider_hl?: string, padding_x?: integer }
+---@param opts? { inactive_hl?: string, active_hl?: string, gap?: string, divider?: boolean, divider_hl?: string, padding_x?: integer }
 ---@return string[] lines
 ---@return table[] spans
 function M.render(items, active_tab, width, opts)
@@ -78,14 +78,17 @@ function M.render(items, active_tab, width, opts)
 			end
 		end
 	end
-	local divider = string.rep("─", math.max(1, width))
-	table.insert(lines, divider)
-	table.insert(spans, {
-		line = 1,
-		start_col = 0,
-		end_col = #divider,
-		hl_group = opts.divider_hl or "AtlasTextMuted",
-	})
+
+	if opts.divider ~= false then
+		local divider = string.rep("─", math.max(1, width))
+		table.insert(lines, divider)
+		table.insert(spans, {
+			line = 1,
+			start_col = 0,
+			end_col = #divider,
+			hl_group = opts.divider_hl or "AtlasTextMuted",
+		})
+	end
 
 	return lines, spans
 end

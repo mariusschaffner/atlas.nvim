@@ -75,6 +75,7 @@ local function render_header(issue, tab_items, width)
 			inactive_hl = "AtlasTextMuted",
 			gap = " ",
 			padding_x = PADDING_X,
+			divider = false,
 		})
 		utils.append_block(lines, spans, { lines = tab_lines, highlights = tab_spans })
 	end

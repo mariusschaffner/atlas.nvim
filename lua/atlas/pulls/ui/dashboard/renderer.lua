@@ -325,15 +325,6 @@ local function render_navbar(lines, spans, width)
 	end
 
 	local actions = {}
-	if state.provider and state.provider.capabilities.notifications then
-		table.insert(actions, { label = "|", hl_group = "AtlasTextMuted" })
-		local count = require("atlas.ui.notifications.state").unread_count or 0
-		local bell, bell_hl = icons.general(count > 0 and "bell_unread" or "bell")
-		table.insert(actions, {
-			label = count > 0 and string.format("%s %d", bell, count) or bell,
-			hl_group = bell_hl,
-		})
-	end
 	utils.append_block(
 		lines,
 		spans,

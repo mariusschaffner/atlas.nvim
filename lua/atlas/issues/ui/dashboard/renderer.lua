@@ -1,6 +1,5 @@
 local M = {}
 
-local resolver = require("atlas.core.keymaps")
 local state = require("atlas.issues.state")
 local navbar = require("atlas.ui.components.navbar")
 local table_tree = require("atlas.ui.components.table_tree")
@@ -16,13 +15,6 @@ local function view_id(view)
 		return ""
 	end
 	return view.key or view.name or ""
-end
-
----@param action_id AtlasKeymapActionId|string
----@return string|nil
-local function key_label(action_id)
-	local keys = resolver.resolve(action_id)
-	return keys and keys[1] or nil
 end
 
 ---@param view IssuesViewConfig|nil
@@ -284,28 +276,6 @@ function M.render(opts)
 	end
 
 	local actions = {}
-
-	if provider and provider.capabilities.notifications then
-		local notif_state = require("atlas.ui.notifications.state")
-		local count = notif_state.unread_count or 0
-		local bell_icon, bell_hl
-		if count > 0 then
-			bell_icon, bell_hl = icons.general("bell_unread")
-		else
-			bell_icon, bell_hl = icons.general("bell")
-		end
-		local bell_label = count > 0 and string.format("%s %d", bell_icon, count) or bell_icon
-		table.insert(actions, { label = bell_label, hl_group = bell_hl })
-		table.insert(actions, { label = "|", hl_group = "AtlasTextMuted" })
-	end
-
-	local refresh_key = key_label("ui.refresh_view")
-	if refresh_key then
-		table.insert(actions, {
-			label = string.format("Refresh (%s)", refresh_key),
-			hl_group = "AtlasTextMuted",
-		})
-	end
 
 	local lines, spans = {}, {}
 	local line_map = {}
