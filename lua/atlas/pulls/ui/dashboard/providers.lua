@@ -67,38 +67,22 @@ local function diff_stats(additions, deletions)
 end
 
 local function gitlab()
-	local successful = { icons.pulls_status("successful") }
-	local failed = { icons.pulls_status("failed") }
-	local in_progress = { icons.pulls_status("inprogress") }
-	local muted = { icons.pulls_status("inprogress"), "AtlasTextMuted" }
-	local stopped = { icons.pulls_status("stopped") }
-	local statuses = {
-		mergeable = successful,
-		checking = in_progress,
-		unchecked = muted,
-		ci_must_pass = failed,
-		ci_still_running = in_progress,
-		discussions_not_resolved = failed,
-		draft_status = stopped,
-		not_approved = in_progress,
-		not_open = stopped,
-		blocked_status = failed,
-		merge_request_blocked = failed,
-		conflict = failed,
-		need_rebase = failed,
-		preparing = in_progress,
-		requested_changes = failed,
-		status_checks_must_pass = failed,
-		security_policy_violations = failed,
-		jira_association_missing = failed,
-		external_status_checks = in_progress,
-		approvals_syncing = muted,
-		commits_status = muted,
-		policies_denied = failed,
+	local pending_statuses = {
+		checking = true,
+		unchecked = true,
+		preparing = true,
+		ci_still_running = true,
+		external_status_checks = true,
+		approvals_syncing = true,
+		commits_status = true,
 	}
-	local ci_column = {
-		key = "ci",
-		name = string.format("%s Pipeline", icons.pulls("pipeline") or icons.pulls_status("inprogress")),
+	local check_icon, check_hl = icons.pulls_status("successful")
+	local cross_icon, cross_hl = icons.pulls_status("failed")
+	local pending_icon, pending_hl = icons.pulls_status("inprogress")
+
+	local mergeable_column = {
+		key = "mergeable",
+		name = string.format("%s Can Merge", check_icon),
 		min_width = 1,
 		can_grow = false,
 		header_hl = "AtlasColumnHeader",
@@ -106,20 +90,25 @@ local function gitlab()
 
 	return {
 		reference = "!",
-		columns = columns(icons.general("comment"), { ci_column }, {}),
+		columns = columns(icons.general("comment"), { mergeable_column }, {}),
 		values = function(pr)
 			---@cast pr GitLabPullRequest
 			local status = tostring(pr.detailed_merge_status or pr.merge_status or ""):lower()
 			if status == "" then
-				return { ci = "", ci_hl = "AtlasTextMuted" }
+				return { mergeable = "", mergeable_hl = "AtlasTextMuted" }
 			end
-			local icon = statuses[status] or muted
-			return { ci = icon[1], ci_hl = icon[2] or "AtlasTextMuted" }
+			if status == "mergeable" then
+				return { mergeable = check_icon, mergeable_hl = check_hl }
+			end
+			if pending_statuses[status] then
+				return { mergeable = pending_icon, mergeable_hl = pending_hl }
+			end
+			return { mergeable = cross_icon, mergeable_hl = cross_hl }
 		end,
 		highlight = function(row, col, ctx)
-			if col.key == "ci" then
+			if col.key == "mergeable" then
 				local empty = row.kind == "meta" or row.kind == "repo"
-				local hl = empty and "" or (row.ci_hl or "AtlasTextMuted")
+				local hl = empty and "" or (row.mergeable_hl or "AtlasTextMuted")
 				return { { start_col = 0, end_col = #ctx.padded, hl_group = hl } }
 			end
 		end,
