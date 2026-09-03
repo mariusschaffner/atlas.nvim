@@ -9,6 +9,7 @@ function M.render(opts)
 	local actions = opts.actions or {} -- { label, hl_group }
 	local active_hl = opts.active_hl
 	local inactive_hl = opts.inactive_hl or "AtlasTabInactive"
+	local plain_items = opts.plain_items == true
 
 	local margin = 1
 	local line = string.rep(" ", margin)
@@ -18,12 +19,14 @@ function M.render(opts)
 
 	for _, item in ipairs(items) do
 		local label = nil
-		if item.icon and item.icon ~= "" then
+		if plain_items then
+			label = item.label or ""
+		elseif item.icon and item.icon ~= "" then
 			label = string.format(" %s  %s ", item.icon, item.label or "")
 		else
 			label = string.format(" %s ", item.label or "")
 		end
-		local hl = item.active and active_hl or inactive_hl
+		local hl = item.hl_group or (item.active and active_hl or inactive_hl)
 
 		line = line .. label .. "  "
 		table.insert(highlights, {

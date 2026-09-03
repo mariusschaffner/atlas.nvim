@@ -310,6 +310,7 @@ function M.render(opts)
 			items = nav_items,
 			actions = actions,
 			active_hl = provider_hl,
+			plain_items = true,
 		})
 	)
 

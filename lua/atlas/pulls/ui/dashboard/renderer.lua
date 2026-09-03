@@ -306,15 +306,16 @@ local function render_navbar(lines, spans, width)
 			active = view_id(view) == active_id,
 		})
 	end
-
-	local actions = {}
+	table.insert(nav_items, { label = "|", hl_group = "AtlasTextMuted" })
 	for _, status in ipairs({ "OPEN", "MERGED", "DECLINED" }) do
 		local label = status:sub(1, 1):upper() .. status:sub(2):lower()
-		table.insert(actions, {
+		table.insert(nav_items, {
 			label = label,
-			hl_group = state.status_filters[status] and "AtlasLogInfo" or "AtlasTextMuted",
+			active = state.status_filters[status],
 		})
 	end
+
+	local actions = {}
 	if state.provider and state.provider.capabilities.notifications then
 		table.insert(actions, { label = "|", hl_group = "AtlasTextMuted" })
 		local count = require("atlas.ui.notifications.state").unread_count or 0
@@ -332,6 +333,7 @@ local function render_navbar(lines, spans, width)
 			items = nav_items,
 			actions = actions,
 			active_hl = hl,
+			plain_items = true,
 		})
 	)
 end
