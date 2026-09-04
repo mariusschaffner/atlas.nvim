@@ -322,7 +322,10 @@ function M.render(pr, _details, width)
 		return lines, spans, line_map
 	end
 
-	local entries = sort_by_status(detail.pipelines)
+	-- Pipelines are already newest-first (see the GitLab provider's fetch());
+	-- keep that order rather than regrouping by status like the stage/job
+	-- rows below, so it matches the GitLab web UI's pipeline list.
+	local entries = detail.pipelines
 	if #entries == 0 then
 		utils.push(lines, spans, "No pipelines found.", "AtlasTextMuted", PADDING_X)
 		return lines, spans, line_map
