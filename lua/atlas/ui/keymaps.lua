@@ -122,7 +122,7 @@ function M.register(buf)
 	utils.insert_if(
 		items,
 		item("ui.inspect", {
-			desc = "inspect",
+			desc = "Inspect",
 			index = 10,
 			opts = { nowait = true, silent = true },
 			callback = function()

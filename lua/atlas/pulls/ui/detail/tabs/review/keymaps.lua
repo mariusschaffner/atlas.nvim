@@ -41,6 +41,7 @@ function M.setup(buf, refresh)
 		items,
 		from_action("ui.comments.reply", {
 			desc = "Reply to comment",
+			hint_desc = "Reply",
 			opts = { nowait = true, silent = true },
 			callback = function()
 				local pr = detail.current_pr
@@ -55,6 +56,7 @@ function M.setup(buf, refresh)
 		items,
 		from_action("ui.comments.edit", {
 			desc = edit_description,
+			hint_desc = "Edit",
 			opts = { nowait = true, silent = true },
 			callback = function()
 				local pr = detail.current_pr
@@ -84,6 +86,7 @@ function M.setup(buf, refresh)
 		items,
 		from_action("ui.delete", {
 			desc = delete_description,
+			hint_desc = "Delete",
 			opts = { nowait = true, silent = true },
 			callback = function()
 				local pr = detail.current_pr

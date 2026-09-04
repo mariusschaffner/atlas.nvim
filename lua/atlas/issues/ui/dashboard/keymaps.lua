@@ -75,7 +75,7 @@ function M.register(buf, views)
 		items,
 		item("ui.filter", {
 			desc = "Edit filter",
-			hint_desc = "filter",
+			hint_desc = "Filter",
 			index = 10,
 			opts = { nowait = true, silent = true },
 			callback = function()
@@ -99,7 +99,7 @@ function M.register(buf, views)
 			items,
 			item(s.action_id, {
 				desc = string.format("Show %s issues", s.status:lower()),
-				hint_desc = "toggle " .. s.status:lower(),
+				hint_desc = "Toggle " .. s.status:sub(1, 1):upper() .. s.status:sub(2):lower(),
 				index = s.index,
 				opts = { nowait = true, silent = true },
 				callback = function()
@@ -114,7 +114,7 @@ function M.register(buf, views)
 			items,
 			item("issues.create_issue", {
 				desc = "Create issue",
-				hint_desc = "create",
+				hint_desc = "Create",
 				index = 30,
 				callback = function()
 					local issue = selected_issue()
@@ -151,7 +151,7 @@ function M.register(buf, views)
 			items,
 			item("issues.edit_issue", {
 				desc = "Edit issue",
-				hint_desc = "edit",
+				hint_desc = "Edit",
 				index = 31,
 				callback = function()
 					local issue = selected_issue()

@@ -108,7 +108,7 @@ function M.setup(buf, refresh)
 			items,
 			from_action("ui.comments.reply", {
 				desc = "Reply to comment",
-				hint_desc = "reply",
+				hint_desc = "Reply",
 				opts = { nowait = true, silent = true },
 				callback = function()
 					dispatch_with_entry(refresh, actions.reply)

@@ -62,7 +62,7 @@ function M.register(buf, views)
 		items,
 		item("ui.filter", {
 			desc = "Edit filter",
-			hint_desc = "filter",
+			hint_desc = "Filter",
 			index = 10,
 			opts = { nowait = true, silent = true },
 			callback = function()
@@ -87,7 +87,7 @@ function M.register(buf, views)
 			items,
 			item(s.action_id, {
 				desc = string.format("Toggle %s filter", s.status:lower()),
-				hint_desc = "toggle " .. s.status:lower(),
+				hint_desc = "Toggle " .. s.status:sub(1, 1):upper() .. s.status:sub(2):lower(),
 				index = s.index,
 				callback = function()
 					local controller = require("atlas.pulls.ui.dashboard.controller")

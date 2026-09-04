@@ -120,6 +120,7 @@ function M.register(buf, opts)
 				desc = "Next selectable item",
 				opts = { nowait = true, silent = true },
 				hidden = true,
+				hint = false,
 				callback = function()
 					nav.move_cursor("down")
 				end,
@@ -131,6 +132,7 @@ function M.register(buf, opts)
 				desc = "Previous selectable item",
 				opts = { nowait = true, silent = true },
 				hidden = true,
+				hint = false,
 				callback = function()
 					nav.move_cursor("up")
 				end,
@@ -141,35 +143,17 @@ function M.register(buf, opts)
 		items,
 		item("ui.select", {
 			desc = "Select item",
+			hint = false,
 			opts = { nowait = true, silent = true },
 			callback = function()
 				open_current_line()
 			end,
 		})
 	)
-	utils.insert_if(
-		items,
-		item("ui.open_in_browser", {
-			desc = "Open in browser",
-			opts = { nowait = true, silent = true },
-			callback = function()
-				if open_current_line() then
-					return
-				end
-				local pr = state.current_pr
-				if pr == nil then
-					return
-				end
-				local context = action_context(pr, buf)
-				if context then
-					actions.run("open_in_browser", context)
-				end
-			end,
-		})
-	)
 
 	local refresh_item = {
 		desc = "Refresh tab",
+		hint = false,
 		opts = { nowait = true, silent = true },
 		callback = function()
 			require("atlas.pulls.ui.detail").refresh()
@@ -183,6 +167,7 @@ function M.register(buf, opts)
 			items,
 			item("ui.open_actions", {
 				desc = "Open PR actions",
+				hint = false,
 				callback = function()
 					local pr = state.current_pr
 					if pr == nil then
@@ -204,6 +189,7 @@ function M.register(buf, opts)
 		items,
 		item("pulls.open_diff", {
 			desc = "Open PR diff",
+			hint_desc = "Diff",
 			opts = { nowait = true },
 			callback = function()
 				local pr = state.current_pr
@@ -222,6 +208,7 @@ function M.register(buf, opts)
 		items,
 		item("pulls.checkout", {
 			desc = "Checkout PR branch",
+			hint_desc = "Checkout",
 			opts = { nowait = true },
 			callback = function()
 				local pr = state.current_pr
@@ -241,6 +228,7 @@ function M.register(buf, opts)
 			items,
 			item("pulls.edit_title", {
 				desc = "Edit PR title",
+				hint_desc = "Title",
 				opts = { nowait = true, silent = true },
 				callback = function()
 					local pr = state.current_pr
@@ -264,6 +252,7 @@ function M.register(buf, opts)
 			items,
 			item("pulls.edit_description", {
 				desc = "Edit PR description",
+				hint_desc = "Description",
 				opts = { nowait = true, silent = true },
 				callback = function()
 					local pr = state.current_pr
@@ -282,11 +271,12 @@ function M.register(buf, opts)
 		)
 	end
 
-	if supports_action("toggle_subscription") then
+	if supports_action("edit_reviewers") then
 		utils.insert_if(
 			items,
-			item("ui.toggle_subscription", {
-				desc = "Toggle subscription",
+			item("pulls.edit_reviewers", {
+				desc = "Edit reviewers",
+				hint_desc = "Reviewers",
 				opts = { nowait = true, silent = true },
 				callback = function()
 					local pr = state.current_pr
@@ -296,7 +286,31 @@ function M.register(buf, opts)
 					local current = action_context(pr)
 					if current then
 						local on_update = state.on_update
-						actions.run("toggle_subscription", current, function(result)
+						actions.run("edit_reviewers", current, function(result)
+							complete_action(pr, on_update, result)
+						end)
+					end
+				end,
+			})
+		)
+	end
+
+	if supports_action("edit_assignees") then
+		utils.insert_if(
+			items,
+			item("pulls.edit_assignees", {
+				desc = "Edit assignees",
+				hint_desc = "Assignees",
+				opts = { nowait = true, silent = true },
+				callback = function()
+					local pr = state.current_pr
+					if pr == nil then
+						return
+					end
+					local current = action_context(pr)
+					if current then
+						local on_update = state.on_update
+						actions.run("edit_assignees", current, function(result)
 							complete_action(pr, on_update, result)
 						end)
 					end
@@ -352,6 +366,7 @@ function M.register(buf, opts)
 		general,
 		item("ui.toggle_panel", {
 			desc = "Toggle detail panel",
+			hint = false,
 			callback = function()
 				require("atlas.pulls.ui.detail").close()
 			end,
@@ -362,6 +377,7 @@ function M.register(buf, opts)
 		general,
 		item("ui.close", {
 			desc = "Close detail panel",
+			hint = false,
 			opts = { nowait = true, silent = true },
 			callback = function()
 				if help.is_open() then
@@ -384,12 +400,12 @@ function M.remove(buf)
 	utils.insert_if(general, remove_item("ui.refresh_view"))
 	utils.insert_if(general, remove_item("ui.open_actions"))
 	utils.insert_if(general, remove_item("ui.select"))
-	utils.insert_if(general, remove_item("ui.open_in_browser"))
 	utils.insert_if(general, remove_item("pulls.open_diff"))
 	utils.insert_if(general, remove_item("pulls.checkout"))
 	utils.insert_if(general, remove_item("pulls.edit_title"))
 	utils.insert_if(general, remove_item("pulls.edit_description"))
-	utils.insert_if(general, remove_item("ui.toggle_subscription"))
+	utils.insert_if(general, remove_item("pulls.edit_reviewers"))
+	utils.insert_if(general, remove_item("pulls.edit_assignees"))
 	utils.insert_if(general, remove_item("ui.next_panel_tab"))
 	utils.insert_if(general, remove_item("ui.previous_panel_tab"))
 	utils.insert_if(general, remove_item("ui.help"))

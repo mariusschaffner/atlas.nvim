@@ -67,6 +67,7 @@ function M.register(buf, opts)
 				desc = "Next item",
 				opts = { nowait = true, silent = true },
 				hidden = true,
+				hint = false,
 				callback = function()
 					nav.move_cursor("down")
 				end,
@@ -78,6 +79,7 @@ function M.register(buf, opts)
 				desc = "Previous item",
 				opts = { nowait = true, silent = true },
 				hidden = true,
+				hint = false,
 				callback = function()
 					nav.move_cursor("up")
 				end,
@@ -89,7 +91,7 @@ function M.register(buf, opts)
 			items,
 			item("ui.open_actions", {
 				desc = "Open issue actions",
-				hint_desc = "actions",
+				hint = false,
 				callback = function()
 					local issue = state.current_issue
 					if issue == nil then
@@ -123,6 +125,7 @@ function M.register(buf, opts)
 			items,
 			item("issues.change_assignee", {
 				desc = "Change assignee",
+				hint_desc = "Change Assignee",
 				callback = function()
 					local issue = state.current_issue
 					if issue == nil then
@@ -142,6 +145,7 @@ function M.register(buf, opts)
 			items,
 			item("issues.change_reporter", {
 				desc = "Change reporter",
+				hint_desc = "Change Reporter",
 				callback = function()
 					local issue = state.current_issue
 					if issue == nil then
@@ -149,6 +153,26 @@ function M.register(buf, opts)
 					end
 					local on_update = state.on_update
 					actions.run("reporter", context(issue), function(result)
+						complete_action(issue, on_update, result)
+					end)
+				end,
+			})
+		)
+	end
+
+	if supports("edit_issue") then
+		utils.insert_if(
+			items,
+			item("issues.edit_issue", {
+				desc = "Edit issue",
+				hint_desc = "Edit",
+				callback = function()
+					local issue = state.current_issue
+					if issue == nil then
+						return
+					end
+					local on_update = state.on_update
+					actions.run("edit_issue", context(issue), function(result)
 						complete_action(issue, on_update, result)
 					end)
 				end,
@@ -199,6 +223,7 @@ function M.register(buf, opts)
 		general,
 		item("ui.toggle_panel", {
 			desc = "Toggle detail panel",
+			hint = false,
 			callback = function()
 				require("atlas.issues.ui.detail").close()
 			end,
@@ -209,6 +234,7 @@ function M.register(buf, opts)
 		general,
 		item("ui.close", {
 			desc = "Close detail panel",
+			hint = false,
 			opts = { nowait = true, silent = true },
 			callback = function()
 				if not help.is_open() then
@@ -229,6 +255,7 @@ function M.remove(buf)
 	utils.insert_if(general, remove_item("ui.open_actions"))
 	utils.insert_if(general, remove_item("issues.change_assignee"))
 	utils.insert_if(general, remove_item("issues.change_reporter"))
+	utils.insert_if(general, remove_item("issues.edit_issue"))
 	utils.insert_if(general, remove_item("ui.next_panel_tab"))
 	utils.insert_if(general, remove_item("ui.previous_panel_tab"))
 	utils.insert_if(general, remove_item("ui.help"))
