@@ -224,10 +224,14 @@ local function build_stage_rows(pr, pipeline, detailed)
 	return rows
 end
 
+local STAGE_ICON_SEPARATOR = " -- "
+local STAGE_ICON_MIN_GAP = 2
+
 ---@param pr PullRequest
 ---@param pipeline PullsPipeline
+---@param width integer
 ---@return table
-local function build_pipeline_row(pr, pipeline)
+local function build_pipeline_row(pr, pipeline, width)
 	local id = tostring(pipeline.id)
 	local state_value = tostring(pipeline.state or "UNKNOWN"):upper()
 	local icon = icons.pulls_status(state_value:lower())
@@ -236,6 +240,7 @@ local function build_pipeline_row(pr, pipeline)
 
 	-- Small per-stage status icons on the pipeline's own row, so its shape
 	-- (which stages passed/failed/are running) is visible before expanding.
+	-- Joined with "--" and centered on the row, like a tiny pipeline graph.
 	local stage_icons = {}
 	for _, stage in ipairs(pipeline.stages or {}) do
 		local stage_state = tostring(stage.state or "UNKNOWN"):upper()
@@ -248,9 +253,13 @@ local function build_pipeline_row(pr, pipeline)
 	for _, s in ipairs(stage_icons) do
 		table.insert(stage_icons_text, s.icon)
 	end
+
 	local label = string.format("%s %s", icon, pipeline.name)
 	if #stage_icons_text > 0 then
-		label = label .. "  " .. table.concat(stage_icons_text, " ")
+		local stage_block = table.concat(stage_icons_text, STAGE_ICON_SEPARATOR)
+		local center_start = math.floor((width - vim.fn.strdisplaywidth(stage_block)) / 2)
+		local gap = math.max(center_start - vim.fn.strdisplaywidth(label), STAGE_ICON_MIN_GAP)
+		label = label .. string.rep(" ", gap) .. stage_block
 	end
 
 	local pipeline_row = {
@@ -264,7 +273,6 @@ local function build_pipeline_row(pr, pipeline)
 		pipeline_id = id,
 		_item = { kind = "pipeline", pipeline = pipeline },
 		children = { { label = "", kind = "placeholder" } },
-		separator = true,
 	}
 
 	if expanded then
@@ -368,7 +376,7 @@ function M.render(pr, _details, width)
 
 	local rows = {}
 	for _, pipeline in ipairs(entries) do
-		table.insert(rows, build_pipeline_row(pr, pipeline))
+		table.insert(rows, build_pipeline_row(pr, pipeline, width))
 	end
 
 	local tbl_lines, tbl_map, tbl_spans = table_tree.render({
@@ -383,6 +391,10 @@ function M.render(pr, _details, width)
 		tree = {
 			column_key = "label",
 			children_key = "children",
+			-- Rendered after a pipeline's expanded stages/jobs (see flatten()),
+			-- so it separates one pipeline's whole block from the next rather
+			-- than sitting between the header and its own expanded content.
+			separator = "─",
 			is_expanded = function(row)
 				if row.kind == "pipeline" then
 					return state.is_pipeline_expanded(row.pipeline_id)
@@ -427,13 +439,14 @@ function M.on_select(pr, refresh, opts)
 end
 
 ---@param _lnum integer
----@param _entry table
+---@param entry table
 ---@return boolean
-function M.is_selectable_line(_lnum, _entry)
+function M.is_selectable_line(_lnum, entry)
 	-- Every row in the tree (stages, jobs, log lines, ...) is meaningful content,
 	-- so navigation should step through them one at a time rather than snapping
 	-- to the next pipeline/job row and skipping expanded content in between.
-	return true
+	-- The separator line between pipelines is the one exception.
+	return not entry._tv2_separator
 end
 
 ---@param pr PullRequest
