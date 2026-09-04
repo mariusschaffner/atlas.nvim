@@ -82,6 +82,7 @@ function M.register(buf)
 		item("ui.last_item", {
 			desc = "Go to last item",
 			hidden = true,
+			hint = false,
 			callback = function()
 				navigation.focus_last_item()
 			end,
@@ -115,8 +116,8 @@ function M.register(buf)
 
 	utils.insert_if(
 		items,
-		item("ui.select", {
-			desc = "Toggle details",
+		item("ui.inspect", {
+			desc = "inspect",
 			opts = { nowait = true, silent = true },
 			callback = function()
 				local dashboard = domain_dashboard()
@@ -130,7 +131,8 @@ function M.register(buf)
 	utils.insert_if(
 		items,
 		item("ui.next_panel_tab", {
-			desc = "Next dashboard tab (Issues/Pulls)",
+			desc = "Tabs",
+			index = 50,
 			opts = { nowait = true },
 			callback = function()
 				require("atlas.ui.dashboard").next_domain()
@@ -141,7 +143,8 @@ function M.register(buf)
 	utils.insert_if(
 		items,
 		item("ui.previous_panel_tab", {
-			desc = "Previous dashboard tab (Issues/Pulls)",
+			desc = "Tabs",
+			index = 51,
 			opts = { nowait = true },
 			callback = function()
 				require("atlas.ui.dashboard").prev_domain()
@@ -153,6 +156,7 @@ function M.register(buf)
 		items,
 		item("ui.notifications.open", {
 			desc = "Open notifications",
+			hint = false,
 			callback = function()
 				require("atlas.ui.notifications").open()
 			end,
@@ -174,7 +178,7 @@ function M.remove(buf)
 	utils.insert_if(items, remove_item("ui.last_item"))
 	utils.insert_if(items, remove_item("ui.help"))
 	utils.insert_if(items, remove_item("ui.close"))
-	utils.insert_if(items, remove_item("ui.select"))
+	utils.insert_if(items, remove_item("ui.inspect"))
 	utils.insert_if(items, remove_item("ui.next_panel_tab"))
 	utils.insert_if(items, remove_item("ui.previous_panel_tab"))
 	utils.insert_if(items, remove_item("ui.notifications.open"))

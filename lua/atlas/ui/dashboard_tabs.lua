@@ -28,8 +28,13 @@ local function build_actions(domain)
 		local notif_state = require("atlas.ui.notifications.state")
 		local count = notif_state.unread_count or 0
 		local bell, bell_hl = icons.general(count > 0 and "bell_unread" or "bell")
+		local label = count > 0 and string.format("%s %d", bell, count) or bell
+		local notif_keys = resolver.resolve("ui.notifications.open")
+		if notif_keys and notif_keys[1] then
+			label = string.format("%s (%s)", label, notif_keys[1])
+		end
 		table.insert(actions, {
-			label = count > 0 and string.format("%s %d", bell, count) or bell,
+			label = label,
 			hl_group = bell_hl,
 		})
 	end

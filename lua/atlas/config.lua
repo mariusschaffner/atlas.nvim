@@ -173,6 +173,7 @@ M.options = {
 			first_item = "gg",
 			last_item = "G",
 			select = "<CR>",
+			inspect = "i",
 			submit = "<C-s>",
 			help = "g?",
 			close = "q",

@@ -9,6 +9,7 @@ local utils = require("atlas.ui.shared.utils")
 ---@field mode? string|string[]
 ---@field opts? table
 ---@field hidden? boolean
+---@field hint? boolean Set to false to exclude this item from the statusline hints even though it still appears (unless also hidden) in the help popup.
 ---@field index? number
 
 ---@class AtlasHelpCommandItem
@@ -140,6 +141,7 @@ function M.register(group, items, opts)
 			mode = mode,
 			index = item.index or DEFAULT_INDEX,
 			hidden = item.hidden == true,
+			no_hint = item.hint == false,
 		})
 	end
 end
@@ -308,7 +310,9 @@ function M.hints(bufnr)
 	for _, group in ipairs(collect_valid_groups(collect_all_groups(bstate))) do
 		if not group.is_cmd then
 			for _, item in ipairs(group.items) do
-				table.insert(hints, { key = item.key, desc = item.desc })
+				if not item.no_hint then
+					table.insert(hints, { key = item.key, desc = item.desc })
+				end
 			end
 		end
 	end

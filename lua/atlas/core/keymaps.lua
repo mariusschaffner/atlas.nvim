@@ -11,6 +11,7 @@ local M = {}
 ---@field close? AtlasKeymapValue
 ---@field delete? AtlasKeymapValue
 ---@field comments? AtlasUICommentKeymaps
+---@field inspect? AtlasKeymapValue
 ---@field toggle_panel? AtlasKeymapValue
 ---@field toggle_fold? AtlasKeymapValue
 ---@field toggle_all_folds? AtlasKeymapValue
@@ -131,6 +132,7 @@ local M = {}
 ---| "ui.comments.reply"
 ---| "ui.comments.edit"
 ---| "ui.comments.react"
+---| "ui.inspect"
 ---| "ui.toggle_panel"
 ---| "ui.toggle_fold"
 ---| "ui.toggle_all_folds"
@@ -306,6 +308,10 @@ function M.validate()
 			"pulls.review.request_changes",
 			"issues.change_reporter",
 		},
+		-- inspect (dashboard: open the detail panel for the selected row) and
+		-- comments.add (inside a detail view's review/conversation tab) never
+		-- apply to the same buffer, so sharing the default "i" is safe.
+		{ "ui.inspect", "ui.comments.add" },
 	}
 
 	local function conflict_allowed(actions)

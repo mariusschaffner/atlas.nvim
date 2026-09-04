@@ -439,6 +439,7 @@ Defaults live under `keymaps` in `setup()`. Each entry accepts:
         first_item              = "gg",
         last_item               = "G",
         select                  = "<CR>",
+        inspect                 = "i",
         submit                  = "<C-s>",
         delete                  = "dd",
         comments = {
