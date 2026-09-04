@@ -190,6 +190,7 @@ function M.register(buf, opts)
 		item("pulls.open_diff", {
 			desc = "Open PR diff",
 			hint_desc = "Diff",
+			index = 14,
 			opts = { nowait = true },
 			callback = function()
 				local pr = state.current_pr
@@ -209,6 +210,7 @@ function M.register(buf, opts)
 		item("pulls.checkout", {
 			desc = "Checkout PR branch",
 			hint_desc = "Checkout",
+			index = 13,
 			opts = { nowait = true },
 			callback = function()
 				local pr = state.current_pr
@@ -229,6 +231,7 @@ function M.register(buf, opts)
 			item("pulls.edit_title", {
 				desc = "Edit PR title",
 				hint_desc = "Change Title",
+				index = 10,
 				opts = { nowait = true, silent = true },
 				callback = function()
 					local pr = state.current_pr
@@ -253,6 +256,7 @@ function M.register(buf, opts)
 			item("pulls.edit_reviewers", {
 				desc = "Edit reviewers",
 				hint_desc = "Change Reviewer",
+				index = 12,
 				opts = { nowait = true, silent = true },
 				callback = function()
 					local pr = state.current_pr
@@ -277,6 +281,7 @@ function M.register(buf, opts)
 			item("pulls.edit_assignees", {
 				desc = "Edit assignees",
 				hint_desc = "Change Assignee",
+				index = 11,
 				opts = { nowait = true, silent = true },
 				callback = function()
 					local pr = state.current_pr
