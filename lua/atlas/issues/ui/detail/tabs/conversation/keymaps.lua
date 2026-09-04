@@ -97,6 +97,7 @@ function M.setup(buf, refresh)
 			items,
 			from_action("ui.comments.add", {
 				desc = "Add comment",
+				hint_desc = "Add",
 				opts = { nowait = true, silent = true },
 				callback = function()
 					dispatch_simple(refresh, actions.add)
@@ -107,6 +108,7 @@ function M.setup(buf, refresh)
 			items,
 			from_action("ui.comments.reply", {
 				desc = "Reply to comment",
+				hint_desc = "reply",
 				opts = { nowait = true, silent = true },
 				callback = function()
 					dispatch_with_entry(refresh, actions.reply)
@@ -119,6 +121,7 @@ function M.setup(buf, refresh)
 			items,
 			from_action("ui.comments.edit", {
 				desc = "Edit comment",
+				hint_desc = "Edit",
 				opts = { nowait = true, silent = true },
 				callback = function()
 					dispatch_with_entry(refresh, actions.edit)
@@ -131,6 +134,7 @@ function M.setup(buf, refresh)
 			items,
 			from_action("ui.delete", {
 				desc = "Delete comment",
+				hint_desc = "Delete",
 				opts = { nowait = true, silent = true },
 				callback = function()
 					dispatch_with_entry(refresh, actions.delete)
@@ -143,6 +147,7 @@ function M.setup(buf, refresh)
 			items,
 			from_action("ui.comments.react", {
 				desc = "Add reaction",
+				hint = false,
 				opts = { nowait = true, silent = true },
 				callback = function()
 					dispatch_with_entry(refresh, actions.react)
@@ -155,6 +160,7 @@ function M.setup(buf, refresh)
 		items,
 		from_action("ui.toggle_fold", {
 			desc = "Expand / collapse comment or thread",
+			hint = false,
 			opts = { nowait = true, silent = true },
 			callback = function()
 				toggle_fold(refresh)
@@ -165,6 +171,7 @@ function M.setup(buf, refresh)
 		items,
 		from_action("ui.toggle_all_folds", {
 			desc = "Expand / collapse all threads",
+			hint = false,
 			opts = { nowait = true, silent = true },
 			callback = function()
 				if state.toggle_all_threads(comment_threads.group_comments(state.comments())) then

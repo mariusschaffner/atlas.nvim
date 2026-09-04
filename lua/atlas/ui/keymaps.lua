@@ -138,7 +138,7 @@ function M.register(buf)
 		items,
 		item("ui.next_panel_tab", {
 			desc = "Tabs",
-			index = 50,
+			hint = false,
 			opts = { nowait = true },
 			callback = function()
 				require("atlas.ui.dashboard").next_domain()
@@ -150,7 +150,7 @@ function M.register(buf)
 		items,
 		item("ui.previous_panel_tab", {
 			desc = "Tabs",
-			index = 51,
+			hint = false,
 			opts = { nowait = true },
 			callback = function()
 				require("atlas.ui.dashboard").prev_domain()

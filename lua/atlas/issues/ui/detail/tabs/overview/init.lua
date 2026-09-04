@@ -54,6 +54,7 @@ function M.activate(buf, refresh)
 		{
 			key = #keys == 1 and keys[1] or keys,
 			desc = "Edit description",
+			hint_desc = "edit",
 			opts = { nowait = true, silent = true },
 			callback = function()
 				local issue = detail.current_issue

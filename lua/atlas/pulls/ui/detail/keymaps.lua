@@ -312,6 +312,7 @@ function M.register(buf, opts)
 		general,
 		item("ui.next_panel_tab", {
 			desc = "Next detail tab",
+			hint = false,
 			opts = { nowait = true },
 			callback = function()
 				if require("atlas.pulls.ui.detail").is_open() then
@@ -325,6 +326,7 @@ function M.register(buf, opts)
 		general,
 		item("ui.previous_panel_tab", {
 			desc = "Previous detail tab",
+			hint = false,
 			opts = { nowait = true },
 			callback = function()
 				if require("atlas.pulls.ui.detail").is_open() then
@@ -338,6 +340,7 @@ function M.register(buf, opts)
 		general,
 		item("ui.help", {
 			desc = "Toggle help",
+			hint = false,
 			opts = { nowait = true, silent = true },
 			callback = function()
 				help.toggle({ buffer = buf })

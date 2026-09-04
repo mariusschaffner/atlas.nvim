@@ -99,7 +99,7 @@ function M.register(buf, views)
 			items,
 			item(s.action_id, {
 				desc = string.format("Show %s issues", s.status:lower()),
-				hint_desc = s.status:sub(1, 1):upper() .. s.status:sub(2):lower(),
+				hint_desc = "toggle " .. s.status:lower(),
 				index = s.index,
 				opts = { nowait = true, silent = true },
 				callback = function()

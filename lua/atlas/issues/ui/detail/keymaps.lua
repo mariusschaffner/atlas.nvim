@@ -6,36 +6,6 @@ local utils = require("atlas.ui.shared.utils")
 local actions = require("atlas.issues.actions")
 local state = require("atlas.issues.ui.detail.state")
 
----@return IssuesDetailTabModule|nil
-local function current_tab_mod()
-	for _, tab in ipairs(state.tabs) do
-		if tab.key == state.current_tab then
-			return tab.mod
-		end
-	end
-end
-
----@return boolean
-local function open_current_line()
-	local win = state.win
-	if win == nil or not vim.api.nvim_win_is_valid(win) then
-		return false
-	end
-
-	local lnum = vim.api.nvim_win_get_cursor(win)[1]
-	local entry = state.line_map[lnum]
-	local issue = state.current_issue
-	if not entry or not issue then
-		return false
-	end
-
-	local tab = current_tab_mod()
-	if tab and tab.on_enter then
-		return tab.on_enter(issue, entry) == true
-	end
-	return false
-end
-
 ---@param issue Issue
 ---@param on_update (fun(issue: Issue|nil, result: IssuesActionResult|nil))|nil
 ---@param result IssuesActionResult|nil
@@ -114,21 +84,12 @@ function M.register(buf, opts)
 			})
 		)
 	end
-	local refresh_item = {
-		desc = "Refresh issue",
-		opts = { nowait = true, silent = true },
-		callback = function()
-			require("atlas.issues.ui.detail").refresh()
-		end,
-	}
-	utils.insert_if(items, item("ui.refresh", refresh_item))
-	utils.insert_if(items, item("ui.refresh_view", refresh_item))
-
 	if provider.capabilities.actions then
 		utils.insert_if(
 			items,
 			item("ui.open_actions", {
 				desc = "Open issue actions",
+				hint_desc = "actions",
 				callback = function()
 					local issue = state.current_issue
 					if issue == nil then
@@ -142,23 +103,6 @@ function M.register(buf, opts)
 			})
 		)
 	end
-
-	utils.insert_if(
-		items,
-		item("ui.open_in_browser", {
-			desc = "Open issue in browser",
-			opts = { nowait = true },
-			callback = function()
-				if open_current_line() then
-					return
-				end
-				local issue = state.current_issue
-				if issue then
-					actions.run("browse_issue", context(issue))
-				end
-			end,
-		})
-	)
 
 	---@param action_id string
 	---@return boolean
@@ -212,23 +156,6 @@ function M.register(buf, opts)
 		)
 	end
 
-	utils.insert_if(
-		items,
-		item("ui.toggle_subscription", {
-			desc = "Toggle subscription",
-			opts = { nowait = true, silent = true },
-			callback = function()
-				local issue = state.current_issue
-				if issue then
-					local on_update = state.on_update
-					actions.run("toggle_subscription", context(issue), function(result)
-						complete_action(issue, on_update, result)
-					end)
-				end
-			end,
-		})
-	)
-
 	M.remove(buf)
 	local general = items
 
@@ -236,6 +163,7 @@ function M.register(buf, opts)
 		general,
 		item("ui.next_panel_tab", {
 			desc = "Next detail tab",
+			hint = false,
 			opts = { nowait = true },
 			callback = function()
 				require("atlas.issues.ui.detail").next_tab()
@@ -247,6 +175,7 @@ function M.register(buf, opts)
 		general,
 		item("ui.previous_panel_tab", {
 			desc = "Previous detail tab",
+			hint = false,
 			opts = { nowait = true },
 			callback = function()
 				require("atlas.issues.ui.detail").prev_tab()
@@ -258,6 +187,7 @@ function M.register(buf, opts)
 		general,
 		item("ui.help", {
 			desc = "Toggle help",
+			hint = false,
 			opts = { nowait = true, silent = true },
 			callback = function()
 				help.toggle({ buffer = buf })
@@ -296,13 +226,9 @@ function M.remove(buf)
 	local general = {}
 	utils.insert_if(general, remove_item("ui.next_item"))
 	utils.insert_if(general, remove_item("ui.previous_item"))
-	utils.insert_if(general, remove_item("ui.refresh"))
-	utils.insert_if(general, remove_item("ui.refresh_view"))
 	utils.insert_if(general, remove_item("ui.open_actions"))
 	utils.insert_if(general, remove_item("issues.change_assignee"))
 	utils.insert_if(general, remove_item("issues.change_reporter"))
-	utils.insert_if(general, remove_item("ui.open_in_browser"))
-	utils.insert_if(general, remove_item("ui.toggle_subscription"))
 	utils.insert_if(general, remove_item("ui.next_panel_tab"))
 	utils.insert_if(general, remove_item("ui.previous_panel_tab"))
 	utils.insert_if(general, remove_item("ui.help"))

@@ -443,7 +443,7 @@ Defaults live under `keymaps` in `setup()`. Each entry accepts:
         submit                  = "<C-s>",
         delete                  = "dd",
         comments = {
-          add    = { "a", "i" },
+          add    = "a",
           reply  = "c",
           edit   = "e",
           react  = "gr",

@@ -72,23 +72,6 @@ function M.is_selectable_line(_lnum, entry)
 	return entry.conversation_item ~= nil or entry.kind == "activity_gap"
 end
 
----@param _issue Issue
----@param entry table
----@return boolean|nil
-function M.on_enter(_issue, entry)
-	local item = entry and entry.conversation_item or nil
-	if not item or item.kind ~= "comment" then
-		return
-	end
-	---@type IssueComment
-	local comment = item.entity
-	local url = tostring(comment.url or "")
-	if url ~= "" then
-		vim.ui.open(url)
-		return true
-	end
-end
-
 ---@return boolean
 function M.is_loading()
 	return state.is_loading()

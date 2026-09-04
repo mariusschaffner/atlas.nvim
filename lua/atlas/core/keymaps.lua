@@ -308,10 +308,6 @@ function M.validate()
 			"pulls.review.request_changes",
 			"issues.change_reporter",
 		},
-		-- inspect (dashboard: open the detail panel for the selected row) and
-		-- comments.add (inside a detail view's review/conversation tab) never
-		-- apply to the same buffer, so sharing the default "i" is safe.
-		{ "ui.inspect", "ui.comments.add" },
 	}
 
 	local function conflict_allowed(actions)

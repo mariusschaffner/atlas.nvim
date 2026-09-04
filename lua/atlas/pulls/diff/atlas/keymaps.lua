@@ -173,6 +173,7 @@ function M.register(session, actions)
 			general,
 			item("ui.help", {
 				desc = "Toggle help",
+				hint = false,
 				index = 2,
 				callback = run(function()
 					help.toggle({ buffer = buf })
