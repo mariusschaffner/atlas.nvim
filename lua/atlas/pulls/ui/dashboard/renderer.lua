@@ -12,6 +12,21 @@ local utils = require("atlas.ui.shared.utils")
 local PR_ICON, PR_ICON_HL = icons.pulls("pr")
 local MERGED_PR_ICON, MERGED_PR_ICON_HL = icons.pulls("merged_pr")
 local DECLINED_PR_ICON, DECLINED_PR_ICON_HL = icons.pulls("declined_pr")
+local REVIEW_ICON = icons.pulls("review")
+
+---@param pr PullRequest
+---@return string display, string|nil hl_key
+local function reviewer_label(pr)
+	local reviewers = pr.reviewers or {}
+	if #reviewers == 0 then
+		return "-", nil
+	end
+	local first = presentation.user_handle(reviewers[1])
+	if #reviewers > 1 then
+		return string.format("%s +%d", first, #reviewers - 1), first
+	end
+	return first, first
+end
 
 local PR_STATE_ICON = {
 	open = { PR_ICON, PR_ICON_HL },
@@ -90,12 +105,12 @@ local function cell_hl(row, col, ctx, display)
 	if col.key == "created" or col.key == "updated" then
 		return { { start_col = 0, end_col = #ctx.padded, hl_group = "AtlasTextMuted" } }
 	end
-	if col.key == "author" then
+	if col.key == "reviewer" then
 		return {
 			{
 				start_col = 0,
 				end_col = #ctx.padded,
-				hl_group = presentation.author_hl(row.author_hl or row.author),
+				hl_group = presentation.author_hl(row.reviewer_hl),
 			},
 		}
 	end
@@ -117,7 +132,7 @@ local function compact_rows(pulls, display)
 	for _, pr in ipairs(pulls) do
 		local repo = presentation.repo(pr)
 		local icon, icon_hl = pr_icon(pr)
-		local author = presentation.user_handle(pr.author)
+		local reviewer, reviewer_hl = reviewer_label(pr)
 		local row = {
 			kind = "pr",
 			pr_icon = displayed_pr_icon(pr),
@@ -126,8 +141,8 @@ local function compact_rows(pulls, display)
 			_pr_icon_hl = icon_hl,
 			repo_pr = display.reference .. tostring(pr.id or "") .. " " .. tostring(pr.title or ""),
 			conversation = tostring(pr.comments_count or 0),
-			author = string.format("%s %s", icons.general("user"), utils.shorten_name(author, 20)),
-			author_hl = author,
+			reviewer = string.format("%s %s", REVIEW_ICON, utils.shorten_name(reviewer, 20)),
+			reviewer_hl = reviewer_hl,
 			created = utils.relative_time(pr.created_on),
 			updated = utils.relative_time(pr.updated_on),
 			separator = true,
@@ -173,7 +188,7 @@ local function list_rows(pulls, layout, display)
 			local repo = group.repo
 			local icon = displayed_pr_icon(pr)
 			local _, icon_hl = pr_icon(pr)
-			local author = presentation.user_handle(pr.author)
+			local reviewer, reviewer_hl = reviewer_label(pr)
 			local row = {
 				kind = "pr",
 				_pr_reloading = state.is_pr_reloading(pr.repo_full_name, pr.id),
@@ -181,8 +196,8 @@ local function list_rows(pulls, layout, display)
 				_pr_icon_hl = icon_hl,
 				name = icon .. " " .. display.reference .. tostring(pr.id or "") .. " " .. tostring(pr.title or ""),
 				conversation = tostring(pr.comments_count or 0),
-				author = string.format("%s %s", icons.general("user"), utils.shorten_name(author, 20)),
-				author_hl = author,
+				reviewer = string.format("%s %s", REVIEW_ICON, utils.shorten_name(reviewer, 20)),
+				reviewer_hl = reviewer_hl,
 				created = utils.relative_time(pr.created_on),
 				updated = utils.relative_time(pr.updated_on),
 				_item = { kind = "pr", id = pr.id, repo = repo, pr = pr },
@@ -246,15 +261,6 @@ end
 ---@param lines string[]
 ---@param spans table[]
 ---@param width integer
-local function append_separator(lines, spans, width)
-	local line = string.rep("─", math.max(0, width))
-	table.insert(lines, line)
-	table.insert(spans, { line = #lines - 1, start_col = 0, end_col = #line, hl_group = "AtlasFilterSeparator" })
-end
-
----@param lines string[]
----@param spans table[]
----@param width integer
 local function render_filter_row(lines, spans, width)
 	local active_index = nil
 	for i, v in ipairs(state.views) do
@@ -279,6 +285,7 @@ local function render_filter_row(lines, spans, width)
 		})
 	end
 
+	local filter_line = #lines
 	utils.append_block(
 		lines,
 		spans,
@@ -289,6 +296,7 @@ local function render_filter_row(lines, spans, width)
 			plain_items = true,
 		})
 	)
+	table.insert(spans, { line = filter_line, line_hl_group = "AtlasFilterBarBackground" })
 end
 
 ---@param opts { width: integer, height: integer }
@@ -301,7 +309,6 @@ function M.render(opts)
 
 	table.insert(lines, "")
 	render_filter_row(lines, spans, opts.width)
-	append_separator(lines, spans, opts.width)
 	table.insert(lines, "")
 
 	if state.error then

@@ -2,7 +2,7 @@ local M = {}
 
 local icons = require("atlas.ui.shared.icons")
 
-local function columns(conversation, before_author, after_author)
+local function columns(conversation, before_reviewer, after_reviewer)
 	local function build(title_key, compact)
 		local result = {}
 		if compact then
@@ -22,15 +22,15 @@ local function columns(conversation, before_author, after_author)
 			can_grow = false,
 			header_hl = "AtlasColumnHeader",
 		})
-		vim.list_extend(result, before_author)
+		vim.list_extend(result, before_reviewer)
 		table.insert(result, {
-			key = "author",
-			name = string.format("%s Author", icons.general("user")),
+			key = "reviewer",
+			name = string.format("%s Reviewer", icons.pulls("review")),
 			min_width = 3,
 			can_grow = false,
 			header_hl = "AtlasColumnHeader",
 		})
-		vim.list_extend(result, after_author)
+		vim.list_extend(result, after_reviewer)
 		table.insert(result, {
 			key = "created",
 			name = string.format("%s Created", icons.general("created")),

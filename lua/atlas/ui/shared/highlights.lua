@@ -59,7 +59,7 @@ local groups = {
 	AtlasChipActive = { fg = "#1e1e2e", bg = "#89b4fa", bold = true },
 
 	AtlasFilterActive = { fg = "#89b4fa", bold = true, underline = true },
-	AtlasFilterSeparator = { fg = "#f5a97f" },
+	AtlasFilterBarBackground = { bg = "#313244" },
 }
 
 function M.setup()

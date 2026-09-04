@@ -11,11 +11,17 @@ local ns = vim.api.nvim_create_namespace("atlas.ui")
 local function apply_spans(buf, spans)
 	vim.api.nvim_buf_clear_namespace(buf, ns, 0, -1)
 	for _, span in ipairs(spans) do
-		vim.api.nvim_buf_set_extmark(buf, ns, span.line, span.start_col, {
-			end_row = span.line,
-			end_col = span.end_col,
-			hl_group = span.hl_group,
-		})
+		if span.line_hl_group ~= nil then
+			vim.api.nvim_buf_set_extmark(buf, ns, span.line, 0, {
+				line_hl_group = span.line_hl_group,
+			})
+		else
+			vim.api.nvim_buf_set_extmark(buf, ns, span.line, span.start_col, {
+				end_row = span.line,
+				end_col = span.end_col,
+				hl_group = span.hl_group,
+			})
+		end
 	end
 end
 

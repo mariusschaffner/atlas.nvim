@@ -10,15 +10,6 @@ local providers = require("atlas.issues.ui.dashboard.providers")
 ---@param lines string[]
 ---@param spans table[]
 ---@param width integer
-local function append_separator(lines, spans, width)
-	local line = string.rep("─", math.max(0, width))
-	table.insert(lines, line)
-	table.insert(spans, { line = #lines - 1, start_col = 0, end_col = #line, hl_group = "AtlasFilterSeparator" })
-end
-
----@param lines string[]
----@param spans table[]
----@param width integer
 local function render_filter_row(lines, spans, width)
 	local active_index = nil
 	for i, v in ipairs(state.views) do
@@ -43,6 +34,7 @@ local function render_filter_row(lines, spans, width)
 		})
 	end
 
+	local filter_line = #lines
 	utils.append_block(
 		lines,
 		spans,
@@ -53,6 +45,7 @@ local function render_filter_row(lines, spans, width)
 			plain_items = true,
 		})
 	)
+	table.insert(spans, { line = filter_line, line_hl_group = "AtlasFilterBarBackground" })
 end
 
 ---@param issue Issue
@@ -255,7 +248,6 @@ function M.render(opts)
 
 	table.insert(lines, "")
 	render_filter_row(lines, spans, opts.width)
-	append_separator(lines, spans, opts.width)
 
 	table.insert(lines, "")
 

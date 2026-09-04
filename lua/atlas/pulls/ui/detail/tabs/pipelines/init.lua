@@ -164,9 +164,9 @@ local function build_job_row(pr, pipeline, job, stage)
 		local log_entry = state.log_by_job_id[job_id]
 		local children = {}
 		if log_entry == nil or log_entry.status == "loading" then
-			table.insert(children, { label = spinner.with_text("Loading log..."), kind = "log_status" })
+			table.insert(children, { label = spinner.with_text("Loading log..."), kind = "log_status", job_id = job_id })
 		elseif log_entry.status == "error" then
-			table.insert(children, { label = log_entry.text, kind = "log_error" })
+			table.insert(children, { label = log_entry.text, kind = "log_error", job_id = job_id })
 		else
 			local log_lines = pipeline_logs.split_log_lines(log_entry.text)
 			local shown = log_lines
@@ -176,16 +176,18 @@ local function build_job_row(pr, pipeline, job, stage)
 				table.insert(children, {
 					label = string.format("... %d earlier line%s truncated ...", truncated, truncated == 1 and "" or "s"),
 					kind = "log_status",
+					job_id = job_id,
 				})
 			end
 			if #shown == 0 then
-				table.insert(children, { label = "(empty log)", kind = "log_status" })
+				table.insert(children, { label = "(empty log)", kind = "log_status", job_id = job_id })
 			end
 			for _, line in ipairs(shown) do
 				table.insert(children, {
 					label = line ~= "" and line or " ",
 					kind = "log_line",
 					log_hl = pipeline_logs.classify_log_line(line),
+					job_id = job_id,
 				})
 			end
 		end
@@ -232,11 +234,31 @@ local function build_pipeline_row(pr, pipeline)
 	local job_count = tonumber(pipeline.job_count)
 	local expanded = state.is_pipeline_expanded(id)
 
+	-- Small per-stage status icons on the pipeline's own row, so its shape
+	-- (which stages passed/failed/are running) is visible before expanding.
+	local stage_icons = {}
+	for _, stage in ipairs(pipeline.stages or {}) do
+		local stage_state = tostring(stage.state or "UNKNOWN"):upper()
+		table.insert(stage_icons, {
+			icon = icons.pulls_status(stage_state:lower()),
+			hl = PIPELINE_HL[stage_state] or "AtlasPipelineLinkMuted",
+		})
+	end
+	local stage_icons_text = {}
+	for _, s in ipairs(stage_icons) do
+		table.insert(stage_icons_text, s.icon)
+	end
+	local label = string.format("%s %s", icon, pipeline.name)
+	if #stage_icons_text > 0 then
+		label = label .. "  " .. table.concat(stage_icons_text, " ")
+	end
+
 	local pipeline_row = {
-		label = string.format("%s %s", icon, pipeline.name),
+		label = label,
 		status = string.format("%s %s", icon, status_label(state_value)),
 		status_icon = icon,
 		status_hl = PIPELINE_HL[state_value] or "AtlasPipelineLinkMuted",
+		stage_icons = stage_icons,
 		jobs = job_count and string.format("%d %s", job_count, job_count == 1 and "job" or "jobs") or "",
 		kind = "pipeline",
 		pipeline_id = id,
@@ -272,15 +294,27 @@ end
 local function cell_hl(row, column, ctx)
 	if column.key == "label" then
 		if row.kind == "pipeline" or row.kind == "job" or row.kind == "stage" then
+			local spans = {}
 			if row.status_icon then
 				local start_col = ctx.text:find(row.status_icon, 1, true)
 				if start_col then
-					return {
-						{ start_col = start_col - 1, end_col = start_col - 1 + #row.status_icon, hl_group = row.status_hl },
-					}
+					table.insert(
+						spans,
+						{ start_col = start_col - 1, end_col = start_col - 1 + #row.status_icon, hl_group = row.status_hl }
+					)
 				end
 			end
-			return nil
+			if row.stage_icons then
+				local cursor = 1
+				for _, s in ipairs(row.stage_icons) do
+					local start_col = ctx.text:find(s.icon, cursor, true)
+					if start_col then
+						table.insert(spans, { start_col = start_col - 1, end_col = start_col - 1 + #s.icon, hl_group = s.hl })
+						cursor = start_col + #s.icon
+					end
+				end
+			end
+			return #spans > 0 and spans or nil
 		end
 		if row.kind == "log_line" then
 			return row.log_hl and { { start_col = 0, end_col = #ctx.padded, hl_group = row.log_hl } } or nil
@@ -423,6 +457,15 @@ function M.on_enter(pr, entry)
 		if state.is_job_expanded(id) then
 			ensure_job_log(pr, entry.pipeline, entry.job)
 		end
+		if current_refresh then
+			current_refresh()
+		end
+		return true
+	end
+	if (entry.kind == "log_line" or entry.kind == "log_status" or entry.kind == "log_error") and entry.job_id then
+		-- These rows only render while their job is expanded, so Enter here
+		-- always means "collapse the job I'm looking at".
+		state.toggle_job(entry.job_id)
 		if current_refresh then
 			current_refresh()
 		end
