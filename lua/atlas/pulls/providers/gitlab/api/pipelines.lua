@@ -23,15 +23,17 @@ local PIPELINES_QUERY = [[
 query($path:ID!,$iid:String!){
   project(fullPath:$path){
     mergeRequest(iid:$iid){
-      head_pipeline:headPipeline{
-        id
-        status
-        path
-        totalJobs
-        stages(first:100){
-          nodes{
-            name
-            status
+      pipelines(first:50){
+        nodes{
+          id
+          status
+          path
+          totalJobs
+          stages(first:100){
+            nodes{
+              name
+              status
+            }
           }
         }
       }
@@ -98,8 +100,9 @@ function M.fetch(pr, opts, on_done)
 		end
 
 		local pipelines = {}
-		local item = json.nilify(merge_request.head_pipeline)
-		if item then
+		local nodes = json.safe_table(json.safe_table(merge_request.pipelines).nodes)
+		for _, raw_item in ipairs(nodes) do
+			local item = json.safe_table(raw_item)
 			local id = (json.safe_str(item.id) or ""):match("/(%d+)$")
 			local stages = {}
 			for _, raw_stage in ipairs(json.safe_table(json.safe_table(item.stages).nodes)) do
@@ -120,6 +123,10 @@ function M.fetch(pr, opts, on_done)
 				stages = stages,
 			})
 		end
+
+		table.sort(pipelines, function(a, b)
+			return (tonumber(a.id) or 0) > (tonumber(b.id) or 0)
+		end)
 
 		service.set_memory_cache(cache_key, pipelines)
 		on_done(pipelines, nil)
