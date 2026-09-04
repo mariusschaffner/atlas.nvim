@@ -5,6 +5,7 @@ local icons = require("atlas.ui.shared.icons")
 local spinner = require("atlas.ui.components.spinner")
 local table_tree = require("atlas.ui.components.table_tree")
 local pipeline_logs = require("atlas.pulls.ui.pipelines.logs")
+local keymaps = require("atlas.pulls.ui.detail.tabs.pipelines.keymaps")
 local state = require("atlas.pulls.ui.detail.tabs.pipelines.state")
 local detail = require("atlas.pulls.ui.detail.state")
 
@@ -448,16 +449,18 @@ function M.is_loading()
 	return false
 end
 
----@param _buf integer
+---@param buf integer
 ---@param refresh fun()
-function M.activate(_buf, refresh)
+function M.activate(buf, refresh)
 	current_refresh = refresh
+	keymaps.setup(buf, refresh)
 end
 
----@param _buf integer
-function M.deactivate(_buf)
+---@param buf integer
+function M.deactivate(buf)
 	current_refresh = nil
 	state.requests.cancel()
+	keymaps.teardown(buf)
 end
 
 return M

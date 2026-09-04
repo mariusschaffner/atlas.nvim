@@ -205,6 +205,21 @@ function M.register(buf, opts)
 		})
 	)
 
+	if state.provider and state.provider.capabilities.pipelines then
+		utils.insert_if(
+			items,
+			item("pulls.open_pipeline", {
+				desc = "Focus pipeline tab",
+				hint_desc = "Pipeline",
+				index = 15,
+				opts = { nowait = true },
+				callback = function()
+					require("atlas.pulls.ui.detail").select_tab("pipelines")
+				end,
+			})
+		)
+	end
+
 	utils.insert_if(
 		items,
 		item("pulls.checkout", {
@@ -382,6 +397,7 @@ function M.remove(buf)
 	utils.insert_if(general, remove_item("ui.open_actions"))
 	utils.insert_if(general, remove_item("ui.select"))
 	utils.insert_if(general, remove_item("pulls.open_diff"))
+	utils.insert_if(general, remove_item("pulls.open_pipeline"))
 	utils.insert_if(general, remove_item("pulls.checkout"))
 	utils.insert_if(general, remove_item("pulls.edit_title"))
 	utils.insert_if(general, remove_item("pulls.edit_reviewers"))

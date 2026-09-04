@@ -431,7 +431,6 @@ register({
 	run = toggle_subscription,
 })
 
-register(actions.open_pipelines)
 register(actions.open_diff)
 register(actions.checkout)
 

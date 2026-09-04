@@ -497,6 +497,36 @@ function M.prev_tab()
 	change_tab(-1)
 end
 
+---@param key string
+function M.select_tab(key)
+	if not M.is_open() then
+		return
+	end
+	local exists = false
+	for _, tab in ipairs(state.tabs) do
+		if tab.key == key then
+			exists = true
+			break
+		end
+	end
+	if not exists or state.current_tab == key then
+		return
+	end
+
+	set_tab(key)
+
+	local pr = state.current_pr
+	if pr then
+		load_active_tab(pr)
+		update_spinner()
+	end
+
+	render()
+	if state.win and vim.api.nvim_win_is_valid(state.win) then
+		vim.api.nvim_win_set_cursor(state.win, { 1, 0 })
+	end
+end
+
 function M.close()
 	if M.is_open() then
 		detail_ui.close()

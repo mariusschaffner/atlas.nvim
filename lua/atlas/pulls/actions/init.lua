@@ -18,7 +18,6 @@ local notify = utils.notify
 ---| "copy_id"
 ---| "copy_url"
 ---| "open_in_browser"
----| "open_pipelines"
 ---| "open_diff"
 ---| "checkout"
 ---| "merge"
@@ -371,19 +370,6 @@ M.edit_reviewers = {
 				end,
 			})
 		end)
-	end,
-}
-
-M.open_pipelines = {
-	id = "open_pipelines",
-	label = "Open Pipelines",
-	is_available = function(context)
-		return has_pr(context) and context.provider.capabilities.pipelines ~= nil
-	end,
-	run = function(context, done)
-		require("atlas.pulls.ui.pipelines").open(assert(context.pr), context.provider)
-		notify(context, "success", "Opened Pipelines", 1200)
-		done({ changed_pr = false, message = "Opened Pipelines" }, nil)
 	end,
 }
 

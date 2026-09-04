@@ -90,6 +90,9 @@ local M = {}
 ---@class AtlasPullsKeymaps
 ---@field create_pr? AtlasKeymapValue
 ---@field open_diff? AtlasKeymapValue
+---@field open_pipeline? AtlasKeymapValue
+---@field pipeline_retry? AtlasKeymapValue
+---@field pipeline_cancel? AtlasKeymapValue
 ---@field checkout? AtlasKeymapValue
 ---@field external_help? AtlasKeymapValue
 ---@field toggle_repo_panel? AtlasKeymapValue
@@ -159,6 +162,9 @@ local M = {}
 ---| "picker.close"
 ---| "pulls.create_pr"
 ---| "pulls.open_diff"
+---| "pulls.open_pipeline"
+---| "pulls.pipeline_retry"
+---| "pulls.pipeline_cancel"
 ---| "pulls.checkout"
 ---| "pulls.external_help"
 ---| "pulls.toggle_repo_panel"
@@ -304,9 +310,13 @@ function M.validate()
 		{ "ui.previous_panel_tab", "pulls.review.explorer.previous_file" },
 		{ "ui.comments.reply", "pulls.review.diff.add_comment", "issues.create_issue", "pulls.create_pr" },
 		{ "pulls.edit_title", "pulls.review.explorer.toggle_grouping" },
-		{ "pulls.toggle_repo_issue_state", "pulls.review.diff.toggle_layout" },
+		{ "pulls.toggle_repo_issue_state", "pulls.review.diff.toggle_layout", "pulls.pipeline_retry" },
 		{ "pulls.checkout", "pulls.review.diff.toggle_compact" },
 		{ "pulls.open_diff", "pulls.review.focus_item" },
+		-- pipeline_cancel (pipelines tab) and review.diff.toggle_resolved
+		-- (review/conversation tabs, or the standalone diff viewer) are
+		-- never active for the same tab/buffer at once.
+		{ "pulls.pipeline_cancel", "pulls.review.diff.toggle_resolved" },
 		-- edit_assignees (pull detail view) and review.approve (standalone
 		-- diff viewer, a separate buffer) never apply to the same buffer,
 		-- so sharing "ga" is safe.
