@@ -228,7 +228,7 @@ function M.register(buf, opts)
 			items,
 			item("pulls.edit_title", {
 				desc = "Edit PR title",
-				hint_desc = "Title",
+				hint_desc = "Change Title",
 				opts = { nowait = true, silent = true },
 				callback = function()
 					local pr = state.current_pr
@@ -239,30 +239,6 @@ function M.register(buf, opts)
 					if current then
 						local on_update = state.on_update
 						actions.run("edit_title", current, function(result)
-							complete_action(pr, on_update, result)
-						end)
-					end
-				end,
-			})
-		)
-	end
-
-	if supports_action("edit_description") then
-		utils.insert_if(
-			items,
-			item("pulls.edit_description", {
-				desc = "Edit PR description",
-				hint_desc = "Description",
-				opts = { nowait = true, silent = true },
-				callback = function()
-					local pr = state.current_pr
-					if pr == nil then
-						return
-					end
-					local current = action_context(pr)
-					if current then
-						local on_update = state.on_update
-						actions.run("edit_description", current, function(result)
 							complete_action(pr, on_update, result)
 						end)
 					end
@@ -300,7 +276,7 @@ function M.register(buf, opts)
 			items,
 			item("pulls.edit_assignees", {
 				desc = "Edit assignees",
-				hint_desc = "Assignees",
+				hint_desc = "Change Assignee",
 				opts = { nowait = true, silent = true },
 				callback = function()
 					local pr = state.current_pr
@@ -403,7 +379,6 @@ function M.remove(buf)
 	utils.insert_if(general, remove_item("pulls.open_diff"))
 	utils.insert_if(general, remove_item("pulls.checkout"))
 	utils.insert_if(general, remove_item("pulls.edit_title"))
-	utils.insert_if(general, remove_item("pulls.edit_description"))
 	utils.insert_if(general, remove_item("pulls.edit_reviewers"))
 	utils.insert_if(general, remove_item("pulls.edit_assignees"))
 	utils.insert_if(general, remove_item("ui.next_panel_tab"))

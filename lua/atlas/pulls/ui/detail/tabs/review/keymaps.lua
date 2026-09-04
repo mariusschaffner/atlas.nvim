@@ -126,6 +126,7 @@ function M.setup(buf, refresh)
 		items,
 		from_action("ui.toggle_fold", {
 			desc = "Toggle thread fold",
+			hint = false,
 			opts = { nowait = true, silent = true },
 			callback = function()
 				local state = require("atlas.pulls.ui.detail.tabs.review.state")
@@ -149,6 +150,7 @@ function M.setup(buf, refresh)
 		items,
 		from_action("ui.toggle_all_folds", {
 			desc = "Toggle all thread folds",
+			hint = false,
 			opts = { nowait = true, silent = true },
 			callback = function()
 				local state = require("atlas.pulls.ui.detail.tabs.review.state")

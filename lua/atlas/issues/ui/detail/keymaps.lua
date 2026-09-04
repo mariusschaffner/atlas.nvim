@@ -180,6 +180,26 @@ function M.register(buf, opts)
 		)
 	end
 
+	if supports("labels") then
+		utils.insert_if(
+			items,
+			item("issues.change_label", {
+				desc = "Change labels",
+				hint_desc = "Change Label",
+				callback = function()
+					local issue = state.current_issue
+					if issue == nil then
+						return
+					end
+					local on_update = state.on_update
+					actions.run("labels", context(issue), function(result)
+						complete_action(issue, on_update, result)
+					end)
+				end,
+			})
+		)
+	end
+
 	M.remove(buf)
 	local general = items
 
@@ -255,6 +275,7 @@ function M.remove(buf)
 	utils.insert_if(general, remove_item("ui.open_actions"))
 	utils.insert_if(general, remove_item("issues.change_assignee"))
 	utils.insert_if(general, remove_item("issues.change_reporter"))
+	utils.insert_if(general, remove_item("issues.change_label"))
 	utils.insert_if(general, remove_item("issues.edit_issue"))
 	utils.insert_if(general, remove_item("ui.next_panel_tab"))
 	utils.insert_if(general, remove_item("ui.previous_panel_tab"))

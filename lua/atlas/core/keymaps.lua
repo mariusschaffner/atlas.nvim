@@ -89,13 +89,13 @@ local M = {}
 ---@field declined? AtlasKeymapValue
 
 ---@class AtlasPullsKeymaps
+---@field create_pr? AtlasKeymapValue
 ---@field open_diff? AtlasKeymapValue
 ---@field checkout? AtlasKeymapValue
 ---@field external_help? AtlasKeymapValue
 ---@field toggle_repo_panel? AtlasKeymapValue
 ---@field toggle_repo_issue_state? AtlasKeymapValue
 ---@field edit_title? AtlasKeymapValue
----@field edit_description? AtlasKeymapValue
 ---@field edit_reviewers? AtlasKeymapValue
 ---@field edit_assignees? AtlasKeymapValue
 ---@field review? AtlasPullsReviewKeymaps
@@ -109,6 +109,7 @@ local M = {}
 ---@field transition_issue? AtlasKeymapValue
 ---@field change_assignee? AtlasKeymapValue
 ---@field change_reporter? AtlasKeymapValue
+---@field change_label? AtlasKeymapValue
 ---@field edit_issue? AtlasKeymapValue
 ---@field create_issue? AtlasKeymapValue
 ---@field toggle_description_mode? AtlasKeymapValue
@@ -157,13 +158,13 @@ local M = {}
 ---| "picker.select"
 ---| "picker.toggle"
 ---| "picker.close"
+---| "pulls.create_pr"
 ---| "pulls.open_diff"
 ---| "pulls.checkout"
 ---| "pulls.external_help"
 ---| "pulls.toggle_repo_panel"
 ---| "pulls.toggle_repo_issue_state"
 ---| "pulls.edit_title"
----| "pulls.edit_description"
 ---| "pulls.edit_reviewers"
 ---| "pulls.edit_assignees"
 ---| "pulls.review.approve"
@@ -201,6 +202,7 @@ local M = {}
 ---| "issues.transition_issue"
 ---| "issues.change_assignee"
 ---| "issues.change_reporter"
+---| "issues.change_label"
 ---| "issues.edit_issue"
 ---| "issues.create_issue"
 ---| "issues.toggle_description_mode"
@@ -302,11 +304,15 @@ function M.validate()
 		{ "pulls.review.find_file", "pulls.review.explorer.find_file" },
 		{ "ui.next_panel_tab", "pulls.review.explorer.next_file" },
 		{ "ui.previous_panel_tab", "pulls.review.explorer.previous_file" },
-		{ "ui.comments.reply", "pulls.review.diff.add_comment", "issues.create_issue" },
+		{ "ui.comments.reply", "pulls.review.diff.add_comment", "issues.create_issue", "pulls.create_pr" },
 		{ "pulls.edit_title", "pulls.review.explorer.toggle_grouping" },
 		{ "pulls.toggle_repo_issue_state", "pulls.review.diff.toggle_layout" },
 		{ "pulls.checkout", "pulls.review.diff.toggle_compact" },
 		{ "pulls.open_diff", "pulls.review.focus_item" },
+		-- edit_assignees (pull detail view) and review.approve (standalone
+		-- diff viewer, a separate buffer) never apply to the same buffer,
+		-- so sharing "ga" is safe.
+		{ "pulls.edit_assignees", "pulls.review.approve" },
 		{
 			"ui.comments.react",
 			"pulls.review.request_changes",

@@ -97,6 +97,20 @@ function M.register(buf, views)
 		)
 	end
 
+	if state.provider and state.provider.capabilities.core and state.provider.capabilities.core.create_pr then
+		utils.insert_if(
+			items,
+			item("pulls.create_pr", {
+				desc = "Create pull request",
+				hint_desc = "Create",
+				index = 30,
+				callback = function()
+					require("atlas.pulls.create.pr").start()
+				end,
+			})
+		)
+	end
+
 	utils.insert_if(
 		items,
 		item("ui.refresh", {

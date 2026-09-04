@@ -112,6 +112,13 @@ local function set_tab(tab_key)
 		end
 	end
 
+	-- Tab-specific keymaps are torn down via help.remove(), which deletes
+	-- the mapping rather than restoring whatever it shadowed. Reassert the
+	-- general layer here so keys shared with a tab (e.g. "gr") fall back to
+	-- their general-section meaning once that tab is no longer active; the
+	-- new tab's activate() below can still override them while it's active.
+	require("atlas.issues.ui.detail.keymaps").register(buf)
+
 	state.current_tab = tab_key
 	if tab_key then
 		local new_tab = tab_module(tab_key)
