@@ -63,6 +63,7 @@ function M.register(buf, views)
 				key = v.key,
 				desc = string.format("Switch to %s", v.name),
 				hidden = true,
+				hint = false,
 				callback = function()
 					controller.switch_view(v)
 				end,
@@ -70,28 +71,12 @@ function M.register(buf, views)
 		end
 	end
 
-	local STATUS_TOGGLES = {
-		{ status = "OPEN", action_id = "issues.filters.open" },
-		{ status = "CLOSED", action_id = "issues.filters.closed" },
-	}
-	for _, sf in ipairs(STATUS_TOGGLES) do
-		local s = sf
-		utils.insert_if(
-			items,
-			item(s.action_id, {
-				desc = string.format("Show %s issues", s.status:lower()),
-				opts = { nowait = true, silent = true },
-				callback = function()
-					controller.set_status_filter(s.status)
-				end,
-			})
-		)
-	end
-
 	utils.insert_if(
 		items,
 		item("ui.filter", {
 			desc = "Edit filter",
+			hint_desc = "filter",
+			index = 10,
 			opts = { nowait = true, silent = true },
 			callback = function()
 				vim.ui.input({ prompt = "Filter: ", default = state.filter_text or "" }, function(input)
@@ -104,12 +89,33 @@ function M.register(buf, views)
 		})
 	)
 
+	local STATUS_TOGGLES = {
+		{ status = "OPEN", action_id = "issues.filters.open", index = 20 },
+		{ status = "CLOSED", action_id = "issues.filters.closed", index = 21 },
+	}
+	for _, sf in ipairs(STATUS_TOGGLES) do
+		local s = sf
+		utils.insert_if(
+			items,
+			item(s.action_id, {
+				desc = string.format("Show %s issues", s.status:lower()),
+				hint_desc = s.status:sub(1, 1):upper() .. s.status:sub(2):lower(),
+				index = s.index,
+				opts = { nowait = true, silent = true },
+				callback = function()
+					controller.set_status_filter(s.status)
+				end,
+			})
+		)
+	end
+
 	if actions.is_available("create_issue", context(nil)) then
 		utils.insert_if(
 			items,
 			item("issues.create_issue", {
 				desc = "Create issue",
-				index = 2,
+				hint_desc = "create",
+				index = 30,
 				callback = function()
 					local issue = selected_issue()
 					actions.run("create_issue", context(issue), controller.apply_action_result)
@@ -122,7 +128,7 @@ function M.register(buf, views)
 		items,
 		item("ui.refresh", {
 			desc = "Reload selected issue",
-			index = 6,
+			hint = false,
 			callback = function()
 				controller.refresh_current_issue()
 			end,
@@ -133,37 +139,20 @@ function M.register(buf, views)
 		items,
 		item("ui.refresh_view", {
 			desc = "Refresh current view",
-			index = 7,
+			hint = false,
 			callback = function()
 				controller.refresh_current_view()
 			end,
 		})
 	)
 
-	if supports("reporter") then
-		utils.insert_if(
-			items,
-			item("issues.change_reporter", {
-				desc = "Change reporter",
-				index = 13,
-				callback = function()
-					local issue = selected_issue()
-					if issue == nil then
-						notify.warn("No issue selected")
-						return
-					end
-					actions.run("reporter", context(issue), controller.apply_action_result)
-				end,
-			})
-		)
-	end
-
 	if supports("edit_issue") then
 		utils.insert_if(
 			items,
 			item("issues.edit_issue", {
 				desc = "Edit issue",
-				index = 14,
+				hint_desc = "edit",
+				index = 31,
 				callback = function()
 					local issue = selected_issue()
 					if issue == nil then

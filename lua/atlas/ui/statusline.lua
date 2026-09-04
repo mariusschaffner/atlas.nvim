@@ -221,11 +221,17 @@ function M.format(segments, current_notice, available, options)
 		}
 	end
 	if options.help_key then
+		-- Always visible (no priority => never truncated) and visually
+		-- separated from everything else so it reads the same everywhere.
 		fitted[#fitted + 1] = {
-			text = string.format("%s help", options.help_key),
+			text = "|",
+			hl_group = "AtlasFooterText",
+			align = "right",
+		}
+		fitted[#fitted + 1] = {
+			text = clean_key(options.help_key) .. " help",
 			hl_group = "AtlasFooterWarning",
 			align = "right",
-			priority = 10,
 		}
 	end
 	local left_padding = options.left_padding or 0

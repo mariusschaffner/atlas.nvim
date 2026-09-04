@@ -10,6 +10,7 @@ local utils = require("atlas.ui.shared.utils")
 ---@field opts? table
 ---@field hidden? boolean
 ---@field hint? boolean Set to false to exclude this item from the statusline hints even though it still appears (unless also hidden) in the help popup.
+---@field hint_desc? string Shorter description to use in the statusline hints instead of `desc`. `desc` is still used in the help popup.
 ---@field index? number
 
 ---@class AtlasHelpCommandItem
@@ -138,6 +139,7 @@ function M.register(group, items, opts)
 		table.insert(bstate.keys[group], {
 			key = display_key,
 			desc = item.desc,
+			hint_desc = item.hint_desc,
 			mode = mode,
 			index = item.index or DEFAULT_INDEX,
 			hidden = item.hidden == true,
@@ -311,7 +313,7 @@ function M.hints(bufnr)
 		if not group.is_cmd then
 			for _, item in ipairs(group.items) do
 				if not item.no_hint then
-					table.insert(hints, { key = item.key, desc = item.desc })
+					table.insert(hints, { key = item.key, desc = item.hint_desc or item.desc })
 				end
 			end
 		end

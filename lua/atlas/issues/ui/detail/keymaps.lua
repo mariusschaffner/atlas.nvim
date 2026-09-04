@@ -160,32 +160,56 @@ function M.register(buf, opts)
 		})
 	)
 
-	if provider.capabilities.actions then
-		local supports_assign = false
+	---@param action_id string
+	---@return boolean
+	local function supports(action_id)
+		if not provider.capabilities.actions then
+			return false
+		end
 		for _, action in ipairs(provider.capabilities.actions.items or {}) do
-			if action.id == "assign" then
-				supports_assign = true
-				break
+			if action.id == action_id then
+				return true
 			end
 		end
-		if supports_assign then
-			utils.insert_if(
-				items,
-				item("issues.change_assignee", {
-					desc = "Change assignee",
-					callback = function()
-						local issue = state.current_issue
-						if issue == nil then
-							return
-						end
-						local on_update = state.on_update
-						actions.run("assign", context(issue), function(result)
-							complete_action(issue, on_update, result)
-						end)
-					end,
-				})
-			)
-		end
+		return false
+	end
+
+	if supports("assign") then
+		utils.insert_if(
+			items,
+			item("issues.change_assignee", {
+				desc = "Change assignee",
+				callback = function()
+					local issue = state.current_issue
+					if issue == nil then
+						return
+					end
+					local on_update = state.on_update
+					actions.run("assign", context(issue), function(result)
+						complete_action(issue, on_update, result)
+					end)
+				end,
+			})
+		)
+	end
+
+	if supports("reporter") then
+		utils.insert_if(
+			items,
+			item("issues.change_reporter", {
+				desc = "Change reporter",
+				callback = function()
+					local issue = state.current_issue
+					if issue == nil then
+						return
+					end
+					local on_update = state.on_update
+					actions.run("reporter", context(issue), function(result)
+						complete_action(issue, on_update, result)
+					end)
+				end,
+			})
+		)
 	end
 
 	utils.insert_if(
@@ -276,6 +300,7 @@ function M.remove(buf)
 	utils.insert_if(general, remove_item("ui.refresh_view"))
 	utils.insert_if(general, remove_item("ui.open_actions"))
 	utils.insert_if(general, remove_item("issues.change_assignee"))
+	utils.insert_if(general, remove_item("issues.change_reporter"))
 	utils.insert_if(general, remove_item("ui.open_in_browser"))
 	utils.insert_if(general, remove_item("ui.toggle_subscription"))
 	utils.insert_if(general, remove_item("ui.next_panel_tab"))

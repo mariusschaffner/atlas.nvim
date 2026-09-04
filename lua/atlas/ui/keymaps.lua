@@ -49,6 +49,7 @@ function M.register(buf)
 		item("ui.next_item", {
 			desc = "Next item",
 			hidden = true,
+			hint = false,
 			callback = function()
 				navigation.move_cursor("down")
 			end,
@@ -60,6 +61,7 @@ function M.register(buf)
 		item("ui.previous_item", {
 			desc = "Previous item",
 			hidden = true,
+			hint = false,
 			callback = function()
 				navigation.move_cursor("up")
 			end,
@@ -71,6 +73,7 @@ function M.register(buf)
 		item("ui.first_item", {
 			desc = "Go to first item",
 			hidden = true,
+			hint = false,
 			callback = function()
 				navigation.focus_first_item()
 			end,
@@ -93,6 +96,7 @@ function M.register(buf)
 		items,
 		item("ui.help", {
 			desc = "Toggle this help popup",
+			hint = false,
 			opts = { nowait = true, silent = true },
 			callback = function()
 				help.toggle({ buffer = buf })
@@ -104,6 +108,7 @@ function M.register(buf)
 		items,
 		item("ui.close", {
 			desc = "Close Atlas window",
+			hint = false,
 			opts = { nowait = true, silent = true },
 			callback = function()
 				if help.is_open() then
@@ -118,6 +123,7 @@ function M.register(buf)
 		items,
 		item("ui.inspect", {
 			desc = "inspect",
+			index = 10,
 			opts = { nowait = true, silent = true },
 			callback = function()
 				local dashboard = domain_dashboard()

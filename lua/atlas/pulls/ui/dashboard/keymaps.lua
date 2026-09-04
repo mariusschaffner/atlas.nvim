@@ -3,7 +3,6 @@ local M = {}
 local notify = require("atlas.core.notify")
 local resolver = require("atlas.core.keymaps")
 local utils = require("atlas.ui.shared.utils")
-local actions = require("atlas.pulls.actions")
 local registrations = {}
 
 ---@return PullRequest|nil, PullsRepo|nil
@@ -40,28 +39,6 @@ function M.register(buf, views)
 	M.remove(buf)
 	local state = require("atlas.pulls.state")
 	local provider_name = state.provider and state.provider.name or "Pulls"
-	---@param id AtlasPullActionId
-	---@param needs_pr boolean
-	local function run_action(id, needs_pr)
-		local pr = selected_pr()
-
-		if needs_pr and not pr then
-			notify.warn("No PR selected")
-			return
-		end
-		if state.provider then
-			actions.run(id, {
-				provider = state.provider,
-				pr = pr,
-				current_user = state.current_user,
-				buf = buf,
-			}, function(result)
-				if pr ~= nil and result ~= nil and result.changed_pr then
-					require("atlas.pulls.ui.dashboard.controller").refresh_pr(pr)
-				end
-			end)
-		end
-	end
 
 	local items = {}
 
@@ -72,6 +49,7 @@ function M.register(buf, views)
 				key = v.key,
 				desc = string.format("Switch to %s", v.name),
 				hidden = true,
+				hint = false,
 				callback = function()
 					local controller = require("atlas.pulls.ui.dashboard.controller")
 					controller.switch_view(v)
@@ -84,6 +62,8 @@ function M.register(buf, views)
 		items,
 		item("ui.filter", {
 			desc = "Edit filter",
+			hint_desc = "filter",
+			index = 10,
 			opts = { nowait = true, silent = true },
 			callback = function()
 				vim.ui.input({ prompt = "Filter: ", default = state.filter_text or "" }, function(input)
@@ -97,9 +77,9 @@ function M.register(buf, views)
 	)
 
 	local STATUS_TOGGLES = {
-		{ status = "OPEN", action_id = "pulls.filters.open" },
-		{ status = "MERGED", action_id = "pulls.filters.merged" },
-		{ status = "DECLINED", action_id = "pulls.filters.declined" },
+		{ status = "OPEN", action_id = "pulls.filters.open", index = 20 },
+		{ status = "MERGED", action_id = "pulls.filters.merged", index = 21 },
+		{ status = "DECLINED", action_id = "pulls.filters.declined", index = 22 },
 	}
 	for _, sf in ipairs(STATUS_TOGGLES) do
 		local s = sf
@@ -107,6 +87,8 @@ function M.register(buf, views)
 			items,
 			item(s.action_id, {
 				desc = string.format("Toggle %s filter", s.status:lower()),
+				hint_desc = s.status:sub(1, 1):upper() .. s.status:sub(2):lower(),
+				index = s.index,
 				callback = function()
 					local controller = require("atlas.pulls.ui.dashboard.controller")
 					controller.toggle_status_filter(s.status)
@@ -117,30 +99,9 @@ function M.register(buf, views)
 
 	utils.insert_if(
 		items,
-		item("pulls.open_diff", {
-			desc = "Open PR diff",
-			opts = { nowait = true },
-			callback = function()
-				run_action("open_diff", true)
-			end,
-		})
-	)
-
-	utils.insert_if(
-		items,
-		item("pulls.checkout", {
-			desc = "Checkout PR branch",
-			opts = { nowait = true },
-			callback = function()
-				run_action("checkout", true)
-			end,
-		})
-	)
-
-	utils.insert_if(
-		items,
 		item("ui.refresh", {
 			desc = "Refetch selected PR",
+			hint = false,
 			callback = function()
 				local pr = selected_pr()
 				if pr == nil then
@@ -156,6 +117,7 @@ function M.register(buf, views)
 		items,
 		item("ui.refresh_view", {
 			desc = "Refresh current view",
+			hint = false,
 			callback = function()
 				require("atlas.pulls.ui.dashboard.controller").refresh_current_view()
 			end,
@@ -163,34 +125,8 @@ function M.register(buf, views)
 	)
 
 	help.register(provider_name, items, { index = 220, buffer = buf })
-
-	local general = {}
-	utils.insert_if(
-		general,
-		item("pulls.toggle_repo_panel", {
-			desc = "Open repo panel",
-			opts = { nowait = true, silent = true },
-			callback = function()
-				local _, repo = selected_pr()
-				if repo == nil then
-					notify.warn("No repository selected")
-					return
-				end
-				local repo_detail = require("atlas.pulls.ui.repo_detail")
-				if repo_detail.is_open() then
-					repo_detail.close()
-					return
-				end
-				repo_detail.open(repo, {
-					provider = require("atlas.pulls.state").provider,
-				})
-			end,
-		})
-	)
-	help.register("General", general, { buffer = buf })
 	registrations[buf] = {
 		{ group = provider_name, items = items },
-		{ group = "General", items = general },
 	}
 end
 
