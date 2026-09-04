@@ -19,6 +19,7 @@ end
 ---@field leaf_prefix? string For non-branch rows at depth > 0 (default "└─ ").
 ---@field show_indicator? boolean Branch expand/collapse glyphs (default true).
 ---@field separator? string If set, inserts a full-width separator line between root siblings.
+---@field separator_padding? boolean Blank line before/after the separator (default true).
 ---@field is_expanded? fun(row:table):boolean Overrides expanded_field when set.
 
 ---@param tree TableTreeTreeOpts|nil
@@ -37,6 +38,7 @@ local function resolve_tree(tree)
 		leaf_prefix = tree.leaf_prefix or "└─ ",
 		show_indicator = tree.show_indicator ~= false,
 		separator = tree.separator,
+		separator_padding = tree.separator_padding ~= false,
 		is_expanded = tree.is_expanded,
 	}
 end
@@ -358,7 +360,10 @@ function M.render(opts)
 			local sep = tostring(row._tv2_separator_char or "─")
 			local content_width = math.max(width - (margin * 2), 1)
 			local sep_line = string.rep(" ", margin) .. string.rep(sep, content_width)
-			table.insert(lines, "")
+			local padded = tree == nil or tree.separator_padding ~= false
+			if padded then
+				table.insert(lines, "")
+			end
 			table.insert(lines, sep_line)
 			table.insert(spans, {
 				line = #lines - 1,
@@ -367,7 +372,9 @@ function M.render(opts)
 				hl_group = "AtlasTextMuted",
 			})
 			line_map[#lines] = row
-			table.insert(lines, "")
+			if padded then
+				table.insert(lines, "")
+			end
 		else
 			local line_parts = {}
 			col_start = margin

@@ -395,6 +395,7 @@ function M.render(pr, _details, width)
 			-- so it separates one pipeline's whole block from the next rather
 			-- than sitting between the header and its own expanded content.
 			separator = "─",
+			separator_padding = false,
 			is_expanded = function(row)
 				if row.kind == "pipeline" then
 					return state.is_pipeline_expanded(row.pipeline_id)
