@@ -47,12 +47,9 @@ function M.render()
 	local spans = vim.list_extend({}, tab_spans)
 	local offset = #tab_lines
 	for _, span in ipairs(body_spans) do
-		table.insert(spans, {
-			line = span.line + offset,
-			start_col = span.start_col,
-			end_col = span.end_col,
-			hl_group = span.hl_group,
-		})
+		local shifted = vim.tbl_extend("force", {}, span)
+		shifted.line = span.line + offset
+		table.insert(spans, shifted)
 	end
 
 	local line_map = {}
