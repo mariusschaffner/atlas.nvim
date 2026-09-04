@@ -140,21 +140,44 @@ local function current_buf()
 	return vim.api.nvim_get_current_buf()
 end
 
---- Builds "<key> - (<desc>)" hint segments from whatever keymaps are
+---@param key string
+---@return string
+local function clean_key(key)
+	return (key:gsub("[<>]", ""))
+end
+
+--- Builds "key desc | key desc | ..." hint segments from whatever keymaps are
 --- currently registered (via atlas.ui.popups.help) for the buffer being
 --- rendered, so the statusline always reflects the active view/tab without
---- each view needing to hand-build its own hint list.
+--- each view needing to hand-build its own hint list. The key and its
+--- description are separate segments (different highlight groups) so each
+--- hint can shrink gracefully: separator first, then description, then key,
+--- starting from the least important (last) hint.
 ---@param bufnr integer
 ---@return AtlasStatuslineSegment[]
 local function hint_segments(bufnr)
 	local hints = help.hints(bufnr)
+	local count = #hints
 	local segments = {}
 	for i, hint in ipairs(hints) do
+		local base = (count - i) * 3
 		segments[#segments + 1] = {
-			text = string.format("%s - (%s)", hint.key, hint.desc),
-			hl_group = "AtlasFooterText",
-			priority = #hints - i + 1,
+			text = clean_key(hint.key),
+			hl_group = "AtlasFooterInfo",
+			priority = base + 2,
 		}
+		segments[#segments + 1] = {
+			text = hint.desc,
+			hl_group = "AtlasFooterText",
+			priority = base + 1,
+		}
+		if i < count then
+			segments[#segments + 1] = {
+				text = "|",
+				hl_group = "AtlasFooterText",
+				priority = base,
+			}
+		end
 	end
 	return segments
 end
