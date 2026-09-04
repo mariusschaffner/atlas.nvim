@@ -272,7 +272,7 @@ local function render_filter_row(lines, spans, width)
 	}
 
 	local status_items = {}
-	for _, status in ipairs({ "OPEN", "MERGED", "DECLINED" }) do
+	for _, status in ipairs({ "OPEN", "MERGED" }) do
 		table.insert(status_items, {
 			label = status:sub(1, 1):upper() .. status:sub(2):lower(),
 			hl_group = state.status_filters[status] and "AtlasFilterActive" or "AtlasTextMuted",

@@ -496,7 +496,7 @@ Defaults live under `keymaps` in `setup()`. Each entry accepts:
         toggle_repo_panel      = "o",
         toggle_repo_issue_state = "t",
         edit_title             = "T",
-        edit_reviewers         = "gv",
+        edit_reviewers         = "gr",
         edit_assignees         = "ga",
         review = {
           focus_item            = "gd",
@@ -536,7 +536,6 @@ Defaults live under `keymaps` in `setup()`. Each entry accepts:
         filters = {
           open                   = "gpo",
           merged                 = "gpm",
-          declined               = "gpd",
         },
       },
     },

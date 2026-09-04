@@ -86,7 +86,6 @@ local M = {}
 ---@class AtlasPullsFilterKeymaps
 ---@field open? AtlasKeymapValue
 ---@field merged? AtlasKeymapValue
----@field declined? AtlasKeymapValue
 
 ---@class AtlasPullsKeymaps
 ---@field create_pr? AtlasKeymapValue
@@ -198,7 +197,6 @@ local M = {}
 ---| "pulls.review.diff.toggle_resolved"
 ---| "pulls.filters.open"
 ---| "pulls.filters.merged"
----| "pulls.filters.declined"
 ---| "issues.transition_issue"
 ---| "issues.change_assignee"
 ---| "issues.change_reporter"
@@ -317,6 +315,7 @@ function M.validate()
 			"ui.comments.react",
 			"pulls.review.request_changes",
 			"issues.change_reporter",
+			"pulls.edit_reviewers",
 		},
 	}
 

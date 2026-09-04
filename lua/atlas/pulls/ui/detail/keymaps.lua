@@ -252,7 +252,7 @@ function M.register(buf, opts)
 			items,
 			item("pulls.edit_reviewers", {
 				desc = "Edit reviewers",
-				hint_desc = "Reviewers",
+				hint_desc = "Change Reviewer",
 				opts = { nowait = true, silent = true },
 				callback = function()
 					local pr = state.current_pr

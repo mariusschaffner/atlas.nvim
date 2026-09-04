@@ -79,7 +79,6 @@ function M.register(buf, views)
 	local STATUS_TOGGLES = {
 		{ status = "OPEN", action_id = "pulls.filters.open", index = 20 },
 		{ status = "MERGED", action_id = "pulls.filters.merged", index = 21 },
-		{ status = "DECLINED", action_id = "pulls.filters.declined", index = 22 },
 	}
 	for _, sf in ipairs(STATUS_TOGGLES) do
 		local s = sf

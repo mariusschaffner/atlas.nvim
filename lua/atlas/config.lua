@@ -219,7 +219,7 @@ M.options = {
 			toggle_repo_panel = "o",
 			toggle_repo_issue_state = "t",
 			edit_title = "T",
-			edit_reviewers = "gv",
+			edit_reviewers = "gr",
 			edit_assignees = "ga",
 			review = {
 				focus_item = "gd",
@@ -259,7 +259,6 @@ M.options = {
 			filters = {
 				open = "gpo",
 				merged = "gpm",
-				declined = "gpd",
 			},
 		},
 		issues = {

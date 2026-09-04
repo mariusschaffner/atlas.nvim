@@ -168,6 +168,7 @@ function M.setup(buf, refresh)
 		items,
 		from_action("pulls.review.diff.next_hunk", {
 			desc = "Next hunk",
+			hint = false,
 			opts = { nowait = true, silent = true },
 			callback = function()
 				local win = detail.win
@@ -191,6 +192,7 @@ function M.setup(buf, refresh)
 		items,
 		from_action("pulls.review.diff.previous_hunk", {
 			desc = "Previous hunk",
+			hint = false,
 			opts = { nowait = true, silent = true },
 			callback = function()
 				local win = detail.win
