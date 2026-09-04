@@ -201,7 +201,6 @@ M.options = {
 			copy_id = "y",
 			copy_url = "Y",
 			show_details = "K",
-			search = "?",
 			filter = "/",
 		},
 		picker = {

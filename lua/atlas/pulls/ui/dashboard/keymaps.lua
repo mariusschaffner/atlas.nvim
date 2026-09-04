@@ -115,75 +115,6 @@ function M.register(buf, views)
 		)
 	end
 
-	if state.provider then
-		utils.insert_if(
-			items,
-			item("ui.open_actions", {
-				desc = "Open PR actions",
-				index = 1,
-				callback = function()
-					local pr = selected_pr()
-					if state.provider then
-						actions.open({
-							provider = state.provider,
-							pr = pr,
-							current_user = state.current_user,
-							buf = buf,
-						}, function(result)
-							if pr ~= nil and result ~= nil and result.changed_pr then
-								require("atlas.pulls.ui.dashboard.controller").refresh_pr(pr)
-							end
-						end)
-					end
-				end,
-			})
-		)
-	end
-
-	utils.insert_if(
-		items,
-		item("ui.open_in_browser", {
-			desc = "Open PR in browser",
-			opts = { nowait = true },
-			callback = function()
-				run_action("open_in_browser", true)
-			end,
-		})
-	)
-
-	utils.insert_if(
-		items,
-		item("ui.copy_url", {
-			desc = "Copy PR URL",
-			opts = { nowait = true },
-			callback = function()
-				run_action("copy_url", true)
-			end,
-		})
-	)
-
-	utils.insert_if(
-		items,
-		item("ui.copy_id", {
-			desc = "Copy PR ID",
-			opts = { nowait = true },
-			callback = function()
-				run_action("copy_id", true)
-			end,
-		})
-	)
-
-	utils.insert_if(
-		items,
-		item("ui.show_details", {
-			desc = "Show PR details",
-			opts = { nowait = true },
-			callback = function()
-				require("atlas.pulls.ui.dashboard.controller").show_pr_details(buf)
-			end,
-		})
-	)
-
 	utils.insert_if(
 		items,
 		item("pulls.open_diff", {
@@ -205,25 +136,6 @@ function M.register(buf, views)
 			end,
 		})
 	)
-
-	local search_available = state.provider
-		and actions.is_available("search", {
-			provider = state.provider,
-			current_user = state.current_user,
-			buf = buf,
-		})
-
-	if search_available then
-		utils.insert_if(
-			items,
-			item("ui.search", {
-				desc = "Search repositories",
-				callback = function()
-					run_action("search", false)
-				end,
-			})
-		)
-	end
 
 	utils.insert_if(
 		items,

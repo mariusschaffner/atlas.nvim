@@ -1,6 +1,7 @@
 local M = {}
 
 local keymaps = require("atlas.core.keymaps")
+local help = require("atlas.ui.popups.help")
 local icons = require("atlas.ui.shared.icons")
 local spinner = require("atlas.ui.components.spinner")
 local utils = require("atlas.ui.shared.utils")
@@ -29,7 +30,6 @@ local next_id = 0
 
 ---@class AtlasStatuslineOptions
 ---@field help_key string|fun(): string|nil
----@field show_version boolean|nil
 ---@field left_padding integer|nil
 
 ---@class AtlasStatusline
@@ -131,6 +131,34 @@ local function current_width()
 	return vim.api.nvim_win_get_width(win)
 end
 
+---@return integer
+local function current_buf()
+	local win = tonumber(vim.g.statusline_winid)
+	if win and vim.api.nvim_win_is_valid(win) then
+		return vim.api.nvim_win_get_buf(win)
+	end
+	return vim.api.nvim_get_current_buf()
+end
+
+--- Builds "<key> - (<desc>)" hint segments from whatever keymaps are
+--- currently registered (via atlas.ui.popups.help) for the buffer being
+--- rendered, so the statusline always reflects the active view/tab without
+--- each view needing to hand-build its own hint list.
+---@param bufnr integer
+---@return AtlasStatuslineSegment[]
+local function hint_segments(bufnr)
+	local hints = help.hints(bufnr)
+	local segments = {}
+	for i, hint in ipairs(hints) do
+		segments[#segments + 1] = {
+			text = string.format("%s - (%s)", hint.key, hint.desc),
+			hl_group = "AtlasFooterText",
+			priority = #hints - i + 1,
+		}
+	end
+	return segments
+end
+
 ---@param segment AtlasStatuslineSegment
 ---@return string
 local function render_segment(segment)
@@ -154,7 +182,7 @@ end
 ---@param segments AtlasStatuslineSegment[]
 ---@param current_notice AtlasStatuslineNotice|nil
 ---@param available integer|nil
----@param options { help_key: string|nil, show_version: boolean|nil, left_padding: integer|nil }|nil
+---@param options { help_key: string|nil, left_padding: integer|nil }|nil
 ---@return string
 function M.format(segments, current_notice, available, options)
 	options = options or {}
@@ -167,14 +195,6 @@ function M.format(segments, current_notice, available, options)
 			text = normalize(current_notice.text),
 			hl_group = current_notice.hl_group,
 			align = "right",
-		}
-	end
-	if options.show_version then
-		fitted[#fitted + 1] = {
-			text = string.format("atlas (%s)", utils.get_version()),
-			hl_group = "AtlasFooterText",
-			align = "right",
-			priority = 0,
 		}
 	end
 	if options.help_key then
@@ -361,9 +381,12 @@ function Statusline:render()
 	if type(help_key) == "function" then
 		help_key = help_key()
 	end
-	return M.format(self.items, self.notice, nil, {
+	local segments = self.items
+	if #segments == 0 then
+		segments = hint_segments(current_buf())
+	end
+	return M.format(segments, self.notice, nil, {
 		help_key = help_key,
-		show_version = self.options.show_version,
 		left_padding = self.options.left_padding,
 	})
 end
@@ -384,7 +407,6 @@ M.default = M.new({
 		local keys = keymaps.resolve("ui.help")
 		return keys and keys[1]
 	end,
-	show_version = true,
 })
 
 ---@param id integer|nil

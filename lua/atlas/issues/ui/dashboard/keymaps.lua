@@ -104,20 +104,6 @@ function M.register(buf, views)
 		})
 	)
 
-	if capabilities.actions then
-		utils.insert_if(
-			items,
-			item("ui.open_actions", {
-				desc = "Open issue actions",
-				index = 1,
-				callback = function()
-					local issue = selected_issue()
-					actions.open(context(issue), controller.apply_action_result)
-				end,
-			})
-		)
-	end
-
 	if actions.is_available("create_issue", context(nil)) then
 		utils.insert_if(
 			items,
@@ -131,31 +117,6 @@ function M.register(buf, views)
 			})
 		)
 	end
-
-	if actions.is_available("search", context(nil)) then
-		utils.insert_if(
-			items,
-			item("ui.search", {
-				desc = "Search issues",
-				index = 3,
-				callback = function()
-					actions.run("search", context(nil), controller.apply_action_result)
-				end,
-			})
-		)
-	end
-
-	utils.insert_if(
-		items,
-		item("ui.show_details", {
-			desc = "Show issue details",
-			index = 4,
-			opts = { nowait = true },
-			callback = function()
-				controller.show_issue_details(buf)
-			end,
-		})
-	)
 
 	utils.insert_if(
 		items,
@@ -178,99 +139,6 @@ function M.register(buf, views)
 			end,
 		})
 	)
-
-	utils.insert_if(
-		items,
-		item("ui.toggle_fold", {
-			desc = "Toggle issue children",
-			index = 8,
-			callback = function()
-				controller.toggle_current_issue_collapsed()
-			end,
-		})
-	)
-
-	utils.insert_if(
-		items,
-		item("ui.toggle_all_folds", {
-			desc = "Toggle all issue children",
-			index = 9,
-			callback = function()
-				controller.toggle_all_issues_collapsed()
-			end,
-		})
-	)
-
-	utils.insert_if(
-		items,
-		item("ui.copy_id", {
-			desc = "Copy issue key",
-			index = 10,
-			opts = { nowait = true },
-			callback = function()
-				local issue = selected_issue()
-				if issue == nil then
-					notify.warn("No issue selected")
-					return
-				end
-				actions.run("copy_issue_key", context(issue))
-			end,
-		})
-	)
-
-	utils.insert_if(
-		items,
-		item("ui.copy_url", {
-			desc = "Copy issue URL",
-			index = 10,
-			opts = { nowait = true },
-			callback = function()
-				local issue = selected_issue()
-				if issue == nil then
-					notify.warn("No issue selected")
-					return
-				end
-				actions.run("copy_issue_url", context(issue))
-			end,
-		})
-	)
-
-	-- g* keys grouped together
-	if supports("transition") then
-		utils.insert_if(
-			items,
-			item("issues.transition_issue", {
-				desc = "Transition issue",
-				index = 11,
-				callback = function()
-					local issue = selected_issue()
-					if issue == nil then
-						notify.warn("No issue selected")
-						return
-					end
-					actions.run("transition", context(issue), controller.apply_action_result)
-				end,
-			})
-		)
-	end
-
-	if supports("assign") then
-		utils.insert_if(
-			items,
-			item("issues.change_assignee", {
-				desc = "Change assignee",
-				index = 12,
-				callback = function()
-					local issue = selected_issue()
-					if issue == nil then
-						notify.warn("No issue selected")
-						return
-					end
-					actions.run("assign", context(issue), controller.apply_action_result)
-				end,
-			})
-		)
-	end
 
 	if supports("reporter") then
 		utils.insert_if(
@@ -307,23 +175,6 @@ function M.register(buf, views)
 			})
 		)
 	end
-
-	utils.insert_if(
-		items,
-		item("ui.open_in_browser", {
-			desc = "Open issue in browser",
-			index = 15,
-			opts = { nowait = true },
-			callback = function()
-				local issue = selected_issue()
-				if issue == nil then
-					notify.warn("No issue selected")
-					return
-				end
-				actions.run("browse_issue", context(issue))
-			end,
-		})
-	)
 
 	M.remove(buf)
 	help.register(provider_name, items, {

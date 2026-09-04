@@ -4,7 +4,6 @@ local state = require("atlas.issues.state")
 local navbar = require("atlas.ui.components.navbar")
 local table_tree = require("atlas.ui.components.table_tree")
 local utils = require("atlas.ui.shared.utils")
-local statusline = require("atlas.ui.statusline")
 local icons = require("atlas.ui.shared.icons")
 local providers = require("atlas.issues.ui.dashboard.providers")
 
@@ -250,11 +249,6 @@ end
 ---@return string[], table[], table<integer, table>
 function M.render(opts)
 	local active = state.active_view
-	local issue_count = #state.issues
-	local statusline_items = {
-		{ text = string.format("%d issues", issue_count), hl_group = "AtlasFooterText" },
-	}
-	statusline.set_items(statusline_items)
 
 	local lines, spans = {}, {}
 	local line_map = {}

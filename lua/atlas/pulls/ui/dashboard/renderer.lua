@@ -5,7 +5,6 @@ local navbar = require("atlas.ui.components.navbar")
 local presentation = require("atlas.pulls.ui.presentation")
 local providers = require("atlas.pulls.ui.dashboard.providers")
 local state = require("atlas.pulls.state")
-local statusline = require("atlas.ui.statusline")
 local table_tree = require("atlas.ui.components.table_tree")
 local ui_utils = require("atlas.ui.utils")
 local utils = require("atlas.ui.shared.utils")
@@ -52,17 +51,6 @@ local function group_by_repo(pulls)
 		table.insert(group.pulls, pr)
 	end
 	return groups
-end
-
----@param pulls PullRequest[]
----@return table[]
-local function statusline_items(pulls)
-	return {
-		{
-			text = string.format("%s %d PR%s", PR_ICON, #pulls, #pulls == 1 and "" or "s"),
-			hl_group = "AtlasFooterInfo",
-		},
-	}
 end
 
 ---@param row table
@@ -310,7 +298,6 @@ function M.render(opts)
 	local pulls = state.pulls
 	local display = providers.get(state.provider and state.provider.id)
 	local loading = string.format("%s Loading...", state.reload_spinner_frame)
-	statusline.set_items(statusline_items(pulls))
 
 	table.insert(lines, "")
 	render_filter_row(lines, spans, opts.width)

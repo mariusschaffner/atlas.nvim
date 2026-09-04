@@ -131,17 +131,16 @@ function M.register(group, items, opts)
 			end
 		end
 
-		if not item.hidden then
-			local display_key = table.concat(keys, KEY_SEPARATOR)
-			remove_existing_entry(bstate.keys[group], "key", display_key)
+		local display_key = table.concat(keys, KEY_SEPARATOR)
+		remove_existing_entry(bstate.keys[group], "key", display_key)
 
-			table.insert(bstate.keys[group], {
-				key = display_key,
-				desc = item.desc,
-				mode = mode,
-				index = item.index or DEFAULT_INDEX,
-			})
-		end
+		table.insert(bstate.keys[group], {
+			key = display_key,
+			desc = item.desc,
+			mode = mode,
+			index = item.index or DEFAULT_INDEX,
+			hidden = item.hidden == true,
+		})
 	end
 end
 
@@ -281,6 +280,43 @@ end
 
 ---@param valid_groups table[]
 ---@return table[]
+local function without_hidden(valid_groups)
+	local filtered = {}
+	for _, group in ipairs(valid_groups) do
+		local visible_items = {}
+		for _, item in ipairs(group.items) do
+			if not item.hidden then
+				table.insert(visible_items, item)
+			end
+		end
+		if #visible_items > 0 then
+			table.insert(filtered, { name = group.name, items = visible_items, is_cmd = group.is_cmd, index = group.index })
+		end
+	end
+	return filtered
+end
+
+---@param bufnr integer
+---@return { key: string, desc: string }[]
+function M.hints(bufnr)
+	local bstate = state.buffers[bufnr]
+	if not bstate then
+		return {}
+	end
+
+	local hints = {}
+	for _, group in ipairs(collect_valid_groups(collect_all_groups(bstate))) do
+		if not group.is_cmd then
+			for _, item in ipairs(group.items) do
+				table.insert(hints, { key = item.key, desc = item.desc })
+			end
+		end
+	end
+	return hints
+end
+
+---@param valid_groups table[]
+---@return table[]
 local function build_render_items(valid_groups)
 	local render_items = {}
 
@@ -367,7 +403,7 @@ local function get_layout(bufnr, max_width)
 		return { lines = {}, highlights = {}, height = 0 }
 	end
 
-	local valid_groups = collect_valid_groups(collect_all_groups(bstate))
+	local valid_groups = without_hidden(collect_valid_groups(collect_all_groups(bstate)))
 	if #valid_groups == 0 then
 		return { lines = { "  No bindings registered  " }, highlights = {}, height = 1 }
 	end

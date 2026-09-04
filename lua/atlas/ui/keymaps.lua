@@ -115,8 +115,9 @@ function M.register(buf)
 
 	utils.insert_if(
 		items,
-		item("ui.toggle_panel", {
-			desc = "Toggle detail panel",
+		item("ui.select", {
+			desc = "Toggle details",
+			opts = { nowait = true, silent = true },
 			callback = function()
 				local dashboard = domain_dashboard()
 				if dashboard then
@@ -173,7 +174,7 @@ function M.remove(buf)
 	utils.insert_if(items, remove_item("ui.last_item"))
 	utils.insert_if(items, remove_item("ui.help"))
 	utils.insert_if(items, remove_item("ui.close"))
-	utils.insert_if(items, remove_item("ui.toggle_panel"))
+	utils.insert_if(items, remove_item("ui.select"))
 	utils.insert_if(items, remove_item("ui.next_panel_tab"))
 	utils.insert_if(items, remove_item("ui.previous_panel_tab"))
 	utils.insert_if(items, remove_item("ui.notifications.open"))
