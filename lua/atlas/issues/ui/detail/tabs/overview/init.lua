@@ -3,10 +3,9 @@ local M = {}
 local help = require("atlas.ui.popups.help")
 local keymaps = require("atlas.core.keymaps")
 local utils = require("atlas.ui.shared.utils")
-local editor = require("atlas.ui.popups.editor")
 local notify = require("atlas.core.notify")
 local detail = require("atlas.issues.ui.detail.state")
-local conversation = require("atlas.issues.ui.detail.tabs.conversation.state")
+local inline_edit = require("atlas.ui.inline_edit")
 
 local PADDING_X = 1
 local PADDING = string.rep(" ", PADDING_X)
@@ -37,14 +36,10 @@ end
 
 ---@param buf integer
 ---@param refresh fun()
-function M.activate(buf, refresh)
-	vim.api.nvim_set_option_value("filetype", "markdown", { buf = buf })
-	vim.api.nvim_set_option_value("syntax", "markdown", { buf = buf })
-
+local function register_edit_keymap(buf, refresh)
 	local provider = detail.provider
 	local core = provider and provider.capabilities.core
 	local update_description = core and core.update_description
-	local comments = provider and provider.capabilities.comments
 	local keys = update_description and keymaps.resolve("ui.comments.edit") or nil
 	if keys == nil then
 		return
@@ -59,52 +54,64 @@ function M.activate(buf, refresh)
 			callback = function()
 				local issue = detail.current_issue
 				local details = detail.current_details
-				if issue == nil or details == nil then
+				if issue == nil or details == nil or inline_edit.is_active(buf) then
 					return
 				end
 
-				local completion
-				if comments and comments.comment_completion then
-					completion = comments.comment_completion({
-						issue = issue,
-						details = details,
-						comments = conversation.comments(),
-					})
-				end
-
 				local current = tostring(details.description or "")
-				editor.open({
-					key = "issue-description-edit-" .. tostring(issue.key),
-					title = " Edit Description ",
-					width_ratio = 0.5,
-					height_ratio = 0.18,
-					initial_text = current,
-					completion = completion,
-					on_save = function(text)
+
+				require("atlas.issues.ui.detail.keymaps").remove(buf)
+				help.remove("Detail", { { key = #keys == 1 and keys[1] or keys } }, { buffer = buf })
+
+				inline_edit.start({
+					buf = buf,
+					text = current,
+					on_save = function(text, done)
 						local updated = text or ""
 						if updated == current then
-							notify.info("Description unchanged", { timeout = 1200 })
+							done(true)
 							return
 						end
 						notify.loading("Updating description...")
 						update_description(issue, updated, function(ok, err)
 							local selected = detail.current_issue
 							if selected == nil or tostring(selected.key) ~= tostring(issue.key) then
+								done(true)
 								return
 							end
 							if not ok then
 								notify.error("Description update failed: " .. tostring(err or "Unknown error"))
+								done(false, err)
 								return
 							end
 							details.description = updated
 							notify.success("Description updated", { timeout = 1200 })
-							refresh()
+							done(true)
 						end)
+					end,
+					on_cancel = function()
+						notify.info("Description unchanged", { timeout = 1200 })
+					end,
+					on_done = function()
+						if buf and vim.api.nvim_buf_is_valid(buf) then
+							require("atlas.issues.ui.detail.keymaps").register(buf)
+							register_edit_keymap(buf, refresh)
+						end
+						refresh()
 					end,
 				})
 			end,
 		},
 	}, { index = 212, buffer = buf })
+end
+
+---@param buf integer
+---@param refresh fun()
+function M.activate(buf, refresh)
+	vim.api.nvim_set_option_value("filetype", "markdown", { buf = buf })
+	vim.api.nvim_set_option_value("syntax", "markdown", { buf = buf })
+
+	register_edit_keymap(buf, refresh)
 end
 
 ---@param buf integer

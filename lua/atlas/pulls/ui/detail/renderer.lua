@@ -9,6 +9,7 @@ local icons = require("atlas.ui.shared.icons")
 local spinner = require("atlas.ui.components.spinner")
 local presentation = require("atlas.pulls.ui.presentation")
 local detail_ui = require("atlas.ui.detail")
+local inline_edit = require("atlas.ui.inline_edit")
 
 local ns = vim.api.nvim_create_namespace("atlas.provider_detail")
 local header_ns = vim.api.nvim_create_namespace("atlas.provider_detail.header")
@@ -219,6 +220,10 @@ function M.render(tab_items, get_tab_module)
 		set_lines(header_buf, header_lines)
 		apply_spans(header_buf, header_ns, header_spans)
 		detail_ui.resize_header(#header_lines)
+	end
+
+	if inline_edit.is_active(buf) then
+		return
 	end
 
 	local width = vim.api.nvim_win_get_width(win)

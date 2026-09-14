@@ -5,6 +5,8 @@ local spinner = require("atlas.ui.components.spinner")
 local detail = require("atlas.pulls.ui.detail.state")
 local help = require("atlas.ui.popups.help")
 local keymaps = require("atlas.core.keymaps")
+local notify = require("atlas.core.notify")
+local inline_edit = require("atlas.ui.inline_edit")
 
 ---@return string|string[]|nil
 local function edit_description_keys()
@@ -70,13 +72,8 @@ function M.render(_pr, details, width)
 end
 
 ---@param buf integer
-function M.activate(buf)
-	if not (buf and vim.api.nvim_buf_is_valid(buf)) then
-		return
-	end
-	vim.api.nvim_set_option_value("filetype", "markdown", { buf = buf })
-	vim.api.nvim_set_option_value("syntax", "markdown", { buf = buf })
-
+---@param refresh fun()|nil
+local function register_edit_keymap(buf, refresh)
 	local keys = edit_description_keys()
 	if keys == nil then
 		return
@@ -90,27 +87,87 @@ function M.activate(buf)
 			opts = { nowait = true, silent = true },
 			callback = function()
 				local pr = detail.current_pr
+				local details = detail.current_details
 				local provider = detail.provider
-				if pr == nil or provider == nil then
+				if pr == nil or details == nil or provider == nil or inline_edit.is_active(buf) then
 					return
 				end
-				require("atlas.pulls.actions").run("edit_description", {
-					provider = provider,
-					pr = pr,
-					details = detail.current_details,
-				}, function(result)
-					if result and result.changed_pr then
-						local on_update = detail.on_update
-						if on_update then
-							on_update(pr, result)
-						else
-							require("atlas.pulls.ui.detail").refresh()
+
+				local core = provider.capabilities.core
+
+				local function begin_edit(current)
+					require("atlas.pulls.ui.detail.keymaps").remove(buf)
+					help.remove("Detail", { { key = #keys == 1 and keys[1] or keys } }, { buffer = buf })
+
+					inline_edit.start({
+						buf = buf,
+						text = current,
+						on_save = function(text, done)
+							local updated = text or ""
+							if updated == current then
+								done(true)
+								return
+							end
+							notify.loading("Updating description...")
+							core.update_description(pr, updated, function(ok, err)
+								if not ok then
+									notify.error("Description update failed: " .. tostring(err or "Unknown error"))
+									done(false, err)
+									return
+								end
+								details.description = updated
+								notify.success("Description updated", { timeout = 1200 })
+								done(true)
+							end)
+						end,
+						on_cancel = function()
+							notify.info("Description unchanged", { timeout = 1200 })
+						end,
+						on_done = function()
+							if buf and vim.api.nvim_buf_is_valid(buf) then
+								require("atlas.pulls.ui.detail.keymaps").register(buf)
+								register_edit_keymap(buf, refresh)
+							end
+							if refresh then
+								refresh()
+							end
+						end,
+					})
+				end
+
+				-- Always edit against the remote description so a stale panel
+				-- does not silently revert someone else's concurrent edit.
+				if core.fetch_description then
+					notify.loading("Loading description...")
+					core.fetch_description(pr, { force_refresh = true }, function(description, err)
+						if detail.current_pr ~= pr then
+							return
 						end
-					end
-				end)
+						if err then
+							notify.error("Failed to load description: " .. tostring(err))
+							return
+						end
+						details.description = description or details.description
+						begin_edit(tostring(details.description or ""))
+					end)
+				else
+					begin_edit(tostring(details.description or ""))
+				end
 			end,
 		},
 	}, { index = 212, buffer = buf })
+end
+
+---@param buf integer
+---@param refresh fun()|nil
+function M.activate(buf, refresh)
+	if not (buf and vim.api.nvim_buf_is_valid(buf)) then
+		return
+	end
+	vim.api.nvim_set_option_value("filetype", "markdown", { buf = buf })
+	vim.api.nvim_set_option_value("syntax", "markdown", { buf = buf })
+
+	register_edit_keymap(buf, refresh)
 end
 
 ---@param buf integer
