@@ -145,7 +145,6 @@ local function compact_rows(pulls, display)
 			reviewer_hl = reviewer_hl,
 			created = utils.relative_time(pr.created_on),
 			updated = utils.relative_time(pr.updated_on),
-			separator = true,
 			_item = { kind = "pr", id = pr.id, repo = repo, pr = pr },
 		}
 		add_values(row, display.values(pr))

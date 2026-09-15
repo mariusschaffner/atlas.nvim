@@ -91,7 +91,7 @@ end
 ---@return table[]
 local function issues_to_rows(issue_groups)
 	local rows = {}
-	for i, group in ipairs(issue_groups) do
+	for _, group in ipairs(issue_groups) do
 		local children = group.children
 		local root_row = issue_to_row(group.issue, false, "plain")
 
@@ -104,9 +104,6 @@ local function issues_to_rows(issue_groups)
 			root_row.icon, root_row._fold_icon_hl = icons.general(collapsed and "fold_closed" or "fold_open")
 		end
 
-		if i < #issue_groups then
-			root_row.separator = true
-		end
 		table.insert(rows, root_row)
 	end
 	return rows
@@ -205,11 +202,8 @@ local function compact_rows(issues)
 			local meta = blank_row(columns)
 			meta.kind = "meta"
 			meta.name = meta_text
-			meta.separator = true
 			meta._item = { kind = "issue_meta", key = issue.key, _issue = issue }
 			table.insert(rows, meta)
-		else
-			row.separator = true
 		end
 	end
 
