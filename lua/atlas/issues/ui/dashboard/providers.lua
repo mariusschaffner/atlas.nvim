@@ -75,14 +75,25 @@ local function gitlab()
 		return string.format("#%d", issue.iid)
 	end
 
-	local function values(issue, is_child)
+	---@param label string
+	---@param width integer|nil
+	---@return string
+	local function pad_label(label, width)
+		if width == nil or width <= #label then
+			return label
+		end
+		return label .. string.rep(" ", width - #label)
+	end
+
+	local function values(issue, is_child, _layout, label_width)
 		---@cast issue GitLabIssue
 		local label = key_label(issue)
+		local padded_label = pad_label(label, label_width)
 		local row_icon = state_icon(issue.status_id)
 		return {
 			icon = is_child and "" or row_icon,
-			name = is_child and ("  " .. row_icon .. "  " .. label .. " " .. (issue.title or ""))
-				or (label .. " " .. (issue.title or "")),
+			name = is_child and ("  " .. row_icon .. "  " .. padded_label .. " " .. (issue.title or ""))
+				or (padded_label .. " " .. (issue.title or "")),
 			_key_label = label,
 			assignee = person_value(issue.assignee, "Unassigned"),
 			reporter = person_value(issue.reporter, "Unknown"),
@@ -140,16 +151,23 @@ local function gitlab()
 		return person_highlight(issue, col, ctx)
 	end
 
-	return { columns = columns, values = values, highlights = highlights }
+	return { columns = columns, values = values, highlights = highlights, label = key_label }
 end
 
 local function default()
 	return {
 		columns = columns,
-		values = function(issue)
+		label = function(issue)
+			return tostring(issue.key or "")
+		end,
+		values = function(issue, _is_child, _layout, label_width)
+			local label = tostring(issue.key or "")
+			if label_width ~= nil and label_width > #label then
+				label = label .. string.rep(" ", label_width - #label)
+			end
 			return {
 				icon = "",
-				name = (issue.key or "") .. " " .. (issue.title or ""),
+				name = label .. " " .. (issue.title or ""),
 				assignee = (issue.assignee and issue.assignee.display_name) or "Unassigned",
 				reporter = (issue.reporter and issue.reporter.display_name) or "Unknown",
 				status = string.format(" %s ", issue.status or ""),

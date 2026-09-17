@@ -125,21 +125,44 @@ local function add_values(row, values)
 end
 
 ---@param pulls PullRequest[]
+---@param reference string
+---@return integer
+local function max_reference_width(pulls, reference)
+	local width = 0
+	for _, pr in ipairs(pulls) do
+		width = math.max(width, #reference + #tostring(pr.id or ""))
+	end
+	return width
+end
+
+---@param label string
+---@param width integer
+---@return string
+local function pad_reference(label, width)
+	if width <= #label then
+		return label
+	end
+	return label .. string.rep(" ", width - #label)
+end
+
+---@param pulls PullRequest[]
 ---@param display table
 ---@return table[]
 local function compact_rows(pulls, display)
 	local rows = {}
+	local ref_width = max_reference_width(pulls, display.reference)
 	for _, pr in ipairs(pulls) do
 		local repo = presentation.repo(pr)
 		local icon, icon_hl = pr_icon(pr)
 		local reviewer, reviewer_hl = reviewer_label(pr)
+		local label = pad_reference(display.reference .. tostring(pr.id or ""), ref_width)
 		local row = {
 			kind = "pr",
 			pr_icon = displayed_pr_icon(pr),
 			_pr_reloading = state.is_pr_reloading(pr.repo_full_name, pr.id),
 			_pr_icon_str = icon,
 			_pr_icon_hl = icon_hl,
-			repo_pr = display.reference .. tostring(pr.id or "") .. " " .. tostring(pr.title or ""),
+			repo_pr = label .. " " .. tostring(pr.title or ""),
 			conversation = tostring(pr.comments_count or 0),
 			reviewer = string.format("%s %s", REVIEW_ICON, utils.shorten_name(reviewer, 20)),
 			reviewer_hl = reviewer_hl,
@@ -168,6 +191,7 @@ local function list_rows(pulls, layout, display)
 	end
 
 	local rows = {}
+	local ref_width = max_reference_width(pulls, display.reference)
 	for group_index, group in ipairs(groups) do
 		if grouped then
 			if group_index > 1 then
@@ -188,12 +212,13 @@ local function list_rows(pulls, layout, display)
 			local icon = displayed_pr_icon(pr)
 			local _, icon_hl = pr_icon(pr)
 			local reviewer, reviewer_hl = reviewer_label(pr)
+			local label = pad_reference(display.reference .. tostring(pr.id or ""), ref_width)
 			local row = {
 				kind = "pr",
 				_pr_reloading = state.is_pr_reloading(pr.repo_full_name, pr.id),
 				_pr_icon_str = icon,
 				_pr_icon_hl = icon_hl,
-				name = icon .. " " .. display.reference .. tostring(pr.id or "") .. " " .. tostring(pr.title or ""),
+				name = icon .. " " .. label .. " " .. tostring(pr.title or ""),
 				conversation = tostring(pr.comments_count or 0),
 				reviewer = string.format("%s %s", REVIEW_ICON, utils.shorten_name(reviewer, 20)),
 				reviewer_hl = reviewer_hl,

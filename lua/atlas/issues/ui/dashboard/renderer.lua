@@ -51,15 +51,30 @@ end
 ---@param issue Issue
 ---@param is_child boolean|nil
 ---@param layout "plain"|"compact"
+---@param label_width integer|nil
 ---@return table
-local function issue_to_row(issue, is_child, layout)
+local function issue_to_row(issue, is_child, layout, label_width)
 	local display = providers.get(state.provider and state.provider.id)
-	local row_data = display.values(issue, is_child == true, layout)
+	local row_data = display.values(issue, is_child == true, layout, label_width)
 
 	row_data._item = { kind = "issue", key = issue.key, _issue = issue }
 	row_data._issue = issue
 	row_data.children = row_data.children or {}
 	return row_data
+end
+
+---@param issues Issue[]
+---@return integer
+local function max_label_width(issues)
+	local display = providers.get(state.provider and state.provider.id)
+	if not display.label then
+		return 0
+	end
+	local width = 0
+	for _, issue in ipairs(issues) do
+		width = math.max(width, #tostring(display.label(issue) or ""))
+	end
+	return width
 end
 
 ---@param columns table[]
@@ -88,15 +103,29 @@ local function cell_hl(row, col, ctx)
 end
 
 ---@param issue_groups IssuesGroup[]
+---@return Issue[]
+local function flatten_issues(issue_groups)
+	local issues = {}
+	for _, group in ipairs(issue_groups) do
+		table.insert(issues, group.issue)
+		for _, child in ipairs(group.children) do
+			table.insert(issues, child)
+		end
+	end
+	return issues
+end
+
+---@param issue_groups IssuesGroup[]
 ---@return table[]
 local function issues_to_rows(issue_groups)
+	local label_width = max_label_width(flatten_issues(issue_groups))
 	local rows = {}
 	for _, group in ipairs(issue_groups) do
 		local children = group.children
-		local root_row = issue_to_row(group.issue, false, "plain")
+		local root_row = issue_to_row(group.issue, false, "plain", label_width)
 
 		for _, child in ipairs(children) do
-			table.insert(root_row.children, issue_to_row(child, true, "plain"))
+			table.insert(root_row.children, issue_to_row(child, true, "plain", label_width))
 		end
 		if #children > 0 then
 			local issue_key = tostring(group.issue.key or "")
@@ -188,9 +217,10 @@ end
 local function compact_rows(issues)
 	local display = providers.get(state.provider and state.provider.id)
 	local columns = display.columns("compact")
+	local label_width = max_label_width(issues)
 	local rows = {}
 	for _, issue in ipairs(issues) do
-		local row = issue_to_row(issue, false, "compact")
+		local row = issue_to_row(issue, false, "compact", label_width)
 		row.children = nil
 		table.insert(rows, row)
 
