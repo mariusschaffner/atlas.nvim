@@ -1,4 +1,5 @@
---TODO: Holy complex fuck pls refactor
+-- TODO: this module has grown complex (tasks, suggestions, resolution
+-- status, reactions) and would benefit from being split up.
 local M = {}
 
 local threadsv2 = require("atlas.ui.components.threadsv2")
