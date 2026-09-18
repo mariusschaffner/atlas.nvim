@@ -17,32 +17,6 @@ local header_ns = vim.api.nvim_create_namespace("atlas.provider_detail.header")
 local PADDING_X = 1
 
 ---@param buf integer
----@param namespace integer
----@param spans table[]
-local function apply_spans(buf, namespace, spans)
-	vim.api.nvim_buf_clear_namespace(buf, namespace, 0, -1)
-	for _, span in ipairs(spans) do
-		if span.line ~= nil and span.line_hl_group ~= nil then
-			vim.api.nvim_buf_set_extmark(buf, namespace, span.line, 0, {
-				line_hl_group = span.line_hl_group,
-			})
-		elseif span.line ~= nil and span.start_col ~= nil and span.end_col ~= nil and span.hl_group ~= nil then
-			local line_text = vim.api.nvim_buf_get_lines(buf, span.line, span.line + 1, false)[1] or ""
-			local max_col = #line_text
-			local sc = math.min(span.start_col, max_col)
-			local ec = math.min(span.end_col, max_col)
-			if ec > sc then
-				vim.api.nvim_buf_set_extmark(buf, namespace, span.line, sc, {
-					end_row = span.line,
-					end_col = ec,
-					hl_group = span.hl_group,
-				})
-			end
-		end
-	end
-end
-
----@param buf integer
 ---@param lines string[]
 local function set_lines(buf, lines)
 	if buf == nil or not vim.api.nvim_buf_is_valid(buf) then
@@ -218,7 +192,7 @@ function M.render(tab_items, get_tab_module)
 			header_lines, header_spans = render_header(pr, tab_items, vim.api.nvim_win_get_width(header_win))
 		end
 		set_lines(header_buf, header_lines)
-		apply_spans(header_buf, header_ns, header_spans)
+		utils.apply_spans_clamped(header_buf, header_ns, header_spans)
 		detail_ui.resize_header(#header_lines)
 	end
 
@@ -249,7 +223,7 @@ function M.render(tab_items, get_tab_module)
 	end
 
 	set_lines(buf, lines)
-	apply_spans(buf, ns, spans)
+	utils.apply_spans_clamped(buf, ns, spans)
 end
 
 return M

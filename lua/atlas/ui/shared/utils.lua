@@ -116,6 +116,56 @@ function M.append_block(lines, spans, block)
 	end
 end
 
+--- Clears namespace and re-applies a list of AtlasUIHighlight spans as extmarks.
+---@param buf integer
+---@param namespace integer
+---@param spans AtlasUIHighlight[]
+function M.apply_spans(buf, namespace, spans)
+	vim.api.nvim_buf_clear_namespace(buf, namespace, 0, -1)
+	for _, span in ipairs(spans) do
+		if span.line ~= nil and span.line_hl_group ~= nil then
+			vim.api.nvim_buf_set_extmark(buf, namespace, span.line, 0, {
+				line_hl_group = span.line_hl_group,
+			})
+		elseif span.line ~= nil and span.start_col ~= nil and span.end_col ~= nil and span.hl_group ~= nil then
+			vim.api.nvim_buf_set_extmark(buf, namespace, span.line, span.start_col, {
+				end_row = span.line,
+				end_col = span.end_col,
+				hl_group = span.hl_group,
+			})
+		end
+	end
+end
+
+--- Same as apply_spans, but clamps start_col/end_col to the target line's
+--- actual length and skips zero-width results. Use where span columns may be
+--- stale relative to already-edited buffer content.
+---@param buf integer
+---@param namespace integer
+---@param spans AtlasUIHighlight[]
+function M.apply_spans_clamped(buf, namespace, spans)
+	vim.api.nvim_buf_clear_namespace(buf, namespace, 0, -1)
+	for _, span in ipairs(spans) do
+		if span.line ~= nil and span.line_hl_group ~= nil then
+			vim.api.nvim_buf_set_extmark(buf, namespace, span.line, 0, {
+				line_hl_group = span.line_hl_group,
+			})
+		elseif span.line ~= nil and span.start_col ~= nil and span.end_col ~= nil and span.hl_group ~= nil then
+			local line_text = vim.api.nvim_buf_get_lines(buf, span.line, span.line + 1, false)[1] or ""
+			local max_col = #line_text
+			local sc = math.min(span.start_col, max_col)
+			local ec = math.min(span.end_col, max_col)
+			if ec > sc then
+				vim.api.nvim_buf_set_extmark(buf, namespace, span.line, sc, {
+					end_row = span.line,
+					end_col = ec,
+					hl_group = span.hl_group,
+				})
+			end
+		end
+	end
+end
+
 function M.get_version()
 	if _cached_version then
 		return _cached_version

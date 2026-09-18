@@ -9,25 +9,6 @@ local detail_tabs = require("atlas.pulls.ui.components.tabs")
 local ns = vim.api.nvim_create_namespace("atlas.repo_detail")
 local PADDING_X = 1
 
----@param buf integer
----@param spans table[]
-local function apply_spans(buf, spans)
-	vim.api.nvim_buf_clear_namespace(buf, ns, 0, -1)
-	for _, span in ipairs(spans) do
-		if span.line ~= nil and span.line_hl_group ~= nil then
-			vim.api.nvim_buf_set_extmark(buf, ns, span.line, 0, {
-				line_hl_group = span.line_hl_group,
-			})
-		elseif span.line ~= nil and span.start_col ~= nil and span.end_col ~= nil and span.hl_group ~= nil then
-			vim.api.nvim_buf_set_extmark(buf, ns, span.line, span.start_col, {
-				end_row = span.line,
-				end_col = span.end_col,
-				hl_group = span.hl_group,
-			})
-		end
-	end
-end
-
 ---@param tab_items PullsRepoDetailTab[]
 ---@param get_tab_module fun(key: string): PullsRepoDetailTabModule|nil
 function M.render(tab_items, get_tab_module)
@@ -96,7 +77,7 @@ function M.render(tab_items, get_tab_module)
 
 	vim.api.nvim_set_option_value("modifiable", true, { buf = buf })
 	vim.api.nvim_buf_set_lines(buf, 0, -1, false, lines)
-	apply_spans(buf, spans)
+	utils.apply_spans(buf, ns, spans)
 	vim.api.nvim_set_option_value("modifiable", false, { buf = buf })
 end
 
