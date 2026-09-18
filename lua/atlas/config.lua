@@ -224,6 +224,7 @@ M.options = {
 			edit_title = "T",
 			edit_reviewers = "gr",
 			edit_assignees = "ga",
+			toggle_remove_source_branch = "gb",
 			review = {
 				focus_item = "gd",
 				approve = "ga",

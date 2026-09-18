@@ -8,6 +8,15 @@ local actions = require("atlas.pulls.actions")
 local notify = require("atlas.core.notify")
 
 ---@param pr PullRequest
+---@return boolean
+local function is_current_pr(pr)
+	local current = state.current_pr
+	return current ~= nil
+		and tostring(current.id or "") == tostring(pr.id or "")
+		and tostring(current.repo_full_name or "") == tostring(pr.repo_full_name or "")
+end
+
+---@param pr PullRequest
 ---@param buf integer|nil
 ---@return AtlasPullActionContext|nil
 local function action_context(pr, buf)
@@ -315,6 +324,44 @@ function M.register(buf, opts)
 		)
 	end
 
+	local core = state.provider and state.provider.capabilities.core
+
+	if core and core.update_remove_source_branch then
+		utils.insert_if(
+			items,
+			item("pulls.toggle_remove_source_branch", {
+				desc = "Toggle delete source branch on merge",
+				hint_desc = "Toggle Delete Branch",
+				opts = { nowait = true, silent = true },
+				callback = function()
+					local pr = state.current_pr
+					if pr == nil then
+						return
+					end
+					local next_value = not (pr.remove_source_branch == true)
+					notify.loading(
+						next_value and "Enabling delete source branch..." or "Disabling delete source branch..."
+					)
+					core.update_remove_source_branch(pr, next_value, function(ok, err)
+						if not is_current_pr(pr) then
+							return
+						end
+						if not ok then
+							notify.error("Failed to update setting: " .. tostring(err or "Unknown error"))
+							return
+						end
+						notify.success(
+							next_value and "Source branch will be deleted on merge"
+								or "Source branch will be kept after merge",
+							{ timeout = 1500 }
+						)
+						require("atlas.pulls.ui.detail").rerender()
+					end)
+				end,
+			})
+		)
+	end
+
 	M.remove(buf)
 	local general = items
 
@@ -402,6 +449,7 @@ function M.remove(buf)
 	utils.insert_if(general, remove_item("pulls.edit_title"))
 	utils.insert_if(general, remove_item("pulls.edit_reviewers"))
 	utils.insert_if(general, remove_item("pulls.edit_assignees"))
+	utils.insert_if(general, remove_item("pulls.toggle_remove_source_branch"))
 	utils.insert_if(general, remove_item("ui.next_panel_tab"))
 	utils.insert_if(general, remove_item("ui.previous_panel_tab"))
 	utils.insert_if(general, remove_item("ui.help"))

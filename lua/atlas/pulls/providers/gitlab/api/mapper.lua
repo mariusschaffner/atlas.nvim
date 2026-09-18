@@ -155,6 +155,7 @@ function M.to_pull_request(raw)
 		merge_status = json.safe_str(raw.merge_status),
 		detailed_merge_status = json.safe_str(raw.detailed_merge_status),
 		diff_refs = diff_refs,
+		remove_source_branch = raw.force_remove_source_branch == true,
 	}
 end
 

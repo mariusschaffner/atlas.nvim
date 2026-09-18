@@ -337,6 +337,13 @@ function M.is_open()
 	return detail_ui.is_showing("pulls")
 end
 
+--- Repaints the currently open detail view from whatever is already in
+--- state, without triggering any network refetch. Used after a local state
+--- mutation that doesn't warrant a full reload.
+function M.rerender()
+	render_if_open()
+end
+
 ---@param pr PullRequest
 ---@param opts { force_refresh: boolean|nil }|nil
 function M.select(pr, opts)

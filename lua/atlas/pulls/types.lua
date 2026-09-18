@@ -52,6 +52,7 @@
 ---@field workspace string
 ---@field repo string
 ---@field reviewers PullsReviewer[]|nil
+---@field remove_source_branch boolean|nil Whether the source branch will be deleted when this MR is merged.
 
 ---@class PullRequestDetails
 ---@field description string

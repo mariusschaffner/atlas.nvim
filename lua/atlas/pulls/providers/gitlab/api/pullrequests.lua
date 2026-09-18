@@ -38,6 +38,7 @@ query($path:ID!,$iids:[String!]!){
         web_url:webUrl
         merge_status:mergeStatus
         detailed_merge_status:detailedMergeStatus
+        force_remove_source_branch:forceRemoveSourceBranch
         reviewers(first:100){nodes{id name username}}
       }
     }
@@ -352,6 +353,21 @@ end
 ---@return { cancel: fun() }|nil
 function M.update_description(pr, description, on_done)
 	return update(pr, { description = description }, on_done)
+end
+
+---@param pr PullRequest
+---@param value boolean
+---@param on_done fun(ok: boolean, err: string|nil)
+---@return { cancel: fun() }|nil
+function M.update_remove_source_branch(pr, value, on_done)
+	return update(pr, { remove_source_branch = value == true }, function(ok, err)
+		if not ok then
+			on_done(false, err)
+			return
+		end
+		pr.remove_source_branch = value == true
+		on_done(true, nil)
+	end)
 end
 
 ---@param pr PullRequest

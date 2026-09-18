@@ -4,13 +4,29 @@ local M = {}
 local header = require("atlas.pulls.ui.components.header")
 local icons = require("atlas.ui.shared.icons")
 
----@param _pr PullRequest
+---@param pr PullRequest
+---@return PullsDetailHeaderField
+local function remove_source_branch_field(pr)
+	---@cast pr GitLabPullRequest
+	local enabled = pr.remove_source_branch == true
+	return {
+		label = "Delete source branch",
+		value = enabled and "Yes" or "No",
+		hl = enabled and "AtlasTextPositive" or "AtlasTextMuted",
+	}
+end
+
+---@param pr PullRequest
 ---@param details PullRequestDetails|nil
 ---@param loading boolean
 ---@return PullsDetailHeaderField[]
-function M.header_fields(_pr, details, loading)
+function M.header_fields(pr, details, loading)
+	local fields = { remove_source_branch_field(pr) }
 	if details == nil then
-		return loading and { header.loading_field("Assignees") } or {}
+		if loading then
+			table.insert(fields, header.loading_field("Assignees"))
+		end
+		return fields
 	end
 	---@cast details GitLabPullRequestDetails
 
@@ -22,7 +38,8 @@ function M.header_fields(_pr, details, loading)
 		end
 	end
 
-	return { header.assignee_field(logins) }
+	table.insert(fields, header.assignee_field(logins))
+	return fields
 end
 
 ---@param _pr PullRequest
