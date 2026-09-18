@@ -3,10 +3,10 @@ local M = {}
 local config = require("atlas.config")
 local keymaps = require("atlas.core.keymaps")
 local editor = require("atlas.ui.popups.editor")
-local core_notify = require("atlas.core.notify")
 local picker = require("atlas.ui.picker")
 local ui_utils = require("atlas.ui.utils")
 local review_threads = require("atlas.pulls.ui.components.review_threads")
+local action_utils = require("atlas.pulls.actions.utils")
 
 ---@class AtlasReviewActionContext: AtlasPullActionContext
 ---@field pr PullRequest
@@ -42,16 +42,7 @@ local function open_editor(context, opts)
 end
 
 ---@param context AtlasReviewActionContext
----@param level "loading"|"success"|"info"|"warn"|"error"
----@param message string
----@param duration? integer
-local function notify(context, level, message, duration)
-	if context.notify then
-		context.notify(level, message, duration)
-		return
-	end
-	core_notify.show(level, message, { timeout = duration })
-end
+local notify = action_utils.notify
 
 ---@return AtlasMarkdownEditorAction|nil
 local function comment_template_action()

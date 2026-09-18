@@ -23,9 +23,9 @@ local ACTIONS = {
 ---@param message string
 ---@param duration integer|nil
 local function notify(session, level, message, duration)
-	if session.notify then
-		session.notify(level, message, duration)
-	end
+	-- Lazy require: atlas.pulls.diff.session requires this module, so this
+	-- can't be a top-level require.
+	require("atlas.pulls.diff.session").notify(session, level, message, duration)
 end
 
 ---@param session AtlasDiffSession
