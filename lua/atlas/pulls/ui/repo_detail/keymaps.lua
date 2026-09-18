@@ -15,30 +15,6 @@ local function current_tab_module()
 	end
 end
 
----@param action_id AtlasKeymapActionId|string
----@param map_item table
----@return table|nil
-local function item(action_id, map_item)
-	local keys = resolver.resolve(action_id)
-	if keys == nil then
-		return nil
-	end
-
-	local out = vim.tbl_deep_extend("force", {}, map_item)
-	out.key = #keys == 1 and keys[1] or keys
-	return out
-end
-
----@param action_id AtlasKeymapActionId|string
----@return table|nil
-local function remove_item(action_id)
-	local keys = resolver.resolve(action_id)
-	if keys == nil then
-		return nil
-	end
-	return { key = (#keys == 1 and keys[1] or keys) }
-end
-
 ---@param repo PullsRepo|nil
 ---@return string|nil
 local function repo_url(repo)
@@ -87,7 +63,7 @@ function M.register(buf)
 	local general = {}
 	utils.insert_if(
 		general,
-		item("pulls.toggle_repo_panel", {
+		resolver.item("pulls.toggle_repo_panel", {
 			desc = "Close repository detail",
 			opts = { nowait = true, silent = true },
 			callback = function()
@@ -98,7 +74,7 @@ function M.register(buf)
 
 	utils.insert_if(
 		general,
-		item("ui.next_item", {
+		resolver.item("ui.next_item", {
 			desc = "Next selectable item",
 			opts = { nowait = true, silent = true },
 			hidden = true,
@@ -110,7 +86,7 @@ function M.register(buf)
 
 	utils.insert_if(
 		general,
-		item("ui.previous_item", {
+		resolver.item("ui.previous_item", {
 			desc = "Previous selectable item",
 			opts = { nowait = true, silent = true },
 			hidden = true,
@@ -122,7 +98,7 @@ function M.register(buf)
 
 	utils.insert_if(
 		general,
-		item("ui.first_item", {
+		resolver.item("ui.first_item", {
 			desc = "First selectable item",
 			opts = { nowait = true, silent = true },
 			hidden = true,
@@ -134,7 +110,7 @@ function M.register(buf)
 
 	utils.insert_if(
 		general,
-		item("ui.last_item", {
+		resolver.item("ui.last_item", {
 			desc = "Last selectable item",
 			opts = { nowait = true, silent = true },
 			hidden = true,
@@ -151,12 +127,12 @@ function M.register(buf)
 			require("atlas.pulls.ui.repo_detail").refresh()
 		end,
 	}
-	utils.insert_if(general, item("ui.refresh", refresh_item))
-	utils.insert_if(general, item("ui.refresh_view", refresh_item))
+	utils.insert_if(general, resolver.item("ui.refresh", refresh_item))
+	utils.insert_if(general, resolver.item("ui.refresh_view", refresh_item))
 
 	utils.insert_if(
 		general,
-		item("ui.open_in_browser", {
+		resolver.item("ui.open_in_browser", {
 			desc = "Open in browser",
 			opts = { nowait = true, silent = true },
 			callback = function()
@@ -167,7 +143,7 @@ function M.register(buf)
 
 	utils.insert_if(
 		general,
-		item("ui.next_panel_tab", {
+		resolver.item("ui.next_panel_tab", {
 			desc = "Next repository tab",
 			hint = false,
 			opts = { nowait = true },
@@ -179,7 +155,7 @@ function M.register(buf)
 
 	utils.insert_if(
 		general,
-		item("ui.previous_panel_tab", {
+		resolver.item("ui.previous_panel_tab", {
 			desc = "Previous repository tab",
 			hint = false,
 			opts = { nowait = true },
@@ -191,7 +167,7 @@ function M.register(buf)
 
 	utils.insert_if(
 		general,
-		item("ui.help", {
+		resolver.item("ui.help", {
 			desc = "Toggle help",
 			hint = false,
 			opts = { nowait = true, silent = true },
@@ -203,7 +179,7 @@ function M.register(buf)
 
 	utils.insert_if(
 		general,
-		item("ui.close", {
+		resolver.item("ui.close", {
 			desc = "Close repository detail",
 			opts = { nowait = true, silent = true },
 			callback = function()
@@ -222,18 +198,18 @@ end
 function M.remove(buf)
 	local general_items = {}
 
-	utils.insert_if(general_items, remove_item("pulls.toggle_repo_panel"))
-	utils.insert_if(general_items, remove_item("ui.next_item"))
-	utils.insert_if(general_items, remove_item("ui.previous_item"))
-	utils.insert_if(general_items, remove_item("ui.first_item"))
-	utils.insert_if(general_items, remove_item("ui.last_item"))
-	utils.insert_if(general_items, remove_item("ui.refresh"))
-	utils.insert_if(general_items, remove_item("ui.refresh_view"))
-	utils.insert_if(general_items, remove_item("ui.open_in_browser"))
-	utils.insert_if(general_items, remove_item("ui.next_panel_tab"))
-	utils.insert_if(general_items, remove_item("ui.previous_panel_tab"))
-	utils.insert_if(general_items, remove_item("ui.help"))
-	utils.insert_if(general_items, remove_item("ui.close"))
+	utils.insert_if(general_items, resolver.remove_item("pulls.toggle_repo_panel"))
+	utils.insert_if(general_items, resolver.remove_item("ui.next_item"))
+	utils.insert_if(general_items, resolver.remove_item("ui.previous_item"))
+	utils.insert_if(general_items, resolver.remove_item("ui.first_item"))
+	utils.insert_if(general_items, resolver.remove_item("ui.last_item"))
+	utils.insert_if(general_items, resolver.remove_item("ui.refresh"))
+	utils.insert_if(general_items, resolver.remove_item("ui.refresh_view"))
+	utils.insert_if(general_items, resolver.remove_item("ui.open_in_browser"))
+	utils.insert_if(general_items, resolver.remove_item("ui.next_panel_tab"))
+	utils.insert_if(general_items, resolver.remove_item("ui.previous_panel_tab"))
+	utils.insert_if(general_items, resolver.remove_item("ui.help"))
+	utils.insert_if(general_items, resolver.remove_item("ui.close"))
 
 	help.remove("General", general_items, { buffer = buf })
 end

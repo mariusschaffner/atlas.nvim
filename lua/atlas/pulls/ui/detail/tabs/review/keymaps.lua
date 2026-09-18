@@ -4,19 +4,6 @@ local help = require("atlas.ui.popups.help")
 local resolver = require("atlas.core.keymaps")
 local utils = require("atlas.ui.shared.utils")
 
----@param action_id AtlasKeymapActionId|string
----@param map_item table
----@return table|nil
-local function from_action(action_id, map_item)
-	local keys = resolver.resolve(action_id)
-	if keys == nil then
-		return nil
-	end
-	local out = vim.tbl_deep_extend("force", {}, map_item)
-	out.key = #keys == 1 and keys[1] or keys
-	return out
-end
-
 ---@param buf integer
 ---@param refresh fun()
 function M.setup(buf, refresh)
@@ -39,7 +26,7 @@ function M.setup(buf, refresh)
 	local items = {}
 	utils.insert_if(
 		items,
-		from_action("ui.comments.reply", {
+		resolver.item("ui.comments.reply", {
 			desc = "Reply to comment",
 			hint_desc = "Reply",
 			opts = { nowait = true, silent = true },
@@ -54,7 +41,7 @@ function M.setup(buf, refresh)
 	)
 	utils.insert_if(
 		items,
-		from_action("ui.comments.edit", {
+		resolver.item("ui.comments.edit", {
 			desc = edit_description,
 			hint_desc = "Edit",
 			opts = { nowait = true, silent = true },
@@ -70,7 +57,7 @@ function M.setup(buf, refresh)
 	if tasks and tasks.add_task then
 		utils.insert_if(
 			items,
-			from_action("pulls.review.add_task", {
+			resolver.item("pulls.review.add_task", {
 				desc = "Add task",
 				opts = { nowait = true, silent = true },
 				callback = function()
@@ -84,7 +71,7 @@ function M.setup(buf, refresh)
 	end
 	utils.insert_if(
 		items,
-		from_action("ui.delete", {
+		resolver.item("ui.delete", {
 			desc = delete_description,
 			hint_desc = "Delete",
 			opts = { nowait = true, silent = true },
@@ -99,7 +86,7 @@ function M.setup(buf, refresh)
 	)
 	utils.insert_if(
 		items,
-		from_action("pulls.review.diff.toggle_resolved", {
+		resolver.item("pulls.review.diff.toggle_resolved", {
 			desc = "Toggle resolved",
 			opts = { nowait = true, silent = true },
 			callback = function()
@@ -113,7 +100,7 @@ function M.setup(buf, refresh)
 	)
 	utils.insert_if(
 		items,
-		from_action("ui.show_details", {
+		resolver.item("ui.show_details", {
 			desc = "Show details",
 			opts = { nowait = true, silent = true },
 			callback = function()
@@ -124,7 +111,7 @@ function M.setup(buf, refresh)
 
 	utils.insert_if(
 		items,
-		from_action("ui.toggle_fold", {
+		resolver.item("ui.toggle_fold", {
 			desc = "Toggle thread fold",
 			hint = false,
 			opts = { nowait = true, silent = true },
@@ -148,7 +135,7 @@ function M.setup(buf, refresh)
 	)
 	utils.insert_if(
 		items,
-		from_action("ui.toggle_all_folds", {
+		resolver.item("ui.toggle_all_folds", {
 			desc = "Toggle all thread folds",
 			hint = false,
 			opts = { nowait = true, silent = true },
@@ -166,7 +153,7 @@ function M.setup(buf, refresh)
 	)
 	utils.insert_if(
 		items,
-		from_action("pulls.review.diff.next_hunk", {
+		resolver.item("pulls.review.diff.next_hunk", {
 			desc = "Next hunk",
 			hint = false,
 			opts = { nowait = true, silent = true },
@@ -190,7 +177,7 @@ function M.setup(buf, refresh)
 	)
 	utils.insert_if(
 		items,
-		from_action("pulls.review.diff.previous_hunk", {
+		resolver.item("pulls.review.diff.previous_hunk", {
 			desc = "Previous hunk",
 			hint = false,
 			opts = { nowait = true, silent = true },
@@ -215,29 +202,19 @@ function M.setup(buf, refresh)
 	help.register("Detail", items, { index = 212, buffer = buf })
 end
 
----@param action_id AtlasKeymapActionId|string
----@return table|nil
-local function remove_item(action_id)
-	local keys = resolver.resolve(action_id)
-	if keys == nil then
-		return nil
-	end
-	return { key = (#keys == 1 and keys[1] or keys) }
-end
-
 ---@param buf integer
 function M.teardown(buf)
 	local items = {}
-	utils.insert_if(items, remove_item("ui.comments.reply"))
-	utils.insert_if(items, remove_item("ui.comments.edit"))
-	utils.insert_if(items, remove_item("pulls.review.add_task"))
-	utils.insert_if(items, remove_item("ui.delete"))
-	utils.insert_if(items, remove_item("pulls.review.diff.toggle_resolved"))
-	utils.insert_if(items, remove_item("ui.toggle_fold"))
-	utils.insert_if(items, remove_item("ui.toggle_all_folds"))
-	utils.insert_if(items, remove_item("pulls.review.diff.next_hunk"))
-	utils.insert_if(items, remove_item("pulls.review.diff.previous_hunk"))
-	utils.insert_if(items, remove_item("ui.show_details"))
+	utils.insert_if(items, resolver.remove_item("ui.comments.reply"))
+	utils.insert_if(items, resolver.remove_item("ui.comments.edit"))
+	utils.insert_if(items, resolver.remove_item("pulls.review.add_task"))
+	utils.insert_if(items, resolver.remove_item("ui.delete"))
+	utils.insert_if(items, resolver.remove_item("pulls.review.diff.toggle_resolved"))
+	utils.insert_if(items, resolver.remove_item("ui.toggle_fold"))
+	utils.insert_if(items, resolver.remove_item("ui.toggle_all_folds"))
+	utils.insert_if(items, resolver.remove_item("pulls.review.diff.next_hunk"))
+	utils.insert_if(items, resolver.remove_item("pulls.review.diff.previous_hunk"))
+	utils.insert_if(items, resolver.remove_item("ui.show_details"))
 	help.remove("Detail", items, { buffer = buf })
 end
 

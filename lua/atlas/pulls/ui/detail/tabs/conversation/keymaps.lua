@@ -49,18 +49,6 @@ local function dispatch_with_entry(refresh, fn)
 	fn(pr, entry, refresh)
 end
 
----@param action_id AtlasKeymapActionId|string
----@param map_item table
----@return table|nil
-local function from_action(action_id, map_item)
-	local keys = resolver.resolve(action_id)
-	if keys == nil then
-		return nil
-	end
-	map_item.key = #keys == 1 and keys[1] or keys
-	return map_item
-end
-
 ---@param refresh fun()
 local function toggle_fold(refresh)
 	local entry = cursor_entry()
@@ -102,7 +90,7 @@ function M.setup(buf, refresh)
 	local items = {}
 	utils.insert_if(
 		items,
-		from_action("ui.comments.add", {
+		resolver.item("ui.comments.add", {
 			desc = "Add comment",
 			hint_desc = "Add",
 			opts = { nowait = true, silent = true },
@@ -113,7 +101,7 @@ function M.setup(buf, refresh)
 	)
 	utils.insert_if(
 		items,
-		from_action("ui.comments.reply", {
+		resolver.item("ui.comments.reply", {
 			desc = "Reply to comment",
 			hint_desc = "Reply",
 			opts = { nowait = true, silent = true },
@@ -124,7 +112,7 @@ function M.setup(buf, refresh)
 	)
 	utils.insert_if(
 		items,
-		from_action("ui.comments.edit", {
+		resolver.item("ui.comments.edit", {
 			desc = has_tasks and "Edit comment / task" or "Edit comment",
 			hint_desc = "Edit",
 			opts = { nowait = true, silent = true },
@@ -135,7 +123,7 @@ function M.setup(buf, refresh)
 	)
 	utils.insert_if(
 		items,
-		from_action("ui.delete", {
+		resolver.item("ui.delete", {
 			desc = has_tasks and "Delete comment / task" or "Delete comment",
 			hint_desc = "Delete",
 			opts = { nowait = true, silent = true },
@@ -146,7 +134,7 @@ function M.setup(buf, refresh)
 	)
 	utils.insert_if(
 		items,
-		from_action("ui.comments.react", {
+		resolver.item("ui.comments.react", {
 			desc = "Add reaction",
 			hint = false,
 			opts = { nowait = true, silent = true },
@@ -156,7 +144,7 @@ function M.setup(buf, refresh)
 		})
 	)
 	if has_tasks then
-		local toggle_task = from_action("pulls.review.diff.toggle_resolved", {
+		local toggle_task = resolver.item("pulls.review.diff.toggle_resolved", {
 			desc = "Toggle task",
 			hint = false,
 			opts = { nowait = true, silent = true },
@@ -180,7 +168,7 @@ function M.setup(buf, refresh)
 			end,
 		})
 	end
-	local toggle_all = from_action("ui.toggle_all_folds", {
+	local toggle_all = resolver.item("ui.toggle_all_folds", {
 		desc = "Expand / collapse all threads",
 		hint = false,
 		opts = { nowait = true, silent = true },
@@ -202,7 +190,7 @@ end
 function M.teardown(buf)
 	local items = {}
 	for _, action_id in ipairs(COMMENT_ACTIONS) do
-		utils.insert_if(items, from_action(action_id, {}))
+		utils.insert_if(items, resolver.item(action_id, {}))
 	end
 	local fold_keys = resolver.resolve("ui.toggle_fold")
 	if fold_keys ~= nil then

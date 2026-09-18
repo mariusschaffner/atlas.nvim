@@ -8,29 +8,6 @@ local detail = require("atlas.pulls.ui.detail.state")
 
 local RETRY_REFRESH_DELAY_MS = 1000
 
----@param action_id AtlasKeymapActionId|string
----@param map_item table
----@return table|nil
-local function item(action_id, map_item)
-	local keys = resolver.resolve(action_id)
-	if keys == nil then
-		return nil
-	end
-	local out = vim.tbl_deep_extend("force", {}, map_item)
-	out.key = #keys == 1 and keys[1] or keys
-	return out
-end
-
----@param action_id AtlasKeymapActionId|string
----@return table|nil
-local function remove_item(action_id)
-	local keys = resolver.resolve(action_id)
-	if keys == nil then
-		return nil
-	end
-	return { key = (#keys == 1 and keys[1] or keys) }
-end
-
 ---@return table|nil
 local function cursor_entry()
 	local win = detail.win
@@ -93,7 +70,7 @@ function M.setup(buf, _refresh)
 
 	utils.insert_if(
 		items,
-		item("pulls.pipeline_retry", {
+		resolver.item("pulls.pipeline_retry", {
 			desc = "Retry pipeline / job",
 			hint_desc = "Retry",
 			opts = { nowait = true, silent = true },
@@ -105,7 +82,7 @@ function M.setup(buf, _refresh)
 
 	utils.insert_if(
 		items,
-		item("pulls.pipeline_cancel", {
+		resolver.item("pulls.pipeline_cancel", {
 			desc = "Cancel pipeline / job",
 			hint_desc = "Cancel",
 			opts = { nowait = true, silent = true },
@@ -121,8 +98,8 @@ end
 ---@param buf integer
 function M.teardown(buf)
 	local items = {}
-	utils.insert_if(items, remove_item("pulls.pipeline_retry"))
-	utils.insert_if(items, remove_item("pulls.pipeline_cancel"))
+	utils.insert_if(items, resolver.remove_item("pulls.pipeline_retry"))
+	utils.insert_if(items, resolver.remove_item("pulls.pipeline_cancel"))
 	help.remove("Detail", items, { buffer = buf })
 end
 

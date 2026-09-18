@@ -23,18 +23,6 @@ local review_panel = require("atlas.pulls.diff.ui.review_panel")
 ---@field show_commit fun()
 ---@field add_file_comment fun(pending: boolean)
 
----@param action AtlasKeymapActionId
----@param definition AtlasHelpKeyItem
----@return AtlasHelpKeyItem|nil
-local function item(action, definition)
-	local keys = resolver.resolve(action)
-	if not keys then
-		return nil
-	end
-	definition.key = #keys == 1 and keys[1] or keys
-	return definition
-end
-
 ---@param items AtlasHelpKeyItem[]
 ---@param definition AtlasHelpKeyItem|nil
 local function add(items, definition)
@@ -86,7 +74,7 @@ function M.register(session, actions)
 	local navigation = {}
 	add(
 		navigation,
-		item("pulls.review.diff.previous_hunk", {
+		resolver.item("pulls.review.diff.previous_hunk", {
 			desc = "Previous diff hunk",
 			index = 1,
 			callback = run(function()
@@ -97,7 +85,7 @@ function M.register(session, actions)
 	)
 	add(
 		navigation,
-		item("pulls.review.diff.next_hunk", {
+		resolver.item("pulls.review.diff.next_hunk", {
 			desc = "Next diff hunk",
 			index = 2,
 			callback = run(function()
@@ -108,7 +96,7 @@ function M.register(session, actions)
 	)
 	add(
 		navigation,
-		item("pulls.review.explorer.previous_file", {
+		resolver.item("pulls.review.explorer.previous_file", {
 			desc = "Previous file",
 			index = 3,
 			callback = run(function()
@@ -119,7 +107,7 @@ function M.register(session, actions)
 	)
 	add(
 		navigation,
-		item("pulls.review.explorer.next_file", {
+		resolver.item("pulls.review.explorer.next_file", {
 			desc = "Next file",
 			index = 4,
 			callback = run(function()
@@ -130,7 +118,7 @@ function M.register(session, actions)
 	)
 	add(
 		navigation,
-		item("pulls.review.explorer.previous_unreviewed_file", {
+		resolver.item("pulls.review.explorer.previous_unreviewed_file", {
 			desc = "Previous unreviewed file",
 			index = 5,
 			callback = run(function()
@@ -141,7 +129,7 @@ function M.register(session, actions)
 	)
 	add(
 		navigation,
-		item("pulls.review.explorer.next_unreviewed_file", {
+		resolver.item("pulls.review.explorer.next_unreviewed_file", {
 			desc = "Next unreviewed file",
 			index = 6,
 			callback = run(function()
@@ -152,7 +140,7 @@ function M.register(session, actions)
 	)
 	for _, buf in ipairs({ state.panel.buf, state.commits_panel.buf, state.left.buf, state.right.buf }) do
 		local find_action = buf == state.panel.buf and "pulls.review.explorer.find_file" or "pulls.review.find_file"
-		local find_item = item(find_action, {
+		local find_item = resolver.item(find_action, {
 			desc = "Find changed file",
 			index = 7,
 			callback = find_file,
@@ -162,7 +150,7 @@ function M.register(session, actions)
 		local general = {}
 		add(
 			general,
-			item("ui.close", {
+			resolver.item("ui.close", {
 				desc = buf == state.commits_panel.buf and "Close commits" or "Close diff",
 				index = 1,
 				callback = run(buf == state.commits_panel.buf and actions.toggle_commits or actions.close),
@@ -171,7 +159,7 @@ function M.register(session, actions)
 		)
 		add(
 			general,
-			item("ui.help", {
+			resolver.item("ui.help", {
 				desc = "Toggle help",
 				hint = false,
 				index = 2,
@@ -183,7 +171,7 @@ function M.register(session, actions)
 		)
 		add(
 			general,
-			item("ui.toggle_panel", {
+			resolver.item("ui.toggle_panel", {
 				desc = "Toggle file explorer",
 				index = 3,
 				callback = run(actions.toggle_explorer),
@@ -193,7 +181,7 @@ function M.register(session, actions)
 		if #session.commits > 0 then
 			add(
 				general,
-				item("pulls.review.explorer.toggle_commits", {
+				resolver.item("pulls.review.explorer.toggle_commits", {
 					desc = "Toggle commits",
 					index = 4,
 					callback = run(actions.toggle_commits),
@@ -203,7 +191,7 @@ function M.register(session, actions)
 		end
 		add(
 			general,
-			item("pulls.review.diff.toggle_compact", {
+			resolver.item("pulls.review.diff.toggle_compact", {
 				desc = "Toggle compact diff",
 				index = 5,
 				callback = run(actions.toggle_compact),
@@ -212,7 +200,7 @@ function M.register(session, actions)
 		)
 		add(
 			general,
-			item("pulls.review.diff.toggle_layout", {
+			resolver.item("pulls.review.diff.toggle_layout", {
 				desc = "Toggle side-by-side / inline",
 				index = 6,
 				callback = run(actions.toggle_layout),
@@ -223,7 +211,7 @@ function M.register(session, actions)
 			if session.review then
 				add(
 					general,
-					item("ui.refresh", {
+					resolver.item("ui.refresh", {
 						desc = "Refresh review",
 						index = 7,
 						callback = run(actions.refresh_review),
@@ -233,7 +221,7 @@ function M.register(session, actions)
 			end
 			add(
 				general,
-				item("ui.refresh_view", {
+				resolver.item("ui.refresh_view", {
 					desc = "Reload diff",
 					index = 8,
 					callback = run(actions.reload),
@@ -242,7 +230,7 @@ function M.register(session, actions)
 			)
 			add(
 				general,
-				item("ui.show_details", {
+				resolver.item("ui.show_details", {
 					desc = "Show commit details",
 					index = 9,
 					callback = run(actions.show_commit),
@@ -255,7 +243,7 @@ function M.register(session, actions)
 			local review = {}
 			add(
 				review,
-				item("pulls.review.explorer.toggle_file_reviewed", {
+				resolver.item("pulls.review.explorer.toggle_file_reviewed", {
 					desc = "Toggle file reviewed",
 					index = 1,
 					callback = run(actions.toggle_file_reviewed),
@@ -273,7 +261,7 @@ function M.register(session, actions)
 	local panel_actions = {}
 	add(
 		panel_actions,
-		item("ui.select", {
+		resolver.item("ui.select", {
 			desc = "Show changed file",
 			index = 1,
 			callback = run(function()
@@ -287,7 +275,7 @@ function M.register(session, actions)
 	)
 	add(
 		panel_actions,
-		item("pulls.review.focus_item", {
+		resolver.item("pulls.review.focus_item", {
 			desc = "Focus changed file",
 			index = 2,
 			callback = run(function()
@@ -301,7 +289,7 @@ function M.register(session, actions)
 	)
 	add(
 		panel_actions,
-		item("ui.show_details", {
+		resolver.item("ui.show_details", {
 			desc = "Show file path / item",
 			index = 3,
 			callback = run(function()
@@ -312,7 +300,7 @@ function M.register(session, actions)
 	)
 	add(
 		panel_actions,
-		item("pulls.review.explorer.toggle_grouping", {
+		resolver.item("pulls.review.explorer.toggle_grouping", {
 			desc = "Toggle grouped / plain files",
 			index = 4,
 			callback = run(function()
@@ -323,7 +311,7 @@ function M.register(session, actions)
 	)
 	add(
 		panel_actions,
-		item("ui.toggle_fold", {
+		resolver.item("ui.toggle_fold", {
 			desc = "Toggle folder",
 			index = 5,
 			callback = run(function()
@@ -334,7 +322,7 @@ function M.register(session, actions)
 	)
 	add(
 		panel_actions,
-		item("ui.toggle_all_folds", {
+		resolver.item("ui.toggle_all_folds", {
 			desc = "Toggle all folders",
 			index = 6,
 			callback = run(function()
@@ -345,7 +333,7 @@ function M.register(session, actions)
 	)
 	add(
 		panel_actions,
-		item("pulls.review.explorer.toggle_file_reviewed", {
+		resolver.item("pulls.review.explorer.toggle_file_reviewed", {
 			desc = "Toggle file reviewed",
 			index = 7,
 			callback = run(actions.toggle_file_reviewed),

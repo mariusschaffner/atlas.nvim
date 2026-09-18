@@ -68,29 +68,6 @@ local function complete_action(issue, on_update, result)
 	end
 end
 
----@param action_id AtlasKeymapActionId|string
----@param map_item table
----@return table|nil
-local function item(action_id, map_item)
-	local keys = resolver.resolve(action_id)
-	if keys == nil then
-		return nil
-	end
-	local out = vim.tbl_deep_extend("force", {}, map_item)
-	out.key = #keys == 1 and keys[1] or keys
-	return out
-end
-
----@param action_id AtlasKeymapActionId|string
----@return table|nil
-local function remove_item(action_id)
-	local keys = resolver.resolve(action_id)
-	if keys == nil then
-		return nil
-	end
-	return { key = (#keys == 1 and keys[1] or keys) }
-end
-
 ---@param buf integer
 ---@param opts { navigation: boolean|nil }|nil
 function M.register(buf, opts)
@@ -105,7 +82,7 @@ function M.register(buf, opts)
 	if opts.navigation ~= false then
 		utils.insert_if(
 			items,
-			item("ui.next_item", {
+			resolver.item("ui.next_item", {
 				desc = "Next item",
 				opts = { nowait = true, silent = true },
 				hidden = true,
@@ -117,7 +94,7 @@ function M.register(buf, opts)
 		)
 		utils.insert_if(
 			items,
-			item("ui.previous_item", {
+			resolver.item("ui.previous_item", {
 				desc = "Previous item",
 				opts = { nowait = true, silent = true },
 				hidden = true,
@@ -131,7 +108,7 @@ function M.register(buf, opts)
 	if provider.capabilities.actions then
 		utils.insert_if(
 			items,
-			item("ui.open_actions", {
+			resolver.item("ui.open_actions", {
 				desc = "Open issue actions",
 				hint = false,
 				callback = function()
@@ -165,7 +142,7 @@ function M.register(buf, opts)
 	if supports("assign") then
 		utils.insert_if(
 			items,
-			item("issues.change_assignee", {
+			resolver.item("issues.change_assignee", {
 				desc = "Change assignee",
 				hint_desc = "Change Assignee",
 				callback = function()
@@ -185,7 +162,7 @@ function M.register(buf, opts)
 	if supports("reporter") then
 		utils.insert_if(
 			items,
-			item("issues.change_reporter", {
+			resolver.item("issues.change_reporter", {
 				desc = "Change reporter",
 				hint_desc = "Change Reporter",
 				callback = function()
@@ -205,7 +182,7 @@ function M.register(buf, opts)
 	if supports("edit_issue") then
 		utils.insert_if(
 			items,
-			item("issues.edit_issue", {
+			resolver.item("issues.edit_issue", {
 				desc = "Edit issue",
 				hint_desc = "Edit",
 				callback = function()
@@ -225,7 +202,7 @@ function M.register(buf, opts)
 	if supports("labels") then
 		utils.insert_if(
 			items,
-			item("issues.change_label", {
+			resolver.item("issues.change_label", {
 				desc = "Change labels",
 				hint_desc = "Change Label",
 				callback = function()
@@ -247,7 +224,7 @@ function M.register(buf, opts)
 	if core.create_branch and core.fetch_project_branches then
 		utils.insert_if(
 			items,
-			item("issues.create_branch", {
+			resolver.item("issues.create_branch", {
 				desc = "Create branch from issue",
 				hint_desc = "New Branch",
 				callback = function()
@@ -326,7 +303,7 @@ function M.register(buf, opts)
 	if core.fetch_linked_merge_requests then
 		utils.insert_if(
 			items,
-			item("issues.go_to_pull", {
+			resolver.item("issues.go_to_pull", {
 				desc = "Go to linked pull request",
 				hint_desc = "Go to PR",
 				callback = function()
@@ -362,7 +339,7 @@ function M.register(buf, opts)
 
 	utils.insert_if(
 		general,
-		item("ui.next_panel_tab", {
+		resolver.item("ui.next_panel_tab", {
 			desc = "Next detail tab",
 			hint = false,
 			opts = { nowait = true },
@@ -374,7 +351,7 @@ function M.register(buf, opts)
 
 	utils.insert_if(
 		general,
-		item("ui.previous_panel_tab", {
+		resolver.item("ui.previous_panel_tab", {
 			desc = "Previous detail tab",
 			hint = false,
 			opts = { nowait = true },
@@ -386,7 +363,7 @@ function M.register(buf, opts)
 
 	utils.insert_if(
 		general,
-		item("ui.help", {
+		resolver.item("ui.help", {
 			desc = "Toggle help",
 			hint = false,
 			opts = { nowait = true, silent = true },
@@ -398,7 +375,7 @@ function M.register(buf, opts)
 
 	utils.insert_if(
 		general,
-		item("ui.toggle_panel", {
+		resolver.item("ui.toggle_panel", {
 			desc = "Toggle detail panel",
 			hint = false,
 			callback = function()
@@ -409,7 +386,7 @@ function M.register(buf, opts)
 
 	utils.insert_if(
 		general,
-		item("ui.close", {
+		resolver.item("ui.close", {
 			desc = "Close detail panel",
 			hint = false,
 			opts = { nowait = true, silent = true },
@@ -427,20 +404,20 @@ end
 ---@param buf integer
 function M.remove(buf)
 	local general = {}
-	utils.insert_if(general, remove_item("ui.next_item"))
-	utils.insert_if(general, remove_item("ui.previous_item"))
-	utils.insert_if(general, remove_item("ui.open_actions"))
-	utils.insert_if(general, remove_item("issues.change_assignee"))
-	utils.insert_if(general, remove_item("issues.change_reporter"))
-	utils.insert_if(general, remove_item("issues.change_label"))
-	utils.insert_if(general, remove_item("issues.edit_issue"))
-	utils.insert_if(general, remove_item("issues.create_branch"))
-	utils.insert_if(general, remove_item("issues.go_to_pull"))
-	utils.insert_if(general, remove_item("ui.next_panel_tab"))
-	utils.insert_if(general, remove_item("ui.previous_panel_tab"))
-	utils.insert_if(general, remove_item("ui.help"))
-	utils.insert_if(general, remove_item("ui.toggle_panel"))
-	utils.insert_if(general, remove_item("ui.close"))
+	utils.insert_if(general, resolver.remove_item("ui.next_item"))
+	utils.insert_if(general, resolver.remove_item("ui.previous_item"))
+	utils.insert_if(general, resolver.remove_item("ui.open_actions"))
+	utils.insert_if(general, resolver.remove_item("issues.change_assignee"))
+	utils.insert_if(general, resolver.remove_item("issues.change_reporter"))
+	utils.insert_if(general, resolver.remove_item("issues.change_label"))
+	utils.insert_if(general, resolver.remove_item("issues.edit_issue"))
+	utils.insert_if(general, resolver.remove_item("issues.create_branch"))
+	utils.insert_if(general, resolver.remove_item("issues.go_to_pull"))
+	utils.insert_if(general, resolver.remove_item("ui.next_panel_tab"))
+	utils.insert_if(general, resolver.remove_item("ui.previous_panel_tab"))
+	utils.insert_if(general, resolver.remove_item("ui.help"))
+	utils.insert_if(general, resolver.remove_item("ui.toggle_panel"))
+	utils.insert_if(general, resolver.remove_item("ui.close"))
 	help.remove("General", general, { buffer = buf })
 end
 

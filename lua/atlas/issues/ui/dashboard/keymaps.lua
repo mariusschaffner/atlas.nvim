@@ -19,20 +19,6 @@ local function selected_issue()
 	return nil
 end
 
----@param action_id AtlasKeymapActionId|string
----@param map_item table
----@return table|nil
-local function item(action_id, map_item)
-	local keys = resolver.resolve(action_id)
-	if keys == nil then
-		return nil
-	end
-
-	local out = vim.tbl_deep_extend("force", {}, map_item)
-	out.key = #keys == 1 and keys[1] or keys
-	return out
-end
-
 ---@param buf integer
 ---@param views IssuesViewConfig[]
 function M.register(buf, views)
@@ -73,7 +59,7 @@ function M.register(buf, views)
 
 	utils.insert_if(
 		items,
-		item("ui.filter", {
+		resolver.item("ui.filter", {
 			desc = "Edit filter",
 			hint_desc = "Filter",
 			index = 10,
@@ -97,7 +83,7 @@ function M.register(buf, views)
 		local s = sf
 		utils.insert_if(
 			items,
-			item(s.action_id, {
+			resolver.item(s.action_id, {
 				desc = string.format("Show %s issues", s.status:lower()),
 				hint_desc = "Toggle " .. s.status:sub(1, 1):upper() .. s.status:sub(2):lower(),
 				index = s.index,
@@ -112,7 +98,7 @@ function M.register(buf, views)
 	if actions.is_available("create_issue", context(nil)) then
 		utils.insert_if(
 			items,
-			item("issues.create_issue", {
+			resolver.item("issues.create_issue", {
 				desc = "Create issue",
 				hint_desc = "Create",
 				index = 30,
@@ -126,7 +112,7 @@ function M.register(buf, views)
 
 	utils.insert_if(
 		items,
-		item("ui.refresh", {
+		resolver.item("ui.refresh", {
 			desc = "Reload selected issue",
 			hint = false,
 			callback = function()
@@ -137,7 +123,7 @@ function M.register(buf, views)
 
 	utils.insert_if(
 		items,
-		item("ui.refresh_view", {
+		resolver.item("ui.refresh_view", {
 			desc = "Refresh current view",
 			hint = false,
 			callback = function()
@@ -149,7 +135,7 @@ function M.register(buf, views)
 	if supports("edit_issue") then
 		utils.insert_if(
 			items,
-			item("issues.edit_issue", {
+			resolver.item("issues.edit_issue", {
 				desc = "Edit issue",
 				hint_desc = "Edit",
 				index = 31,

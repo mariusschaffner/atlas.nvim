@@ -70,30 +70,6 @@ local function supports_action(action_id)
 	return false
 end
 
----@param action_id AtlasKeymapActionId|string
----@param map_item table
----@return table|nil
-local function item(action_id, map_item)
-	local keys = resolver.resolve(action_id)
-	if keys == nil then
-		return nil
-	end
-
-	local out = vim.tbl_deep_extend("force", {}, map_item)
-	out.key = #keys == 1 and keys[1] or keys
-	return out
-end
-
----@param action_id AtlasKeymapActionId|string
----@return table|nil
-local function remove_item(action_id)
-	local keys = resolver.resolve(action_id)
-	if keys == nil then
-		return nil
-	end
-	return { key = (#keys == 1 and keys[1] or keys) }
-end
-
 ---@return boolean
 local function open_current_line()
 	local win = state.win
@@ -125,7 +101,7 @@ function M.register(buf, opts)
 	if opts.navigation ~= false then
 		utils.insert_if(
 			items,
-			item("ui.next_item", {
+			resolver.item("ui.next_item", {
 				desc = "Next selectable item",
 				opts = { nowait = true, silent = true },
 				hidden = true,
@@ -137,7 +113,7 @@ function M.register(buf, opts)
 		)
 		utils.insert_if(
 			items,
-			item("ui.previous_item", {
+			resolver.item("ui.previous_item", {
 				desc = "Previous selectable item",
 				opts = { nowait = true, silent = true },
 				hidden = true,
@@ -150,7 +126,7 @@ function M.register(buf, opts)
 	end
 	utils.insert_if(
 		items,
-		item("ui.select", {
+		resolver.item("ui.select", {
 			desc = "Select item",
 			hint = false,
 			opts = { nowait = true, silent = true },
@@ -168,13 +144,13 @@ function M.register(buf, opts)
 			require("atlas.pulls.ui.detail").refresh()
 		end,
 	}
-	utils.insert_if(items, item("ui.refresh", refresh_item))
-	utils.insert_if(items, item("ui.refresh_view", refresh_item))
+	utils.insert_if(items, resolver.item("ui.refresh", refresh_item))
+	utils.insert_if(items, resolver.item("ui.refresh_view", refresh_item))
 
 	if state.provider and state.provider.capabilities.actions then
 		utils.insert_if(
 			items,
-			item("ui.open_actions", {
+			resolver.item("ui.open_actions", {
 				desc = "Open PR actions",
 				hint = false,
 				callback = function()
@@ -196,7 +172,7 @@ function M.register(buf, opts)
 
 	utils.insert_if(
 		items,
-		item("pulls.open_diff", {
+		resolver.item("pulls.open_diff", {
 			desc = "Open PR diff",
 			hint_desc = "Diff",
 			index = 14,
@@ -217,7 +193,7 @@ function M.register(buf, opts)
 	if state.provider and state.provider.capabilities.pipelines then
 		utils.insert_if(
 			items,
-			item("pulls.open_pipeline", {
+			resolver.item("pulls.open_pipeline", {
 				desc = "Focus pipeline tab",
 				hint_desc = "Pipeline",
 				index = 15,
@@ -231,7 +207,7 @@ function M.register(buf, opts)
 
 	utils.insert_if(
 		items,
-		item("pulls.checkout", {
+		resolver.item("pulls.checkout", {
 			desc = "Checkout PR branch",
 			hint_desc = "Checkout",
 			index = 13,
@@ -252,7 +228,7 @@ function M.register(buf, opts)
 	if supports_action("edit_title") then
 		utils.insert_if(
 			items,
-			item("pulls.edit_title", {
+			resolver.item("pulls.edit_title", {
 				desc = "Edit PR title",
 				hint_desc = "Change Title",
 				index = 10,
@@ -277,7 +253,7 @@ function M.register(buf, opts)
 	if supports_action("edit_reviewers") then
 		utils.insert_if(
 			items,
-			item("pulls.edit_reviewers", {
+			resolver.item("pulls.edit_reviewers", {
 				desc = "Edit reviewers",
 				hint_desc = "Change Reviewer",
 				index = 12,
@@ -302,7 +278,7 @@ function M.register(buf, opts)
 	if supports_action("edit_assignees") then
 		utils.insert_if(
 			items,
-			item("pulls.edit_assignees", {
+			resolver.item("pulls.edit_assignees", {
 				desc = "Edit assignees",
 				hint_desc = "Change Assignee",
 				index = 11,
@@ -329,7 +305,7 @@ function M.register(buf, opts)
 	if core and core.update_remove_source_branch then
 		utils.insert_if(
 			items,
-			item("pulls.toggle_remove_source_branch", {
+			resolver.item("pulls.toggle_remove_source_branch", {
 				desc = "Toggle delete source branch on merge",
 				hint_desc = "Toggle Delete Branch",
 				opts = { nowait = true, silent = true },
@@ -367,7 +343,7 @@ function M.register(buf, opts)
 
 	utils.insert_if(
 		general,
-		item("ui.next_panel_tab", {
+		resolver.item("ui.next_panel_tab", {
 			desc = "Next detail tab",
 			hint = false,
 			opts = { nowait = true },
@@ -381,7 +357,7 @@ function M.register(buf, opts)
 
 	utils.insert_if(
 		general,
-		item("ui.previous_panel_tab", {
+		resolver.item("ui.previous_panel_tab", {
 			desc = "Previous detail tab",
 			hint = false,
 			opts = { nowait = true },
@@ -395,7 +371,7 @@ function M.register(buf, opts)
 
 	utils.insert_if(
 		general,
-		item("ui.help", {
+		resolver.item("ui.help", {
 			desc = "Toggle help",
 			hint = false,
 			opts = { nowait = true, silent = true },
@@ -407,7 +383,7 @@ function M.register(buf, opts)
 
 	utils.insert_if(
 		general,
-		item("ui.toggle_panel", {
+		resolver.item("ui.toggle_panel", {
 			desc = "Toggle detail panel",
 			hint = false,
 			callback = function()
@@ -418,7 +394,7 @@ function M.register(buf, opts)
 
 	utils.insert_if(
 		general,
-		item("ui.close", {
+		resolver.item("ui.close", {
 			desc = "Close detail panel",
 			hint = false,
 			opts = { nowait = true, silent = true },
@@ -437,24 +413,24 @@ end
 ---@param buf integer
 function M.remove(buf)
 	local general = {}
-	utils.insert_if(general, remove_item("ui.next_item"))
-	utils.insert_if(general, remove_item("ui.previous_item"))
-	utils.insert_if(general, remove_item("ui.refresh"))
-	utils.insert_if(general, remove_item("ui.refresh_view"))
-	utils.insert_if(general, remove_item("ui.open_actions"))
-	utils.insert_if(general, remove_item("ui.select"))
-	utils.insert_if(general, remove_item("pulls.open_diff"))
-	utils.insert_if(general, remove_item("pulls.open_pipeline"))
-	utils.insert_if(general, remove_item("pulls.checkout"))
-	utils.insert_if(general, remove_item("pulls.edit_title"))
-	utils.insert_if(general, remove_item("pulls.edit_reviewers"))
-	utils.insert_if(general, remove_item("pulls.edit_assignees"))
-	utils.insert_if(general, remove_item("pulls.toggle_remove_source_branch"))
-	utils.insert_if(general, remove_item("ui.next_panel_tab"))
-	utils.insert_if(general, remove_item("ui.previous_panel_tab"))
-	utils.insert_if(general, remove_item("ui.help"))
-	utils.insert_if(general, remove_item("ui.toggle_panel"))
-	utils.insert_if(general, remove_item("ui.close"))
+	utils.insert_if(general, resolver.remove_item("ui.next_item"))
+	utils.insert_if(general, resolver.remove_item("ui.previous_item"))
+	utils.insert_if(general, resolver.remove_item("ui.refresh"))
+	utils.insert_if(general, resolver.remove_item("ui.refresh_view"))
+	utils.insert_if(general, resolver.remove_item("ui.open_actions"))
+	utils.insert_if(general, resolver.remove_item("ui.select"))
+	utils.insert_if(general, resolver.remove_item("pulls.open_diff"))
+	utils.insert_if(general, resolver.remove_item("pulls.open_pipeline"))
+	utils.insert_if(general, resolver.remove_item("pulls.checkout"))
+	utils.insert_if(general, resolver.remove_item("pulls.edit_title"))
+	utils.insert_if(general, resolver.remove_item("pulls.edit_reviewers"))
+	utils.insert_if(general, resolver.remove_item("pulls.edit_assignees"))
+	utils.insert_if(general, resolver.remove_item("pulls.toggle_remove_source_branch"))
+	utils.insert_if(general, resolver.remove_item("ui.next_panel_tab"))
+	utils.insert_if(general, resolver.remove_item("ui.previous_panel_tab"))
+	utils.insert_if(general, resolver.remove_item("ui.help"))
+	utils.insert_if(general, resolver.remove_item("ui.toggle_panel"))
+	utils.insert_if(general, resolver.remove_item("ui.close"))
 	help.remove("General", general, { buffer = buf })
 end
 

@@ -270,6 +270,39 @@ function M.resolve(action_id)
 	return normalize(from_config(action_id))
 end
 
+--- Resolves action_id to key(s) and merges them into a help-item/keymap-item
+--- definition. Returns nil (dropping the item) when the action has no keys
+--- configured.
+---@param action_id AtlasKeymapActionId|string
+---@param map_item table
+---@return table|nil
+function M.item(action_id, map_item)
+	local keys = M.resolve(action_id)
+	if keys == nil then
+		return nil
+	end
+	local out = vim.tbl_deep_extend("force", {}, map_item)
+	out.key = #keys == 1 and keys[1] or keys
+	return out
+end
+
+--- Resolves action_id to key(s) for removal (e.g. help.remove/keymap
+--- teardown), where only the `key` (and optionally `mode`) field is needed.
+---@param action_id AtlasKeymapActionId|string
+---@param mode string|string[]|nil
+---@return table|nil
+function M.remove_item(action_id, mode)
+	local keys = M.resolve(action_id)
+	if keys == nil then
+		return nil
+	end
+	local out = { key = (#keys == 1 and keys[1] or keys) }
+	if mode ~= nil then
+		out.mode = mode
+	end
+	return out
+end
+
 ---@param section_path string[]
 ---@return table<string, string[]>
 local function view_key_conflicts(section_path)

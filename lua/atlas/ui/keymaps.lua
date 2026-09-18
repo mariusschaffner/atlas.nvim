@@ -10,43 +10,13 @@ local function domain_dashboard()
 	return domain and require("atlas." .. domain .. ".ui.dashboard") or nil
 end
 
----@param action_id AtlasKeymapActionId|string
----@param map_item table
----@return table|nil
-local function item(action_id, map_item)
-	local keys = resolver.resolve(action_id)
-	if keys == nil then
-		return nil
-	end
-
-	local out = vim.tbl_deep_extend("force", {}, map_item)
-	out.key = #keys == 1 and keys[1] or keys
-	return out
-end
-
----@param action_id AtlasKeymapActionId|string
----@param mode string|string[]|nil
----@return table|nil
-local function remove_item(action_id, mode)
-	local keys = resolver.resolve(action_id)
-	if keys == nil then
-		return nil
-	end
-
-	local out = { key = (#keys == 1 and keys[1] or keys) }
-	if mode ~= nil then
-		out.mode = mode
-	end
-	return out
-end
-
 ---@param buf integer
 function M.register(buf)
 	local items = {}
 
 	utils.insert_if(
 		items,
-		item("ui.next_item", {
+		resolver.item("ui.next_item", {
 			desc = "Next item",
 			hidden = true,
 			hint = false,
@@ -58,7 +28,7 @@ function M.register(buf)
 
 	utils.insert_if(
 		items,
-		item("ui.previous_item", {
+		resolver.item("ui.previous_item", {
 			desc = "Previous item",
 			hidden = true,
 			hint = false,
@@ -70,7 +40,7 @@ function M.register(buf)
 
 	utils.insert_if(
 		items,
-		item("ui.first_item", {
+		resolver.item("ui.first_item", {
 			desc = "Go to first item",
 			hidden = true,
 			hint = false,
@@ -82,7 +52,7 @@ function M.register(buf)
 
 	utils.insert_if(
 		items,
-		item("ui.last_item", {
+		resolver.item("ui.last_item", {
 			desc = "Go to last item",
 			hidden = true,
 			hint = false,
@@ -94,7 +64,7 @@ function M.register(buf)
 
 	utils.insert_if(
 		items,
-		item("ui.help", {
+		resolver.item("ui.help", {
 			desc = "Toggle this help popup",
 			hint = false,
 			opts = { nowait = true, silent = true },
@@ -106,7 +76,7 @@ function M.register(buf)
 
 	utils.insert_if(
 		items,
-		item("ui.close", {
+		resolver.item("ui.close", {
 			desc = "Close Atlas window",
 			hint = false,
 			opts = { nowait = true, silent = true },
@@ -121,7 +91,7 @@ function M.register(buf)
 
 	utils.insert_if(
 		items,
-		item("ui.inspect", {
+		resolver.item("ui.inspect", {
 			desc = "Inspect",
 			index = 10,
 			opts = { nowait = true, silent = true },
@@ -136,7 +106,7 @@ function M.register(buf)
 
 	utils.insert_if(
 		items,
-		item("ui.next_panel_tab", {
+		resolver.item("ui.next_panel_tab", {
 			desc = "Tabs",
 			hint = false,
 			opts = { nowait = true },
@@ -148,7 +118,7 @@ function M.register(buf)
 
 	utils.insert_if(
 		items,
-		item("ui.previous_panel_tab", {
+		resolver.item("ui.previous_panel_tab", {
 			desc = "Tabs",
 			hint = false,
 			opts = { nowait = true },
@@ -160,7 +130,7 @@ function M.register(buf)
 
 	utils.insert_if(
 		items,
-		item("ui.notifications.open", {
+		resolver.item("ui.notifications.open", {
 			desc = "Open notifications",
 			hint = false,
 			callback = function()
@@ -178,16 +148,16 @@ end
 function M.remove(buf)
 	navigation.detach(buf)
 	local items = {}
-	utils.insert_if(items, remove_item("ui.next_item"))
-	utils.insert_if(items, remove_item("ui.previous_item"))
-	utils.insert_if(items, remove_item("ui.first_item"))
-	utils.insert_if(items, remove_item("ui.last_item"))
-	utils.insert_if(items, remove_item("ui.help"))
-	utils.insert_if(items, remove_item("ui.close"))
-	utils.insert_if(items, remove_item("ui.inspect"))
-	utils.insert_if(items, remove_item("ui.next_panel_tab"))
-	utils.insert_if(items, remove_item("ui.previous_panel_tab"))
-	utils.insert_if(items, remove_item("ui.notifications.open"))
+	utils.insert_if(items, resolver.remove_item("ui.next_item"))
+	utils.insert_if(items, resolver.remove_item("ui.previous_item"))
+	utils.insert_if(items, resolver.remove_item("ui.first_item"))
+	utils.insert_if(items, resolver.remove_item("ui.last_item"))
+	utils.insert_if(items, resolver.remove_item("ui.help"))
+	utils.insert_if(items, resolver.remove_item("ui.close"))
+	utils.insert_if(items, resolver.remove_item("ui.inspect"))
+	utils.insert_if(items, resolver.remove_item("ui.next_panel_tab"))
+	utils.insert_if(items, resolver.remove_item("ui.previous_panel_tab"))
+	utils.insert_if(items, resolver.remove_item("ui.notifications.open"))
 
 	help.remove("General", items, { buffer = buf })
 end

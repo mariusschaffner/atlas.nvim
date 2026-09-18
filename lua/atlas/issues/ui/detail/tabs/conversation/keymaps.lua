@@ -44,19 +44,6 @@ local function dispatch_with_entry(refresh, fn)
 	end
 end
 
----@param action_id AtlasKeymapActionId|string
----@param map_item table
----@return table|nil
-local function from_action(action_id, map_item)
-	local keys = resolver.resolve(action_id)
-	if keys == nil then
-		return nil
-	end
-	local item = vim.tbl_deep_extend("force", {}, map_item)
-	item.key = #keys == 1 and keys[1] or keys
-	return item
-end
-
 ---@param refresh fun()
 local function toggle_fold(refresh)
 	local entry = cursor_entry()
@@ -95,7 +82,7 @@ function M.setup(buf, refresh)
 	if comments and comments.add_comment then
 		utils.insert_if(
 			items,
-			from_action("ui.comments.add", {
+			resolver.item("ui.comments.add", {
 				desc = "Add comment",
 				hint_desc = "Add",
 				opts = { nowait = true, silent = true },
@@ -106,7 +93,7 @@ function M.setup(buf, refresh)
 		)
 		utils.insert_if(
 			items,
-			from_action("ui.comments.reply", {
+			resolver.item("ui.comments.reply", {
 				desc = "Reply to comment",
 				hint_desc = "Reply",
 				opts = { nowait = true, silent = true },
@@ -119,7 +106,7 @@ function M.setup(buf, refresh)
 	if comments and comments.edit_comment then
 		utils.insert_if(
 			items,
-			from_action("ui.comments.edit", {
+			resolver.item("ui.comments.edit", {
 				desc = "Edit comment",
 				hint_desc = "Edit",
 				opts = { nowait = true, silent = true },
@@ -132,7 +119,7 @@ function M.setup(buf, refresh)
 	if comments and comments.delete_comment then
 		utils.insert_if(
 			items,
-			from_action("ui.delete", {
+			resolver.item("ui.delete", {
 				desc = "Delete comment",
 				hint_desc = "Delete",
 				opts = { nowait = true, silent = true },
@@ -145,7 +132,7 @@ function M.setup(buf, refresh)
 	if comments and comments.add_reaction and #(comments.reaction_options or {}) > 0 then
 		utils.insert_if(
 			items,
-			from_action("ui.comments.react", {
+			resolver.item("ui.comments.react", {
 				desc = "Add reaction",
 				hint = false,
 				opts = { nowait = true, silent = true },
@@ -158,7 +145,7 @@ function M.setup(buf, refresh)
 
 	utils.insert_if(
 		items,
-		from_action("ui.toggle_fold", {
+		resolver.item("ui.toggle_fold", {
 			desc = "Expand / collapse comment or thread",
 			hint = false,
 			opts = { nowait = true, silent = true },
@@ -169,7 +156,7 @@ function M.setup(buf, refresh)
 	)
 	utils.insert_if(
 		items,
-		from_action("ui.toggle_all_folds", {
+		resolver.item("ui.toggle_all_folds", {
 			desc = "Expand / collapse all threads",
 			hint = false,
 			opts = { nowait = true, silent = true },
@@ -188,10 +175,10 @@ end
 function M.teardown(buf)
 	local items = {}
 	for _, action_id in ipairs(COMMENT_ACTIONS) do
-		utils.insert_if(items, from_action(action_id, {}))
+		utils.insert_if(items, resolver.item(action_id, {}))
 	end
-	utils.insert_if(items, from_action("ui.toggle_fold", {}))
-	utils.insert_if(items, from_action("ui.toggle_all_folds", {}))
+	utils.insert_if(items, resolver.item("ui.toggle_fold", {}))
+	utils.insert_if(items, resolver.item("ui.toggle_all_folds", {}))
 	help.remove("Detail", items, { buffer = buf })
 end
 
