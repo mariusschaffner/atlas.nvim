@@ -130,7 +130,7 @@ local function issue_ref(target)
 	end
 end
 
-return {
+local M = {
 	views = views,
 	search_view = search_view,
 	issue_ref = issue_ref,
@@ -165,3 +165,5 @@ return {
 		},
 	},
 }
+
+return M
