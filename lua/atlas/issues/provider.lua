@@ -42,6 +42,10 @@
 ---@class IssueLinkedBranch
 ---@field name string
 
+---@class IssueProjectBranch
+---@field name string
+---@field default boolean
+
 ---@class IssuesCoreCapability
 ---@field fetch_user fun(on_done: fun(user: IssueUser|nil, err: string|nil)): { cancel: fun() }|nil
 ---@field search_query fun(view: IssuesViewConfig, opts: IssuesFetchOpts): string
@@ -51,7 +55,8 @@
 ---@field update_description (fun(issue: Issue, content: string, on_done: fun(ok: boolean, err: string|nil)): { cancel: fun() }|nil)|nil
 ---@field fetch_linked_merge_requests (fun(issue: Issue, opts: { force_load: boolean|nil }|nil, on_done: fun(items: IssueLinkedMergeRequest[]|nil, err: string|nil)): { cancel: fun() }|nil)|nil
 ---@field fetch_linked_branches (fun(issue: Issue, opts: { force_load: boolean|nil }|nil, on_done: fun(items: IssueLinkedBranch[]|nil, err: string|nil)): { cancel: fun() }|nil)|nil
----@field create_branch (fun(issue: Issue, branch_name: string, on_done: fun(branch: IssueLinkedBranch|nil, err: string|nil)): { cancel: fun() }|nil)|nil
+---@field fetch_project_branches (fun(issue: Issue, opts: { force_load: boolean|nil }|nil, on_done: fun(items: IssueProjectBranch[]|nil, err: string|nil)): { cancel: fun() }|nil)|nil
+---@field create_branch (fun(issue: Issue, branch_name: string, source_ref: string, on_done: fun(branch: IssueLinkedBranch|nil, err: string|nil)): { cancel: fun() }|nil)|nil
 ---@field refresh fun()|nil
 
 ---@class IssuesCommentsCapability

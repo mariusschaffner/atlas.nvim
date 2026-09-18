@@ -8,6 +8,7 @@ local tabs = require("atlas.ui.components.tabs")
 local state = require("atlas.issues.ui.detail.state")
 local detail_ui = require("atlas.ui.detail")
 local inline_edit = require("atlas.ui.inline_edit")
+local highlights = require("atlas.ui.shared.highlights")
 
 local ns = vim.api.nvim_create_namespace("atlas.issues.provider_detail")
 local header_ns = vim.api.nvim_create_namespace("atlas.issues.provider_detail.header")
@@ -89,11 +90,15 @@ local function linked_branches_field()
 		return { label = "Linked Branches", value = "None", hl = "AtlasTextMuted" }
 	end
 
-	local names = {}
-	for _, branch in ipairs(value) do
-		table.insert(names, tostring(branch.name))
+	local parts, spans, cursor = {}, {}, 0
+	for i, branch in ipairs(value) do
+		local name = tostring(branch.name)
+		table.insert(parts, name)
+		local hl = highlights.dynamic_for(name) or "AtlasTextMuted"
+		table.insert(spans, { start_col = cursor, end_col = cursor + #name, hl_group = hl })
+		cursor = cursor + #name + (i < #value and 2 or 0)
 	end
-	return { label = "Linked Branches", value = table.concat(names, ", "), hl = "AtlasTextMuted" }
+	return { label = "Linked Branches", value = table.concat(parts, ", "), hl = spans }
 end
 
 ---@param issue Issue

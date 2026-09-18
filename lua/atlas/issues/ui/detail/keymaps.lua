@@ -244,7 +244,7 @@ function M.register(buf, opts)
 
 	local core = provider.capabilities.core
 
-	if core.create_branch then
+	if core.create_branch and core.fetch_project_branches then
 		utils.insert_if(
 			items,
 			item("issues.create_branch", {
@@ -255,26 +255,68 @@ function M.register(buf, opts)
 					if issue == nil then
 						return
 					end
-					vim.ui.input({ prompt = "Branch name: ", default = default_branch_name(issue) }, function(input)
-						local name = input and vim.trim(input) or ""
-						if name == "" then
+
+					local function create_from(source_ref)
+						vim.ui.input({ prompt = "Branch name: ", default = default_branch_name(issue) }, function(input)
+							local name = input and vim.trim(input) or ""
+							if name == "" then
+								return
+							end
+							notify.loading("Creating branch...")
+							core.create_branch(issue, name, source_ref, function(branch, err)
+								if not is_current_issue(issue) then
+									return
+								end
+								if not branch then
+									notify.error("Create branch failed: " .. tostring(err or "Unknown error"))
+									return
+								end
+								local existing = type(state.linked_branches) == "table" and state.linked_branches or {}
+								table.insert(existing, branch)
+								state.linked_branches = existing
+								notify.success(
+									string.format("Branch created: %s (from %s)", tostring(branch.name), source_ref),
+									{ timeout = 1500 }
+								)
+								require("atlas.issues.ui.detail").rerender()
+							end)
+						end)
+					end
+
+					notify.loading("Loading branches...")
+					core.fetch_project_branches(issue, {}, function(branches, err)
+						if not is_current_issue(issue) then
 							return
 						end
-						notify.loading("Creating branch...")
-						core.create_branch(issue, name, function(branch, err)
-							if not is_current_issue(issue) then
-								return
+						if not branches then
+							notify.error("Failed to load branches: " .. tostring(err or "Unknown error"))
+							return
+						end
+						if #branches == 0 then
+							notify.error("No branches found")
+							return
+						end
+
+						table.sort(branches, function(a, b)
+							if a.default ~= b.default then
+								return a.default
 							end
-							if not branch then
-								notify.error("Create branch failed: " .. tostring(err or "Unknown error"))
-								return
-							end
-							local existing = type(state.linked_branches) == "table" and state.linked_branches or {}
-							table.insert(existing, branch)
-							state.linked_branches = existing
-							notify.success("Branch created: " .. tostring(branch.name), { timeout = 1500 })
-							require("atlas.issues.ui.detail").rerender()
+							return a.name < b.name
 						end)
+
+						require("atlas.ui.picker").select({
+							title = "Create branch from...",
+							items = branches,
+							kind = "atlas_issues_source_branch",
+							format_item = function(branch)
+								return branch.default and (branch.name .. "  (default)") or branch.name
+							end,
+							on_select = function(branch)
+								if branch then
+									create_from(branch.name)
+								end
+							end,
+						})
 					end)
 				end,
 			})

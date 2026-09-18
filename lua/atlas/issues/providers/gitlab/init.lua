@@ -161,6 +161,7 @@ return {
 			update_description = issues_api.update_description,
 			fetch_linked_merge_requests = issues_api.fetch_related_merge_requests,
 			fetch_linked_branches = issues_api.fetch_related_branches,
+			fetch_project_branches = issues_api.fetch_project_branches,
 			create_branch = issues_api.create_branch,
 		},
 		comments = {

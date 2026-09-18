@@ -618,10 +618,54 @@ function M.fetch_related_branches(issue, opts, on_done)
 end
 
 ---@param issue Issue
+---@param opts { force_load?: boolean }|nil
+---@param on_done fun(items: IssueProjectBranch[]|nil, err: string|nil)
+---@return { cancel: fun() }|nil
+function M.fetch_project_branches(issue, opts, on_done)
+	opts = opts or {}
+	local path = normalizer.parse_key(tostring(issue.key or ""))
+	if path == "" then
+		on_done(nil, "Invalid issue key")
+		return nil
+	end
+
+	local cache_key = string.format("gitlab:issue-project-branches:%s", path)
+	if not opts.force_load then
+		local cached, ok = service.get_memory_cache(cache_key)
+		if ok then
+			on_done(cached, nil)
+			return nil
+		end
+	end
+
+	local endpoint = string.format("/projects/%s/repository/branches?per_page=100", service.url_encode(path))
+	return service.request("GET", endpoint, nil, function(result, err)
+		if err then
+			on_done(nil, err)
+			return
+		end
+		local items = {}
+		for _, raw_value in ipairs(json.safe_table(result)) do
+			local raw = json.safe_table(raw_value)
+			local name = json.safe_str(raw.name)
+			if name and name ~= "" then
+				table.insert(items, { name = name, default = raw.default == true })
+			end
+		end
+		service.set_memory_cache(cache_key, items)
+		on_done(items, nil)
+	end, {
+		action = "Fetch project branches",
+		path = path,
+	})
+end
+
+---@param issue Issue
 ---@param branch_name string
+---@param source_ref string
 ---@param on_done fun(branch: IssueLinkedBranch|nil, err: string|nil)
 ---@return { cancel: fun() }|nil
-function M.create_branch(issue, branch_name, on_done)
+function M.create_branch(issue, branch_name, source_ref, on_done)
 	local path, iid = normalizer.parse_key(tostring(issue.key or ""))
 	if path == "" or iid == nil then
 		on_done(nil, "Invalid issue key")
@@ -632,46 +676,31 @@ function M.create_branch(issue, branch_name, on_done)
 		on_done(nil, "Branch name is required")
 		return nil
 	end
+	local ref = vim.trim(tostring(source_ref or ""))
+	if ref == "" then
+		on_done(nil, "Source branch is required")
+		return nil
+	end
 
-	local requests = request_scope.new()
-	requests.run(function(done)
-		return service.request("GET", string.format("/projects/%s", service.url_encode(path)), nil, done, {
-			action = "Fetch project",
-			path = path,
-		})
-	end, function(project, err)
+	local endpoint = string.format(
+		"/projects/%s/repository/branches?branch=%s&ref=%s",
+		service.url_encode(path),
+		service.url_encode(name),
+		service.url_encode(ref)
+	)
+	return service.request("POST", endpoint, nil, function(result, err)
 		if err then
 			on_done(nil, err)
 			return
 		end
-		local default_branch = json.safe_str(json.safe_table(project).default_branch)
-		if not default_branch or default_branch == "" then
-			on_done(nil, "Could not determine default branch")
-			return
-		end
-
-		local endpoint = string.format(
-			"/projects/%s/repository/branches?branch=%s&ref=%s",
-			service.url_encode(path),
-			service.url_encode(name),
-			service.url_encode(default_branch)
-		)
-		requests.run(function(done)
-			return service.request("POST", endpoint, nil, done, {
-				action = "Create branch",
-				path = path,
-				branch = name,
-			})
-		end, function(result, create_err)
-			if create_err then
-				on_done(nil, create_err)
-				return
-			end
-			service.delete_memory_cache(string.format("gitlab:issue-linked-branches:%s#%d", path, iid))
-			on_done({ name = json.safe_str(json.safe_table(result).name) or name }, nil)
-		end)
-	end)
-	return requests
+		service.delete_memory_cache(string.format("gitlab:issue-linked-branches:%s#%d", path, iid))
+		on_done({ name = json.safe_str(json.safe_table(result).name) or name }, nil)
+	end, {
+		action = "Create branch",
+		path = path,
+		branch = name,
+		ref = ref,
+	})
 end
 
 ---@param query string
