@@ -522,6 +522,41 @@ function M.fetch_related_merge_requests(issue, opts, on_done)
 	})
 end
 
+---@param cache_key string
+---@param opts { force_load?: boolean }
+---@param path string
+---@param action string
+---@param extra_meta table|nil
+---@param map_item fun(raw: table): table|nil
+---@param on_done fun(items: table[]|nil, err: string|nil)
+---@return { cancel: fun() }|nil
+local function fetch_cached_branches(cache_key, opts, path, action, extra_meta, map_item, on_done)
+	if not opts.force_load then
+		local cached, ok = service.get_memory_cache(cache_key)
+		if ok then
+			on_done(cached, nil)
+			return nil
+		end
+	end
+
+	local endpoint = string.format("/projects/%s/repository/branches?per_page=100", service.url_encode(path))
+	return service.request("GET", endpoint, nil, function(result, err)
+		if err then
+			on_done(nil, err)
+			return
+		end
+		local items = {}
+		for _, raw_value in ipairs(json.safe_table(result)) do
+			local item = map_item(json.safe_table(raw_value))
+			if item ~= nil then
+				table.insert(items, item)
+			end
+		end
+		service.set_memory_cache(cache_key, items)
+		on_done(items, nil)
+	end, vim.tbl_extend("force", { action = action, path = path }, extra_meta or {}))
+end
+
 ---@param issue Issue
 ---@param opts { force_load?: boolean }|nil
 ---@param on_done fun(items: IssueLinkedBranch[]|nil, err: string|nil)
@@ -534,43 +569,28 @@ function M.fetch_related_branches(issue, opts, on_done)
 		return nil
 	end
 
-	local cache_key = string.format("gitlab:issue-linked-branches:%s#%d", path, iid)
-	if not opts.force_load then
-		local cached, ok = service.get_memory_cache(cache_key)
-		if ok then
-			on_done(cached, nil)
-			return nil
-		end
-	end
-
 	-- GitLab does not expose a stable public REST endpoint for "related
 	-- branches" -- the issue page widget is backed by an internal web route
 	-- (/-/issues/:iid/related_branches), which 404s against the versioned
 	-- API. Branches created from an issue always follow the "<iid>-slug"
 	-- naming convention GitLab itself generates, so derive the list from the
 	-- standard repository branches endpoint instead.
-	local endpoint = string.format("/projects/%s/repository/branches?per_page=100", service.url_encode(path))
 	local prefix = tostring(iid) .. "-"
-	return service.request("GET", endpoint, nil, function(result, err)
-		if err then
-			on_done(nil, err)
-			return
-		end
-		local items = {}
-		for _, raw_value in ipairs(json.safe_table(result)) do
-			local raw = json.safe_table(raw_value)
+	return fetch_cached_branches(
+		string.format("gitlab:issue-linked-branches:%s#%d", path, iid),
+		opts,
+		path,
+		"Fetch related branches",
+		{ iid = iid },
+		function(raw)
 			local name = json.safe_str(raw.name)
 			if name and (name == tostring(iid) or name:sub(1, #prefix) == prefix) then
-				table.insert(items, { name = name })
+				return { name = name }
 			end
-		end
-		service.set_memory_cache(cache_key, items)
-		on_done(items, nil)
-	end, {
-		action = "Fetch related branches",
-		path = path,
-		iid = iid,
-	})
+			return nil
+		end,
+		on_done
+	)
 end
 
 ---@param issue Issue
@@ -585,35 +605,21 @@ function M.fetch_project_branches(issue, opts, on_done)
 		return nil
 	end
 
-	local cache_key = string.format("gitlab:issue-project-branches:%s", path)
-	if not opts.force_load then
-		local cached, ok = service.get_memory_cache(cache_key)
-		if ok then
-			on_done(cached, nil)
-			return nil
-		end
-	end
-
-	local endpoint = string.format("/projects/%s/repository/branches?per_page=100", service.url_encode(path))
-	return service.request("GET", endpoint, nil, function(result, err)
-		if err then
-			on_done(nil, err)
-			return
-		end
-		local items = {}
-		for _, raw_value in ipairs(json.safe_table(result)) do
-			local raw = json.safe_table(raw_value)
+	return fetch_cached_branches(
+		string.format("gitlab:issue-project-branches:%s", path),
+		opts,
+		path,
+		"Fetch project branches",
+		nil,
+		function(raw)
 			local name = json.safe_str(raw.name)
 			if name and name ~= "" then
-				table.insert(items, { name = name, default = raw.default == true })
+				return { name = name, default = raw.default == true }
 			end
-		end
-		service.set_memory_cache(cache_key, items)
-		on_done(items, nil)
-	end, {
-		action = "Fetch project branches",
-		path = path,
-	})
+			return nil
+		end,
+		on_done
+	)
 end
 
 ---@param issue Issue

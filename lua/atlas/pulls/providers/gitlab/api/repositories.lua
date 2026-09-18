@@ -131,13 +131,14 @@ function M.fetch_detail(repo, opts, on_done)
 	return requests
 end
 
----@param repo PullsRepoDetails
+---@param resource "branches"|"tags"
+---@param path string
+---@param cache_key string
 ---@param opts PullsFetchOpts
----@param on_done fun(branches: PullsRepoBranches|nil, err: string|nil)
+---@param get_message fun(raw: table, commit: table): string
+---@param on_done fun(result: { entries: table[] }|nil, err: string|nil)
 ---@return { cancel: fun() }|nil
-function M.fetch_branches(repo, opts, on_done)
-	opts = opts or {}
-	local path = repo_path(repo)
+local function fetch_refs(resource, path, cache_key, opts, get_message, on_done)
 	if path == "" then
 		vim.schedule(function()
 			on_done(nil, "Missing repository info")
@@ -145,7 +146,6 @@ function M.fetch_branches(repo, opts, on_done)
 		return nil
 	end
 
-	local cache_key = string.format("gitlab:branches:%s", path)
 	if not opts.force_load then
 		local cached, ok = service.get_memory_cache(cache_key)
 		if ok then
@@ -154,7 +154,7 @@ function M.fetch_branches(repo, opts, on_done)
 		end
 	end
 
-	local endpoint = string.format("/projects/%s/repository/branches?per_page=100", service.url_encode(path))
+	local endpoint = string.format("/projects/%s/repository/%s?per_page=100", service.url_encode(path), resource)
 	return service.request("GET", endpoint, nil, function(result, err)
 		if err then
 			on_done(nil, err)
@@ -162,25 +162,37 @@ function M.fetch_branches(repo, opts, on_done)
 		end
 
 		local entries = {}
-		for _, branch_value in ipairs(json.safe_table(result)) do
-			local branch = json.safe_table(branch_value)
-			local commit = json.safe_table(branch.commit)
+		for _, raw_value in ipairs(json.safe_table(result)) do
+			local raw = json.safe_table(raw_value)
+			local commit = json.safe_table(raw.commit)
 			table.insert(entries, {
-				name = json.safe_str(branch.name) or "",
+				name = json.safe_str(raw.name) or "",
 				hash = (json.safe_str(commit.short_id) or json.safe_str(commit.id) or ""):sub(1, 8),
 				date = json.safe_str(commit.committed_date) or "",
-				message = json.safe_str(commit.title) or "",
+				message = get_message(raw, commit),
 				author = json.safe_str(commit.author_name) or "",
 			})
 		end
 
-		local branches = { entries = entries }
-		service.set_memory_cache(cache_key, branches)
-		on_done(branches, nil)
+		local out = { entries = entries }
+		service.set_memory_cache(cache_key, out)
+		on_done(out, nil)
 	end, {
-		action = "Fetch repository branches",
+		action = string.format("Fetch repository %s", resource),
 		repo = path,
 	})
+end
+
+---@param repo PullsRepoDetails
+---@param opts PullsFetchOpts
+---@param on_done fun(branches: PullsRepoBranches|nil, err: string|nil)
+---@return { cancel: fun() }|nil
+function M.fetch_branches(repo, opts, on_done)
+	opts = opts or {}
+	local path = repo_path(repo)
+	return fetch_refs("branches", path, string.format("gitlab:branches:%s", path), opts, function(_, commit)
+		return json.safe_str(commit.title) or ""
+	end, on_done)
 end
 
 ---@param repo PullsRepoDetails
@@ -190,49 +202,9 @@ end
 function M.fetch_tags(repo, opts, on_done)
 	opts = opts or {}
 	local path = repo_path(repo)
-	if path == "" then
-		vim.schedule(function()
-			on_done(nil, "Missing repository info")
-		end)
-		return nil
-	end
-
-	local cache_key = string.format("gitlab:tags:%s", path)
-	if not opts.force_load then
-		local cached, ok = service.get_memory_cache(cache_key)
-		if ok then
-			on_done(cached, nil)
-			return nil
-		end
-	end
-
-	local endpoint = string.format("/projects/%s/repository/tags?per_page=100", service.url_encode(path))
-	return service.request("GET", endpoint, nil, function(result, err)
-		if err then
-			on_done(nil, err)
-			return
-		end
-
-		local entries = {}
-		for _, tag_value in ipairs(json.safe_table(result)) do
-			local tag = json.safe_table(tag_value)
-			local commit = json.safe_table(tag.commit)
-			table.insert(entries, {
-				name = json.safe_str(tag.name) or "",
-				hash = (json.safe_str(commit.short_id) or json.safe_str(commit.id) or ""):sub(1, 8),
-				date = json.safe_str(commit.committed_date) or "",
-				message = json.safe_str(tag.message) or json.safe_str(commit.title) or "",
-				author = json.safe_str(commit.author_name) or "",
-			})
-		end
-
-		local tags = { entries = entries }
-		service.set_memory_cache(cache_key, tags)
-		on_done(tags, nil)
-	end, {
-		action = "Fetch repository tags",
-		repo = path,
-	})
+	return fetch_refs("tags", path, string.format("gitlab:tags:%s", path), opts, function(raw, commit)
+		return json.safe_str(raw.message) or json.safe_str(commit.title) or ""
+	end, on_done)
 end
 
 ---@param repo PullsRepoDetails
