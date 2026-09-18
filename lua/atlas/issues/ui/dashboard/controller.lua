@@ -8,6 +8,7 @@ local dashboard_host = require("atlas.ui.dashboard")
 local navigation = require("atlas.ui.navigation")
 local info_popup = require("atlas.ui.popups.info")
 local requests = require("atlas.core.requests")
+local pagination = require("atlas.core.pagination")
 
 local active_requests = requests.new()
 local issue_reload_requests = requests.new()
@@ -248,53 +249,27 @@ local function load_query(view, force_load, on_done)
 	local configured_max = tonumber(issues_config().max_results)
 	local max_results = (configured_max and configured_max > 0) and math.floor(configured_max) or 100
 
-	local function fetch_page(next_page_token, issues)
-		local remaining = max_results - #issues
-		if remaining <= 0 then
-			finalize_fetch_success(issues)
-			return
-		end
-
-		load_requests.run(function(done)
-			return provider.capabilities.core.fetch_issues(view, {
-				force_load = force_load,
-				next_page_token = next_page_token,
-				max_results = remaining,
-				layout = view.layout or "plain",
-				with_relationships = relationships_enabled(view),
-			}, done)
-		end, function(page_issues, next_token, is_last, err)
-			if err ~= nil then
-				finalize_fetch_failure(err, issues)
-				return
-			end
-
-			for _, issue in ipairs(page_issues) do
-				if #issues >= max_results then
-					break
-				end
-				table.insert(issues, issue)
-			end
-
+	pagination.run({
+		max_results = max_results,
+		fetch = function(next_page_token, remaining, done)
+			load_requests.run(function(req_done)
+				return provider.capabilities.core.fetch_issues(view, {
+					force_load = force_load,
+					next_page_token = next_page_token,
+					max_results = remaining,
+					layout = view.layout or "plain",
+					with_relationships = relationships_enabled(view),
+				}, req_done)
+			end, done)
+		end,
+		on_page = function(issues)
 			state.error = nil
 			state.set_issues(issues)
 			render_if_active()
-
-			if #issues >= max_results then
-				finalize_fetch_success(issues)
-				return
-			end
-
-			if is_last ~= true and next_token ~= nil and next_token ~= "" then
-				fetch_page(next_token, issues)
-				return
-			end
-
-			finalize_fetch_success(issues)
-		end)
-	end
-
-	fetch_page(nil, {})
+		end,
+		on_error = finalize_fetch_failure,
+		on_complete = finalize_fetch_success,
+	})
 end
 
 ---@param force_load boolean
