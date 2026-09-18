@@ -47,6 +47,74 @@ local function transition(ctx, done)
 	end)
 end
 
+---@param key string
+---@param current_assignees IssueUser[]
+---@param members IssueUser[]
+---@param done fun(result: IssuesActionResult|nil, err: string|nil)
+local function open_assignees_picker(key, current_assignees, members, done)
+	notify.clear()
+
+	if #members == 0 then
+		local message = "No assignable members"
+		notify.warn(message)
+		done(nil, message)
+		return
+	end
+
+	local original = {}
+	for _, assignee in ipairs(current_assignees) do
+		if tonumber(assignee.id) then
+			table.insert(original, assignee)
+		end
+	end
+
+	picker.multi_select({
+		items = members,
+		selected = vim.deepcopy(original),
+		key = function(item)
+			return tostring(item.id or item.account_id or "")
+		end,
+		format_item = function(item)
+			return string.format(
+				"%s %s (@%s)",
+				icons.general("user"),
+				item.display_name or item.account_id or item.name or item.username,
+				item.account_id or item.username
+			)
+		end,
+		title = string.format("Assignees for %s", key),
+		on_done = function(selected)
+			local id_key = function(item)
+				return tonumber(item.id)
+			end
+			if not core_utils.selection_changed(original, selected, id_key) then
+				done(nil, nil)
+				return
+			end
+
+			local final_ids = {}
+			for _, it in ipairs(selected) do
+				local id = tonumber(it.id)
+				if id then
+					table.insert(final_ids, id)
+				end
+			end
+
+			notify.loading(string.format("Updating assignees on %s...", key))
+			issues_api.set_assignee_ids(key, final_ids, function(ok, set_err)
+				if not ok then
+					notify.error(set_err or "Failed")
+					done(nil, set_err or "Failed")
+					return
+				end
+				local msg = string.format("%d assignee(s)", #final_ids)
+				notify.success(msg, { timeout = 1200 })
+				done({ issue_key = key }, nil)
+			end)
+		end,
+	})
+end
+
 ---@param ctx AtlasIssueActionContext
 ---@param done fun(result: IssuesActionResult|nil, err: string|nil)
 local function assign(ctx, done)
@@ -59,72 +127,6 @@ local function assign(ctx, done)
 		notify.error(err)
 		done(nil, err)
 		return
-	end
-
-	---@param current_assignees IssueUser[]
-	---@param members IssueUser[]
-	local function open_picker(current_assignees, members)
-		notify.clear()
-
-		if #members == 0 then
-			local message = "No assignable members"
-			notify.warn(message)
-			done(nil, message)
-			return
-		end
-
-		local original = {}
-		for _, assignee in ipairs(current_assignees) do
-			if tonumber(assignee.id) then
-				table.insert(original, assignee)
-			end
-		end
-
-		picker.multi_select({
-			items = members,
-			selected = vim.deepcopy(original),
-			key = function(item)
-				return tostring(item.id or item.account_id or "")
-			end,
-			format_item = function(item)
-				return string.format(
-					"%s %s (@%s)",
-					icons.general("user"),
-					item.display_name or item.account_id or item.name or item.username,
-					item.account_id or item.username
-				)
-			end,
-			title = string.format("Assignees for %s", key),
-			on_done = function(selected)
-				local id_key = function(item)
-					return tonumber(item.id)
-				end
-				if not core_utils.selection_changed(original, selected, id_key) then
-					done(nil, nil)
-					return
-				end
-
-				local final_ids = {}
-				for _, it in ipairs(selected) do
-					local id = tonumber(it.id)
-					if id then
-						table.insert(final_ids, id)
-					end
-				end
-
-				notify.loading(string.format("Updating assignees on %s...", key))
-				issues_api.set_assignee_ids(key, final_ids, function(ok, set_err)
-					if not ok then
-						notify.error(set_err or "Failed")
-						done(nil, set_err or "Failed")
-						return
-					end
-					local msg = string.format("%d assignee(s)", #final_ids)
-					notify.success(msg, { timeout = 1200 })
-					done({ issue_key = key }, nil)
-				end)
-			end,
-		})
 	end
 
 	notify.loading("Loading assignees...")
@@ -144,8 +146,79 @@ local function assign(ctx, done)
 			done(nil, message)
 			return
 		end
-		open_picker(values.assignees, values.members)
+		open_assignees_picker(key, values.assignees, values.members, done)
 	end)
+end
+
+---@param ctx AtlasIssueActionContext
+---@param done fun(result: IssuesActionResult|nil, err: string|nil)
+---@param key string
+---@param current_labels IssueLabel[]
+---@param all_labels IssueLabel[]
+---@param done fun(result: IssuesActionResult|nil, err: string|nil)
+local function open_labels_picker(key, current_labels, all_labels, done)
+	notify.clear()
+	if #all_labels == 0 then
+		local message = "No labels available"
+		notify.warn(message)
+		done(nil, message)
+		return
+	end
+
+	local original = {}
+	local original_set = {}
+	for _, label in ipairs(current_labels) do
+		local name = tostring(label.name or "")
+		if name ~= "" then
+			table.insert(original, { name = name, color = label.color })
+			original_set[name] = true
+		end
+	end
+
+	picker.multi_select({
+		items = all_labels,
+		selected = vim.deepcopy(original),
+		key = function(item)
+			return tostring(item.name or "")
+		end,
+		format_item = function(item)
+			return tostring(item.name or "")
+		end,
+		title = string.format("Labels for %s", key),
+		on_done = function(selected)
+			local selected_set = {}
+			for _, it in ipairs(selected) do
+				selected_set[it.name] = true
+			end
+			local adds, removes = {}, {}
+			for name, _ in pairs(selected_set) do
+				if not original_set[name] then
+					table.insert(adds, name)
+				end
+			end
+			for name, _ in pairs(original_set) do
+				if not selected_set[name] then
+					table.insert(removes, name)
+				end
+			end
+			if #adds == 0 and #removes == 0 then
+				done(nil, nil)
+				return
+			end
+
+			notify.loading(string.format("Updating labels on %s...", key))
+			issues_api.update_labels(key, { add = adds, remove = removes }, function(ok, set_err)
+				if not ok then
+					notify.error(set_err or "Failed")
+					done(nil, set_err or "Failed")
+					return
+				end
+				local msg = string.format("+%d / -%d label(s)", #adds, #removes)
+				notify.success(msg, { timeout = 1200 })
+				done({ issue_key = key }, nil)
+			end)
+		end,
+	})
 end
 
 ---@param ctx AtlasIssueActionContext
@@ -160,73 +233,6 @@ local function labels(ctx, done)
 		notify.error(err)
 		done(nil, err)
 		return
-	end
-
-	---@param current_labels IssueLabel[]
-	---@param all_labels IssueLabel[]
-	local function open_picker(current_labels, all_labels)
-		notify.clear()
-		if #all_labels == 0 then
-			local message = "No labels available"
-			notify.warn(message)
-			done(nil, message)
-			return
-		end
-
-		local original = {}
-		local original_set = {}
-		for _, label in ipairs(current_labels) do
-			local name = tostring(label.name or "")
-			if name ~= "" then
-				table.insert(original, { name = name, color = label.color })
-				original_set[name] = true
-			end
-		end
-
-		picker.multi_select({
-			items = all_labels,
-			selected = vim.deepcopy(original),
-			key = function(item)
-				return tostring(item.name or "")
-			end,
-			format_item = function(item)
-				return tostring(item.name or "")
-			end,
-			title = string.format("Labels for %s", key),
-			on_done = function(selected)
-				local selected_set = {}
-				for _, it in ipairs(selected) do
-					selected_set[it.name] = true
-				end
-				local adds, removes = {}, {}
-				for name, _ in pairs(selected_set) do
-					if not original_set[name] then
-						table.insert(adds, name)
-					end
-				end
-				for name, _ in pairs(original_set) do
-					if not selected_set[name] then
-						table.insert(removes, name)
-					end
-				end
-				if #adds == 0 and #removes == 0 then
-					done(nil, nil)
-					return
-				end
-
-				notify.loading(string.format("Updating labels on %s...", key))
-				issues_api.update_labels(key, { add = adds, remove = removes }, function(ok, set_err)
-					if not ok then
-						notify.error(set_err or "Failed")
-						done(nil, set_err or "Failed")
-						return
-					end
-					local msg = string.format("+%d / -%d label(s)", #adds, #removes)
-					notify.success(msg, { timeout = 1200 })
-					done({ issue_key = key }, nil)
-				end)
-			end,
-		})
 	end
 
 	notify.loading("Loading labels...")
@@ -245,7 +251,7 @@ local function labels(ctx, done)
 				done(nil, message)
 				return
 			end
-			open_picker(current_labels, all_labels)
+			open_labels_picker(key, current_labels, all_labels, done)
 		end)
 	end)
 end
