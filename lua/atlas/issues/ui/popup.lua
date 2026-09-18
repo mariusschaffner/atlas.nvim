@@ -71,7 +71,7 @@ local function render(issue, rows)
 			line = 0,
 			start_col = 3 + #key,
 			end_col = #lines[1],
-			hl_group = helper.issue_title_hl(title),
+			hl_group = "Normal",
 		}
 	end
 
