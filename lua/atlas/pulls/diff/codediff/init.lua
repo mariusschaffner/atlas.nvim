@@ -8,6 +8,7 @@ local position = require("atlas.pulls.diff.position")
 local review_keymaps = require("atlas.pulls.diff.keymaps")
 local review_panel = require("atlas.pulls.diff.ui.review_panel")
 local session_api = require("atlas.pulls.diff.session")
+local adapter_helpers = require("atlas.pulls.diff.adapter_helpers")
 
 local READY_RETRIES = 80
 
@@ -518,17 +519,7 @@ local function reload_view(session)
 		return
 	end
 	local reload = session.reload
-	vim.cmd("tabnew")
-	local win = vim.api.nvim_get_current_win()
-	local target = {
-		tabpage = vim.api.nvim_get_current_tabpage(),
-		buf = vim.api.nvim_get_current_buf(),
-		win = win,
-		number = vim.wo[win].number,
-		relativenumber = vim.wo[win].relativenumber,
-		statuscolumn = vim.wo[win].statuscolumn,
-		winbar = vim.wo[win].winbar,
-	}
+	local target = adapter_helpers.open_reload_target()
 	state.reloading = true
 	if not state.lifecycle.close(state.tabpage) then
 		state.reloading = false
