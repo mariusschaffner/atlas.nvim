@@ -109,18 +109,7 @@ end
 ---@param hex string|nil
 ---@return string
 local function label_hl(hex)
-	local clean = tostring(hex or ""):lower():gsub("[^0-9a-f]", "")
-	if #clean ~= 6 then
-		return "AtlasTextMuted"
-	end
-	local name = string.format("AtlasGLLabel_%s", clean)
-	local r = tonumber(clean:sub(1, 2), 16) or 0
-	local g = tonumber(clean:sub(3, 4), 16) or 0
-	local b = tonumber(clean:sub(5, 6), 16) or 0
-	local lum = (0.299 * r + 0.587 * g + 0.114 * b) / 255
-	local fg = lum > 0.6 and "#1e1e2e" or "#ffffff"
-	vim.api.nvim_set_hl(0, name, { fg = fg, bg = "#" .. clean, bold = true })
-	return name
+	return highlights.label_hl(hex, "AtlasGLLabel_", "AtlasTextMuted")
 end
 
 ---@param milestone GitLabCreateIssueMilestone|nil

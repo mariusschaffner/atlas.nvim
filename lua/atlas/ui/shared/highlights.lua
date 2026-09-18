@@ -102,4 +102,26 @@ function M.dynamic_for_bg(identifier)
 	return string.format("AtlasDynBgColor%02d", idx)
 end
 
+--- Defines (and returns the name of) a highlight group for a GitLab label
+--- color hex string, choosing a readable foreground by luminance. Returns
+--- fallback_hl unchanged for an invalid/missing hex.
+---@param hex string|nil
+---@param group_prefix string e.g. "AtlasGLLabel_"
+---@param fallback_hl string
+---@return string
+function M.label_hl(hex, group_prefix, fallback_hl)
+	local clean = tostring(hex or ""):lower():gsub("[^0-9a-f]", "")
+	if #clean ~= 6 then
+		return fallback_hl
+	end
+	local name = group_prefix .. clean
+	local r = tonumber(clean:sub(1, 2), 16) or 0
+	local g = tonumber(clean:sub(3, 4), 16) or 0
+	local b = tonumber(clean:sub(5, 6), 16) or 0
+	local lum = (0.299 * r + 0.587 * g + 0.114 * b) / 255
+	local fg = lum > 0.6 and "#1e1e2e" or "#ffffff"
+	vim.api.nvim_set_hl(0, name, { fg = fg, bg = "#" .. clean, bold = true })
+	return name
+end
+
 return M
