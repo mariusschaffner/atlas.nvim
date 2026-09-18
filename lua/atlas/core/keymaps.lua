@@ -115,6 +115,8 @@ local M = {}
 ---@field edit_issue? AtlasKeymapValue
 ---@field create_issue? AtlasKeymapValue
 ---@field toggle_description_mode? AtlasKeymapValue
+---@field create_branch? AtlasKeymapValue
+---@field go_to_pull? AtlasKeymapValue
 ---@field filters? AtlasIssuesFilterKeymaps
 
 ---@class AtlasKeymapsConfig
@@ -210,6 +212,8 @@ local M = {}
 ---| "issues.edit_issue"
 ---| "issues.create_issue"
 ---| "issues.toggle_description_mode"
+---| "issues.create_branch"
+---| "issues.go_to_pull"
 ---| "issues.filters.open"
 ---| "issues.filters.closed"
 

@@ -5,6 +5,48 @@ local resolver = require("atlas.core.keymaps")
 local utils = require("atlas.ui.shared.utils")
 local actions = require("atlas.issues.actions")
 local state = require("atlas.issues.ui.detail.state")
+local notify = require("atlas.core.notify")
+
+---@param text string
+---@return string
+local function slugify(text)
+	local slug = tostring(text or ""):lower():gsub("[^%w]+", "-"):gsub("^%-+", ""):gsub("%-+$", "")
+	if #slug > 50 then
+		slug = slug:sub(1, 50):gsub("%-+$", "")
+	end
+	return slug
+end
+
+---@param issue Issue
+---@return string
+local function default_branch_name(issue)
+	local iid = tostring(issue.key or ""):match("#(%d+)$") or ""
+	local slug = slugify(issue.title)
+	if iid ~= "" and slug ~= "" then
+		return iid .. "-" .. slug
+	end
+	return slug ~= "" and slug or ("issue-" .. iid)
+end
+
+---@param issue Issue
+---@return boolean
+local function is_current_issue(issue)
+	local current = state.current_issue
+	return current ~= nil and tostring(current.key or "") == tostring(issue.key or "")
+end
+
+---@param mr IssueLinkedMergeRequest
+local function open_linked_mr(mr)
+	local providers = require("atlas.providers")
+	local pulls_provider = providers.load("gitlab", "pulls")
+	if pulls_provider == nil then
+		notify.error("Pull request provider unavailable")
+		return
+	end
+	require("atlas.pulls.ui.detail").open_ref({ id = mr.id, repo_full_name = mr.repo_full_name }, {
+		provider = pulls_provider,
+	})
+end
 
 ---@param issue Issue
 ---@param on_update (fun(issue: Issue|nil, result: IssuesActionResult|nil))|nil
@@ -200,6 +242,79 @@ function M.register(buf, opts)
 		)
 	end
 
+	local core = provider.capabilities.core
+
+	if core.create_branch then
+		utils.insert_if(
+			items,
+			item("issues.create_branch", {
+				desc = "Create branch from issue",
+				hint_desc = "New Branch",
+				callback = function()
+					local issue = state.current_issue
+					if issue == nil then
+						return
+					end
+					vim.ui.input({ prompt = "Branch name: ", default = default_branch_name(issue) }, function(input)
+						local name = input and vim.trim(input) or ""
+						if name == "" then
+							return
+						end
+						notify.loading("Creating branch...")
+						core.create_branch(issue, name, function(branch, err)
+							if not is_current_issue(issue) then
+								return
+							end
+							if not branch then
+								notify.error("Create branch failed: " .. tostring(err or "Unknown error"))
+								return
+							end
+							local existing = type(state.linked_branches) == "table" and state.linked_branches or {}
+							table.insert(existing, branch)
+							state.linked_branches = existing
+							notify.success("Branch created: " .. tostring(branch.name), { timeout = 1500 })
+							require("atlas.issues.ui.detail").rerender()
+						end)
+					end)
+				end,
+			})
+		)
+	end
+
+	if core.fetch_linked_merge_requests then
+		utils.insert_if(
+			items,
+			item("issues.go_to_pull", {
+				desc = "Go to linked pull request",
+				hint_desc = "Go to PR",
+				callback = function()
+					local linked = state.linked_merge_requests
+					if type(linked) ~= "table" or #linked == 0 then
+						notify.warn("No linked merge requests")
+						return
+					end
+					if #linked == 1 then
+						open_linked_mr(linked[1])
+						return
+					end
+					require("atlas.ui.picker").select({
+						title = "Linked merge requests",
+						items = linked,
+						kind = "atlas_issues_linked_mrs",
+						format_item = function(mr)
+							return string.format("!%d %s", mr.id, mr.title)
+						end,
+						on_select = function(mr)
+							if mr then
+								open_linked_mr(mr)
+							end
+						end,
+					})
+				end,
+			})
+		)
+	end
+
 	M.remove(buf)
 	local general = items
 
@@ -277,6 +392,8 @@ function M.remove(buf)
 	utils.insert_if(general, remove_item("issues.change_reporter"))
 	utils.insert_if(general, remove_item("issues.change_label"))
 	utils.insert_if(general, remove_item("issues.edit_issue"))
+	utils.insert_if(general, remove_item("issues.create_branch"))
+	utils.insert_if(general, remove_item("issues.go_to_pull"))
 	utils.insert_if(general, remove_item("ui.next_panel_tab"))
 	utils.insert_if(general, remove_item("ui.previous_panel_tab"))
 	utils.insert_if(general, remove_item("ui.help"))

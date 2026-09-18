@@ -498,6 +498,175 @@ function M.create_issue(opts, on_done)
 	})
 end
 
+---@param raw table
+---@param fallback_path string
+---@return string
+local function mr_project_path(raw, fallback_path)
+	local refs = json.safe_table(raw.references)
+	local full_ref = json.safe_str(refs.full)
+	local project_path = full_ref and full_ref:match("^(.-)!%d+$") or nil
+	if project_path and project_path ~= "" then
+		return project_path
+	end
+	local web = json.safe_str(raw.web_url) or ""
+	project_path = web:match("^https?://[^/]+/(.+)/%-/merge_requests/")
+	if project_path and project_path ~= "" then
+		return project_path
+	end
+	return fallback_path
+end
+
+---@param issue Issue
+---@param opts { force_load?: boolean }|nil
+---@param on_done fun(items: IssueLinkedMergeRequest[]|nil, err: string|nil)
+---@return { cancel: fun() }|nil
+function M.fetch_related_merge_requests(issue, opts, on_done)
+	opts = opts or {}
+	local path, iid = normalizer.parse_key(tostring(issue.key or ""))
+	if path == "" or iid == nil then
+		on_done(nil, "Invalid issue key")
+		return nil
+	end
+
+	local cache_key = string.format("gitlab:issue-linked-mrs:%s#%d", path, iid)
+	if not opts.force_load then
+		local cached, ok = service.get_memory_cache(cache_key)
+		if ok then
+			on_done(cached, nil)
+			return nil
+		end
+	end
+
+	local endpoint = string.format("/projects/%s/issues/%d/related_merge_requests", service.url_encode(path), iid)
+	return service.request("GET", endpoint, nil, function(result, err)
+		if err then
+			on_done(nil, err)
+			return
+		end
+		local items = {}
+		for _, raw_value in ipairs(json.safe_table(result)) do
+			local raw = json.safe_table(raw_value)
+			local mr_iid = tonumber(raw.iid)
+			if mr_iid then
+				table.insert(items, {
+					id = mr_iid,
+					title = json.safe_str(raw.title) or "",
+					state = (json.safe_str(raw.state) or ""):lower(),
+					web_url = json.safe_str(raw.web_url),
+					repo_full_name = mr_project_path(raw, path),
+				})
+			end
+		end
+		service.set_memory_cache(cache_key, items)
+		on_done(items, nil)
+	end, {
+		action = "Fetch related merge requests",
+		path = path,
+		iid = iid,
+	})
+end
+
+---@param issue Issue
+---@param opts { force_load?: boolean }|nil
+---@param on_done fun(items: IssueLinkedBranch[]|nil, err: string|nil)
+---@return { cancel: fun() }|nil
+function M.fetch_related_branches(issue, opts, on_done)
+	opts = opts or {}
+	local path, iid = normalizer.parse_key(tostring(issue.key or ""))
+	if path == "" or iid == nil then
+		on_done(nil, "Invalid issue key")
+		return nil
+	end
+
+	local cache_key = string.format("gitlab:issue-linked-branches:%s#%d", path, iid)
+	if not opts.force_load then
+		local cached, ok = service.get_memory_cache(cache_key)
+		if ok then
+			on_done(cached, nil)
+			return nil
+		end
+	end
+
+	local endpoint = string.format("/projects/%s/issues/%d/related_branches", service.url_encode(path), iid)
+	return service.request("GET", endpoint, nil, function(result, err)
+		if err then
+			on_done(nil, err)
+			return
+		end
+		local items = {}
+		for _, raw_value in ipairs(json.safe_table(result)) do
+			local raw = json.safe_table(raw_value)
+			local name = json.safe_str(raw.name)
+			if name and name ~= "" then
+				table.insert(items, { name = name })
+			end
+		end
+		service.set_memory_cache(cache_key, items)
+		on_done(items, nil)
+	end, {
+		action = "Fetch related branches",
+		path = path,
+		iid = iid,
+	})
+end
+
+---@param issue Issue
+---@param branch_name string
+---@param on_done fun(branch: IssueLinkedBranch|nil, err: string|nil)
+---@return { cancel: fun() }|nil
+function M.create_branch(issue, branch_name, on_done)
+	local path, iid = normalizer.parse_key(tostring(issue.key or ""))
+	if path == "" or iid == nil then
+		on_done(nil, "Invalid issue key")
+		return nil
+	end
+	local name = vim.trim(tostring(branch_name or ""))
+	if name == "" then
+		on_done(nil, "Branch name is required")
+		return nil
+	end
+
+	local requests = request_scope.new()
+	requests.run(function(done)
+		return service.request("GET", string.format("/projects/%s", service.url_encode(path)), nil, done, {
+			action = "Fetch project",
+			path = path,
+		})
+	end, function(project, err)
+		if err then
+			on_done(nil, err)
+			return
+		end
+		local default_branch = json.safe_str(json.safe_table(project).default_branch)
+		if not default_branch or default_branch == "" then
+			on_done(nil, "Could not determine default branch")
+			return
+		end
+
+		local endpoint = string.format(
+			"/projects/%s/repository/branches?branch=%s&ref=%s",
+			service.url_encode(path),
+			service.url_encode(name),
+			service.url_encode(default_branch)
+		)
+		requests.run(function(done)
+			return service.request("POST", endpoint, nil, done, {
+				action = "Create branch",
+				path = path,
+				branch = name,
+			})
+		end, function(result, create_err)
+			if create_err then
+				on_done(nil, create_err)
+				return
+			end
+			service.delete_memory_cache(string.format("gitlab:issue-linked-branches:%s#%d", path, iid))
+			on_done({ name = json.safe_str(json.safe_table(result).name) or name }, nil)
+		end)
+	end)
+	return requests
+end
+
 ---@param query string
 ---@param opts { force_load?: boolean, max_results?: number }|nil
 ---@param on_done fun(items: { id: any, key: string, title: string, url: string|nil, description: string }[]|nil, err: string|nil)

@@ -45,6 +45,57 @@ local function set_lines(buf, lines)
 	vim.api.nvim_set_option_value("modifiable", false, { buf = buf })
 end
 
+---@return IssuesDetailHeaderField|nil
+local function linked_mr_field()
+	local value = state.linked_merge_requests
+	if value == nil then
+		return nil
+	end
+	if value == "loading" then
+		return { label = "Linked MR", value = spinner.with_text("Loading..."), hl = "AtlasTextMuted" }
+	end
+	if type(value) == "string" then
+		return { label = "Linked MR", value = value, hl = "AtlasLogError" }
+	end
+	if #value == 0 then
+		return { label = "Linked MR", value = "None", hl = "AtlasTextMuted" }
+	end
+
+	local parts, spans, cursor = {}, {}, 0
+	for i, mr in ipairs(value) do
+		local token = "!" .. tostring(mr.id)
+		table.insert(parts, token)
+		local hl = mr.state == "merged" and "AtlasTextPositive"
+			or (mr.state == "closed" and "AtlasLogError" or "AtlasTextMuted")
+		table.insert(spans, { start_col = cursor, end_col = cursor + #token, hl_group = hl })
+		cursor = cursor + #token + (i < #value and 2 or 0)
+	end
+	return { label = "Linked MR", value = table.concat(parts, ", "), hl = spans }
+end
+
+---@return IssuesDetailHeaderField|nil
+local function linked_branches_field()
+	local value = state.linked_branches
+	if value == nil then
+		return nil
+	end
+	if value == "loading" then
+		return { label = "Linked Branches", value = spinner.with_text("Loading..."), hl = "AtlasTextMuted" }
+	end
+	if type(value) == "string" then
+		return { label = "Linked Branches", value = value, hl = "AtlasLogError" }
+	end
+	if #value == 0 then
+		return { label = "Linked Branches", value = "None", hl = "AtlasTextMuted" }
+	end
+
+	local names = {}
+	for _, branch in ipairs(value) do
+		table.insert(names, tostring(branch.name))
+	end
+	return { label = "Linked Branches", value = table.concat(names, ", "), hl = "AtlasTextMuted" }
+end
+
 ---@param issue Issue
 ---@param tab_items IssuesDetailTabDefinition[]
 ---@param width integer
@@ -62,7 +113,11 @@ local function render_header(issue, tab_items, width)
 			and provider_detail.chips(issue, details, state.details_loading)
 		or {}
 
-	local header_lines, header_spans = header.render(issue, width, extra_fields)
+	local secondary_fields = {}
+	utils.insert_if(secondary_fields, linked_mr_field())
+	utils.insert_if(secondary_fields, linked_branches_field())
+
+	local header_lines, header_spans = header.render(issue, width, extra_fields, secondary_fields)
 	utils.append_block(lines, spans, { lines = header_lines, highlights = header_spans })
 
 	local chip_lines, chip_spans = chips.render({ width = width, extra_chips = extra_chips })

@@ -46,6 +46,9 @@ local function is_loading()
 	if state.issue_loading or state.details_loading then
 		return true
 	end
+	if state.linked_merge_requests == "loading" or state.linked_branches == "loading" then
+		return true
+	end
 	if state.current_issue == nil then
 		return false
 	end
@@ -182,6 +185,44 @@ local function load_details(ref, force_refresh)
 	end)
 end
 
+---@param issue Issue
+---@param force_refresh boolean
+local function load_linked(issue, force_refresh)
+	local provider = state.provider
+	local core = provider and provider.capabilities.core
+	if core == nil then
+		return
+	end
+
+	if core.fetch_linked_merge_requests then
+		state.linked_merge_requests = "loading"
+		state.requests.run(function(done)
+			return core.fetch_linked_merge_requests(issue, { force_load = force_refresh }, done)
+		end, function(items, err)
+			if not same_ref(state.current_issue, issue) then
+				return
+			end
+			state.linked_merge_requests = err and tostring(err) or (items or {})
+			update_spinner()
+			render_if_open()
+		end)
+	end
+
+	if core.fetch_linked_branches then
+		state.linked_branches = "loading"
+		state.requests.run(function(done)
+			return core.fetch_linked_branches(issue, { force_load = force_refresh }, done)
+		end, function(items, err)
+			if not same_ref(state.current_issue, issue) then
+				return
+			end
+			state.linked_branches = err and tostring(err) or (items or {})
+			update_spinner()
+			render_if_open()
+		end)
+	end
+end
+
 local function clear_issue()
 	stop_spinner()
 	cancel_requests()
@@ -191,6 +232,8 @@ local function clear_issue()
 	state.current_details = nil
 	state.details_loading = false
 	state.issue_loading = false
+	state.linked_merge_requests = nil
+	state.linked_branches = nil
 	state.line_map = {}
 end
 
@@ -201,6 +244,7 @@ local function show_issue(issue, force_refresh)
 	pending_ref = nil
 	state.issue_loading = false
 	load_active_tab(issue, { force_refresh = force_refresh })
+	load_linked(issue, force_refresh)
 	update_spinner()
 	render()
 end
@@ -239,6 +283,13 @@ end
 ---@return boolean
 function M.is_open()
 	return detail_ui.is_showing("issues")
+end
+
+--- Repaints the currently open detail view from whatever is already in
+--- state, without triggering any network refetch. Used after a local state
+--- mutation (e.g. a newly created branch) that doesn't warrant a full reload.
+function M.rerender()
+	render_if_open()
 end
 
 ---@param issue Issue
