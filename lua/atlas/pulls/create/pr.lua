@@ -466,33 +466,9 @@ end
 ---@field diffstat string[]|nil
 
 ---@param opts CreatePROpenOpts
-function M.open(opts)
-	--- Atlas might not be open when this is called, so we need to load the highlights
-	require("atlas.ui.shared.highlights").setup()
-	require("atlas.pulls.ui.highlights").setup()
-
-	---@type CreatePRState
-	local pr_state = {
-		fields = {
-			provider = opts.provider,
-			repo_slug = opts.repo_slug,
-			repo_root = opts.repo_root,
-			head = opts.head,
-			base = opts.base,
-			draft = opts.draft,
-			commit_count = opts.commit_count,
-			commits = opts.commits or {},
-			diffstat = opts.diffstat or {},
-			available_bases = opts.available_bases or { opts.base },
-			reviewers = "loading",
-		},
-		layout = {},
-		content_width = 80,
-		is_submitting = false,
-		settings_changed = false,
-		initial_body = opts.initial_body,
-	}
-
+---@param pr_state CreatePRState
+---@return table[]
+local function build_form_keymaps(pr_state)
 	local form_keymaps = {
 		{
 			key = "gb",
@@ -543,6 +519,37 @@ function M.open(opts)
 			end,
 		})
 	end
+	return form_keymaps
+end
+
+function M.open(opts)
+	--- Atlas might not be open when this is called, so we need to load the highlights
+	require("atlas.ui.shared.highlights").setup()
+	require("atlas.pulls.ui.highlights").setup()
+
+	---@type CreatePRState
+	local pr_state = {
+		fields = {
+			provider = opts.provider,
+			repo_slug = opts.repo_slug,
+			repo_root = opts.repo_root,
+			head = opts.head,
+			base = opts.base,
+			draft = opts.draft,
+			commit_count = opts.commit_count,
+			commits = opts.commits or {},
+			diffstat = opts.diffstat or {},
+			available_bases = opts.available_bases or { opts.base },
+			reviewers = "loading",
+		},
+		layout = {},
+		content_width = 80,
+		is_submitting = false,
+		settings_changed = false,
+		initial_body = opts.initial_body,
+	}
+
+	local form_keymaps = build_form_keymaps(pr_state)
 
 	form.open(pr_state, {
 		context_title = "Commits",
