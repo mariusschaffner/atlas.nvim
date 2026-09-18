@@ -261,6 +261,97 @@ end
 ---@param history_expanded boolean
 ---@param head_revision string|nil
 ---@return string[], table[], table<integer, table>
+---@param lines string[]
+---@param spans table[]
+---@param line_map table<integer, table>
+---@param item table
+---@param width integer
+---@param head_revision string|nil
+---@param entry table
+---@param key string
+---@param show_status boolean
+---@param full_body boolean|nil
+local function render_history_entry(lines, spans, line_map, item, width, head_revision, entry, key, show_status, full_body)
+	local icon, _, hl = review_state(entry.state)
+	local status = show_status and icon or ""
+	local details = utils.relative_time(entry.submitted_on)
+	local is_previous_entry = show_status
+		and entry.commit_hash
+		and head_revision
+		and entry.commit_hash ~= head_revision
+	if is_previous_entry then
+		details = details ~= "" and details .. "  previous commit" or "previous commit"
+	end
+	local body = entry.body and vim.trim(entry.body:gsub("%s+", " ")) or ""
+	if full_body and body ~= "" then
+		local body_prefix = status ~= "" and (status .. "  ") or ""
+		local continuation = string.rep(" ", vim.api.nvim_strwidth(body_prefix))
+		for index, row in ipairs(utils.wrap_line(body, math.max(1, width - vim.api.nvim_strwidth(body_prefix)))) do
+			local text = (index == 1 and body_prefix or continuation) .. row
+			table.insert(lines, text)
+			line_map[#lines] = { reviewer = item, review_history = entry, tree_key = key }
+			if index == 1 and status ~= "" then
+				table.insert(spans, {
+					line = #lines - 1,
+					start_col = 0,
+					end_col = #status,
+					hl_group = hl,
+				})
+			end
+		end
+		if details ~= "" then
+			if vim.api.nvim_strwidth(lines[#lines]) + vim.api.nvim_strwidth(details) + 2 <= width then
+				local start_col = #lines[#lines] + 2
+				lines[#lines] = lines[#lines] .. "  " .. details
+				table.insert(spans, {
+					line = #lines - 1,
+					start_col = start_col,
+					end_col = #lines[#lines],
+					hl_group = "AtlasTextMuted",
+				})
+			else
+				table.insert(lines, continuation .. details)
+				line_map[#lines] = { reviewer = item, review_history = entry, tree_key = key }
+				table.insert(spans, {
+					line = #lines - 1,
+					start_col = #continuation,
+					end_col = #lines[#lines],
+					hl_group = "AtlasTextMuted",
+				})
+			end
+		end
+		return
+	end
+	local separators = (status ~= "" and body ~= "" and 2 or 0) + (details ~= "" and (status ~= "" or body ~= "") and 2 or 0)
+	local body_width = math.max(0, width - vim.api.nvim_strwidth(status) - vim.api.nvim_strwidth(details) - separators)
+	body = utils.truncate(body, body_width)
+	local text = status
+	if body ~= "" then
+		text = text .. (status ~= "" and "  " or "") .. body
+	end
+	if details ~= "" then
+		text = text .. ((status ~= "" or body ~= "") and "  " or "") .. details
+	end
+	table.insert(lines, text)
+	line_map[#lines] = { reviewer = item, review_history = entry, tree_key = key }
+	if status ~= "" then
+		table.insert(spans, {
+			line = #lines - 1,
+			start_col = 0,
+			end_col = #status,
+			hl_group = hl,
+		})
+	end
+	if details ~= "" then
+		table.insert(spans, {
+			line = #lines - 1,
+			start_col = #text - #details,
+			end_col = #text,
+			hl_group = "AtlasTextMuted",
+		})
+	end
+end
+
 local function render_reviewer(item, width, expanded, history_expanded, head_revision, edit_key)
 	local lines, spans, line_map = {}, {}, {}
 	local history = item.history
@@ -316,94 +407,11 @@ local function render_reviewer(item, width, expanded, history_expanded, head_rev
 		tree_key = #history > 0 and item.key or nil,
 	}
 
-	local function render_history_entry(entry, key, show_status, full_body)
-		local icon, _, hl = review_state(entry.state)
-		local status = show_status and icon or ""
-		local details = utils.relative_time(entry.submitted_on)
-		local is_previous_entry = show_status
-			and entry.commit_hash
-			and head_revision
-			and entry.commit_hash ~= head_revision
-		if is_previous_entry then
-			details = details ~= "" and details .. "  previous commit" or "previous commit"
-		end
-		local body = entry.body and vim.trim(entry.body:gsub("%s+", " ")) or ""
-		if full_body and body ~= "" then
-			local body_prefix = status ~= "" and (status .. "  ") or ""
-			local continuation = string.rep(" ", vim.api.nvim_strwidth(body_prefix))
-			for index, row in ipairs(utils.wrap_line(body, math.max(1, width - vim.api.nvim_strwidth(body_prefix)))) do
-				local text = (index == 1 and body_prefix or continuation) .. row
-				table.insert(lines, text)
-				line_map[#lines] = { reviewer = item, review_history = entry, tree_key = key }
-				if index == 1 and status ~= "" then
-					table.insert(spans, {
-						line = #lines - 1,
-						start_col = 0,
-						end_col = #status,
-						hl_group = hl,
-					})
-				end
-			end
-			if details ~= "" then
-				if vim.api.nvim_strwidth(lines[#lines]) + vim.api.nvim_strwidth(details) + 2 <= width then
-					local start_col = #lines[#lines] + 2
-					lines[#lines] = lines[#lines] .. "  " .. details
-					table.insert(spans, {
-						line = #lines - 1,
-						start_col = start_col,
-						end_col = #lines[#lines],
-						hl_group = "AtlasTextMuted",
-					})
-				else
-					table.insert(lines, continuation .. details)
-					line_map[#lines] = { reviewer = item, review_history = entry, tree_key = key }
-					table.insert(spans, {
-						line = #lines - 1,
-						start_col = #continuation,
-						end_col = #lines[#lines],
-						hl_group = "AtlasTextMuted",
-					})
-				end
-			end
-			return
-		end
-		local separators = (status ~= "" and body ~= "" and 2 or 0)
-			+ (details ~= "" and (status ~= "" or body ~= "") and 2 or 0)
-		local body_width =
-			math.max(0, width - vim.api.nvim_strwidth(status) - vim.api.nvim_strwidth(details) - separators)
-		body = utils.truncate(body, body_width)
-		local text = status
-		if body ~= "" then
-			text = text .. (status ~= "" and "  " or "") .. body
-		end
-		if details ~= "" then
-			text = text .. ((status ~= "" or body ~= "") and "  " or "") .. details
-		end
-		table.insert(lines, text)
-		line_map[#lines] = { reviewer = item, review_history = entry, tree_key = key }
-		if status ~= "" then
-			table.insert(spans, {
-				line = #lines - 1,
-				start_col = 0,
-				end_col = #status,
-				hl_group = hl,
-			})
-		end
-		if details ~= "" then
-			table.insert(spans, {
-				line = #lines - 1,
-				start_col = #text - #details,
-				end_col = #text,
-				hl_group = "AtlasTextMuted",
-			})
-		end
-	end
-
 	if expanded and #history > 0 then
 		local latest = history[#history]
 		local has_body = vim.trim(latest.body or "") ~= ""
 		local show_status = not item.reviewer or latest.state ~= item.reviewer.decision or not has_body
-		render_history_entry(latest, item.key, show_status, true)
+		render_history_entry(lines, spans, line_map, item, width, head_revision, latest, item.key, show_status, true)
 		if edit_key and latest.id and has_body then
 			local footer = edit_key .. " edit"
 			table.insert(lines, footer)
@@ -437,7 +445,7 @@ local function render_reviewer(item, width, expanded, history_expanded, head_rev
 			})
 			if history_expanded then
 				for index = #history - 1, 1, -1 do
-					render_history_entry(history[index], history_key, true)
+					render_history_entry(lines, spans, line_map, item, width, head_revision, history[index], history_key, true)
 				end
 			end
 		end
@@ -625,23 +633,13 @@ end
 
 ---@param panel AtlasDiffReviewPanel|nil
 ---@param session AtlasDiffSession|nil
-function M.render(panel, session)
-	if not panel then
-		return
-	end
-	if session then
-		panel.session = session
-	end
-	if not active(panel) or not panel.session then
-		return
-	end
-
-	local data = panel_data(panel.session)
-	local selected = tree_key(selected_entry(panel))
-	local cursor = vim.api.nvim_win_get_cursor(panel.win)
-	local width = math.max(6, vim.api.nvim_win_get_width(panel.win))
-	local lines, spans, line_map = {}, {}, {}
-	local reviewers, pending_comments, published_comments, standalone_tasks = panel_items(data)
+--- Computes the comment/task/review action-key hints, sets the panel
+--- window's winbar (comment/task/pending counts), and returns the action
+--- keys for use by the section-rendering loop below.
+---@param panel AtlasDiffReviewPanel
+---@param data table
+---@return table comment_action_keys, table task_action_keys, string|nil review_edit_key
+local function render_winbar_and_action_keys(panel, data)
 	local published, pending = 0, 0
 	for _, items in ipairs({ data.comments, data.tasks }) do
 		for _, item in ipairs(items) do
@@ -680,6 +678,28 @@ function M.render(panel, session)
 		winbar = winbar .. string.format("   %s Pending: %d", pending_icon, pending)
 	end
 	vim.wo[panel.win].winbar = winbar .. " "
+
+	return comment_action_keys, task_action_keys, review_edit_key
+end
+
+function M.render(panel, session)
+	if not panel then
+		return
+	end
+	if session then
+		panel.session = session
+	end
+	if not active(panel) or not panel.session then
+		return
+	end
+
+	local data = panel_data(panel.session)
+	local selected = tree_key(selected_entry(panel))
+	local cursor = vim.api.nvim_win_get_cursor(panel.win)
+	local width = math.max(6, vim.api.nvim_win_get_width(panel.win))
+	local lines, spans, line_map = {}, {}, {}
+	local reviewers, pending_comments, published_comments, standalone_tasks = panel_items(data)
+	local comment_action_keys, task_action_keys, review_edit_key = render_winbar_and_action_keys(panel, data)
 	local sections = {
 		{ id = "pending", title = "Pending", item_name = "comment", items = pending_comments },
 		{
