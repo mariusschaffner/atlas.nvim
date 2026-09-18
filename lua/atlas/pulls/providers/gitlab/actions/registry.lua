@@ -5,6 +5,7 @@ local action_utils = require("atlas.pulls.actions.utils")
 local icons = require("atlas.ui.shared.icons")
 local picker = require("atlas.ui.picker")
 local core_notify = require("atlas.core.notify")
+local core_utils = require("atlas.core.utils")
 local pullrequests_api = require("atlas.pulls.providers.gitlab.api.pullrequests")
 local users_api = require("atlas.pulls.providers.gitlab.api.users")
 local service = require("atlas.providers.gitlab.client")
@@ -166,12 +167,10 @@ local function edit_assignees(ctx, done)
 			notify(ctx, "success", "Members loaded", 1200)
 
 			local original = {}
-			local original_set = {}
 			for _, a in ipairs(assignees) do
 				local id = tonumber(a.id)
 				if id then
 					table.insert(original, { id = id, username = a.username, name = a.name or a.username })
-					original_set[id] = true
 				end
 			end
 
@@ -191,31 +190,20 @@ local function edit_assignees(ctx, done)
 				end,
 				title = string.format("Assignees for %s", pr_label(pr)),
 				on_done = function(selected)
+					local id_key = function(item)
+						return tonumber(item.id)
+					end
+					if not core_utils.selection_changed(original, selected, id_key) then
+						done({ changed_pr = false, message = "No changes" }, nil)
+						return
+					end
+
 					local final_ids = {}
-					local final_set = {}
 					for _, it in ipairs(selected) do
 						local id = tonumber(it.id)
 						if id then
 							table.insert(final_ids, id)
-							final_set[id] = true
 						end
-					end
-
-					local changed = false
-					if #final_ids ~= #original then
-						changed = true
-					else
-						for id, _ in pairs(original_set) do
-							if not final_set[id] then
-								changed = true
-								break
-							end
-						end
-					end
-
-					if not changed then
-						done({ changed_pr = false, message = "No changes" }, nil)
-						return
 					end
 
 					notify(ctx, "loading", string.format("Updating assignees on %s...", pr_label(pr)))

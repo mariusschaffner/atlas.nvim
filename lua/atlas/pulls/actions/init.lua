@@ -6,6 +6,7 @@ local picker = require("atlas.ui.picker")
 local review = require("atlas.pulls.actions.review")
 local utils = require("atlas.pulls.actions.utils")
 local ui_utils = require("atlas.ui.shared.utils")
+local core_utils = require("atlas.core.utils")
 
 local has_pr = utils.has_pr
 local notify = utils.notify
@@ -338,20 +339,10 @@ M.edit_reviewers = {
 				end,
 				title = string.format("Reviewers for #%s", tostring(pr.id or "")),
 				on_done = function(chosen)
-					local changed = #chosen ~= #original
-					if not changed then
-						local chosen_ids = {}
-						for _, reviewer in ipairs(chosen) do
-							chosen_ids[reviewer.provider_id] = true
-						end
-						for _, reviewer in ipairs(original) do
-							if not chosen_ids[reviewer.provider_id] then
-								changed = true
-								break
-							end
-						end
+					local provider_id_key = function(reviewer)
+						return reviewer.provider_id
 					end
-					if not changed then
+					if not core_utils.selection_changed(original, chosen, provider_id_key) then
 						done({ changed_pr = false, message = "No changes" }, nil)
 						return
 					end
