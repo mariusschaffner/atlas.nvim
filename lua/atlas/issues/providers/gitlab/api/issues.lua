@@ -587,7 +587,14 @@ function M.fetch_related_branches(issue, opts, on_done)
 		end
 	end
 
-	local endpoint = string.format("/projects/%s/issues/%d/related_branches", service.url_encode(path), iid)
+	-- GitLab does not expose a stable public REST endpoint for "related
+	-- branches" -- the issue page widget is backed by an internal web route
+	-- (/-/issues/:iid/related_branches), which 404s against the versioned
+	-- API. Branches created from an issue always follow the "<iid>-slug"
+	-- naming convention GitLab itself generates, so derive the list from the
+	-- standard repository branches endpoint instead.
+	local endpoint = string.format("/projects/%s/repository/branches?per_page=100", service.url_encode(path))
+	local prefix = tostring(iid) .. "-"
 	return service.request("GET", endpoint, nil, function(result, err)
 		if err then
 			on_done(nil, err)
@@ -597,7 +604,7 @@ function M.fetch_related_branches(issue, opts, on_done)
 		for _, raw_value in ipairs(json.safe_table(result)) do
 			local raw = json.safe_table(raw_value)
 			local name = json.safe_str(raw.name)
-			if name and name ~= "" then
+			if name and (name == tostring(iid) or name:sub(1, #prefix) == prefix) then
 				table.insert(items, { name = name })
 			end
 		end

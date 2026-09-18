@@ -43,7 +43,7 @@ local function open_linked_mr(mr)
 		notify.error("Pull request provider unavailable")
 		return
 	end
-	require("atlas.pulls.ui.detail").open_ref({ id = mr.id, repo_full_name = mr.repo_full_name }, {
+	require("atlas.pulls.ui.detail").open({ id = mr.id, repo_full_name = mr.repo_full_name }, {
 		provider = pulls_provider,
 	})
 end
