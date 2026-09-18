@@ -135,6 +135,7 @@ function M.to_issue(raw)
 		closed_at = closed_at,
 		comment_count = tonumber(raw.user_notes_count) or 0,
 		is_subscribed = json.nilify(raw.subscribed),
+		confidential = json.nilify(raw.confidential),
 	}
 	return issue
 end

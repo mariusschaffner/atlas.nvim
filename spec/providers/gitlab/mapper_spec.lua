@@ -14,6 +14,18 @@ describe("GitLab issue mapper", function()
 		assert.are.equal(42, issue.iid)
 	end)
 
+	it("maps the confidential flag onto issues", function()
+		local issue = issue_mapper.to_issue({
+			iid = 42,
+			references = { full = "group/project#42" },
+			title = "Confidential issue",
+			state = "opened",
+			confidential = true,
+		})
+
+		assert.is_true(issue.confidential)
+	end)
+
 	it("maps only supplemental issue details", function()
 		local details = issue_mapper.to_issue_details({
 			iid = 7,
