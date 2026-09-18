@@ -320,6 +320,157 @@ end
 
 ---@param session AtlasDiffSession
 ---@param annotated_paths? table<string, { comments: boolean }>
+---@param headers table<integer, table>
+---@param lines string[]
+---@param text string
+---@param spacing boolean|nil
+local function add_header(headers, lines, text, spacing)
+	local row = #lines
+	local virtual_lines = headers[row] or {}
+	if spacing then
+		table.insert(virtual_lines, { { " ", "Normal" } })
+	end
+	table.insert(virtual_lines, { { text, "AtlasLogInfo" } })
+	headers[row] = virtual_lines
+end
+
+---@class AtlasNativeDiffRenderCtx
+---@field session AtlasDiffSession
+---@field lines string[]
+---@field highlights table[]
+---@field width integer
+---@field annotated_paths table
+
+---@param ctx AtlasNativeDiffRenderCtx
+---@param file_index integer
+---@param branch string
+---@param show_directory boolean
+local function add_file(ctx, file_index, branch, show_directory)
+	local session, lines, highlights, width, annotated_paths =
+		ctx.session, ctx.lines, ctx.highlights, ctx.width, ctx.annotated_paths
+	local file = session.viewer_state.files[file_index]
+	local label = basename(file.path)
+	local parent = directory(file.path)
+	local status, status_highlight = status_marker(file.status)
+	local annotation = annotated_paths[file.path]
+	local old_annotation = file.old_path and annotated_paths[file.old_path]
+	local has_comments = (annotation and annotation.comments) or (old_annotation and old_annotation.comments)
+	local devicon, devicon_hl = web_icon(basename(file.path))
+	local status_part = { text = status, hl_group = status_highlight }
+	local suffix_parts = stat_parts(file)
+	table.insert(suffix_parts, status_part)
+	local suffix_texts = {}
+	for _, part in ipairs(suffix_parts) do
+		table.insert(suffix_texts, part.text)
+	end
+	local suffix = table.concat(suffix_texts, " ")
+
+	local prefix_parts = {}
+	if has_comments then
+		table.insert(prefix_parts, { text = comment_icon, hl_group = "AtlasLogInfo" })
+	end
+	if devicon then
+		table.insert(prefix_parts, { text = devicon, hl_group = devicon_hl or "AtlasTextMuted" })
+	end
+	local prefix_texts = {}
+	for _, part in ipairs(prefix_parts) do
+		table.insert(prefix_texts, part.text)
+	end
+	local prefix = #prefix_texts > 0 and (table.concat(prefix_texts, " ") .. " ") or ""
+	local available = math.max(1, width - vim.fn.strdisplaywidth(branch) - vim.fn.strdisplaywidth(prefix) - 1)
+	if vim.fn.strdisplaywidth(label .. " " .. suffix) > available then
+		suffix_parts = { status_part }
+		suffix = status
+	end
+	local suffix_width = suffix ~= "" and vim.fn.strdisplaywidth(suffix) + 1 or 0
+	local content_width = math.max(1, available - suffix_width)
+	local display_label = utils.truncate(label, content_width)
+	local path_width = content_width - vim.fn.strdisplaywidth(display_label) - 1
+	local display_path = show_directory and parent and path_width > 2 and utils.truncate(parent .. "/", path_width)
+		or ""
+	local content = display_label .. (display_path ~= "" and " " .. display_path or "")
+	local left = branch .. prefix .. content
+	local padding = suffix ~= ""
+			and math.max(1, width - vim.fn.strdisplaywidth(left) - vim.fn.strdisplaywidth(suffix) - 1)
+		or 0
+	local text = left .. string.rep(" ", padding) .. suffix
+	table.insert(lines, text)
+	local line = #lines
+	session.viewer_state.panel_items[line] = { kind = "file", index = file_index }
+
+	table.insert(highlights, { line - 1, 0, #branch, "AtlasTextMuted" })
+	local col = #branch
+	for _, part in ipairs(prefix_parts) do
+		table.insert(highlights, { line - 1, col, col + #part.text, part.hl_group })
+		col = col + #part.text + 1
+	end
+	table.insert(highlights, { line - 1, col, col + #display_label, "Normal" })
+	if display_path ~= "" then
+		local path_start = col + #display_label + 1
+		table.insert(highlights, { line - 1, path_start, path_start + #display_path, "AtlasTextMuted" })
+	end
+	local stat_col = #left + padding
+	for _, part in ipairs(suffix_parts) do
+		table.insert(highlights, { line - 1, stat_col, stat_col + #part.text, part.hl_group })
+		stat_col = stat_col + #part.text + 1
+	end
+end
+
+---@param ctx AtlasNativeDiffRenderCtx
+---@param node AtlasNativeDiffExplorerTree
+---@param label string
+---@param branch string
+---@return boolean collapsed
+local function add_folder(ctx, node, label, branch)
+	local session, lines, highlights, width = ctx.session, ctx.lines, ctx.highlights, ctx.width
+	local collapsed = session.viewer_state.collapsed_folders[node.path] == true
+	local icon = collapsed and folder_closed_icon or folder_open_icon
+	local icon_hl = collapsed and folder_closed_icon_hl or folder_open_icon_hl
+	local available = width - vim.fn.strdisplaywidth(branch) - vim.fn.strdisplaywidth(icon) - 1
+	label = utils.truncate(label, math.max(1, available))
+	local text = branch .. icon .. " " .. label
+	table.insert(lines, text)
+	session.viewer_state.panel_items[#lines] = { kind = "folder", path = node.path }
+	table.insert(highlights, { #lines - 1, 0, #branch, "AtlasTextMuted" })
+	local icon_start = #branch
+	table.insert(highlights, { #lines - 1, icon_start, icon_start + #icon, icon_hl })
+	local label_start = icon_start + #icon + 1
+	table.insert(highlights, { #lines - 1, label_start, #text, "AtlasLogInfo" })
+	return collapsed
+end
+
+---@param ctx AtlasNativeDiffRenderCtx
+---@param indices integer[]
+local function add_section(ctx, indices)
+	if not ctx.session.viewer_state.explorer.grouped then
+		for _, index in ipairs(indices) do
+			add_file(ctx, index, "  ", true)
+		end
+		return
+	end
+
+	local function add_tree(node, prefix)
+		local folders = sorted_folders(node)
+		local files = sorted_files(node, ctx.session.viewer_state.files)
+		local total = #folders + #files
+		local entry = 0
+		for _, folder in ipairs(folders) do
+			entry = entry + 1
+			local displayed, label = compact_folder(folder)
+			local last = entry == total
+			local collapsed = add_folder(ctx, displayed, label, prefix .. (last and "└ " or "├ "))
+			if not collapsed then
+				add_tree(displayed, prefix .. (last and "  " or "│ "))
+			end
+		end
+		for _, index in ipairs(files) do
+			entry = entry + 1
+			add_file(ctx, index, prefix .. (entry == total and "└ " or "├ "), false)
+		end
+	end
+	add_tree(build_tree(ctx.session.viewer_state.files, indices), "")
+end
+
 function M.render(session, annotated_paths)
 	local buf = session.viewer_state.panel.buf
 	if not vim.api.nvim_buf_is_valid(buf) then
@@ -336,146 +487,18 @@ function M.render(session, annotated_paths)
 	session.viewer_state.panel_items = {}
 
 	annotated_paths = annotated_paths or {}
-	---@param text string
-	---@param spacing boolean|nil
-	local function add_header(text, spacing)
-		local row = #lines
-		local virtual_lines = headers[row] or {}
-		if spacing then
-			table.insert(virtual_lines, { { " ", "Normal" } })
-		end
-		table.insert(virtual_lines, { { text, "AtlasLogInfo" } })
-		headers[row] = virtual_lines
-	end
+	local ctx = {
+		session = session,
+		lines = lines,
+		highlights = highlights,
+		width = width,
+		annotated_paths = annotated_paths,
+	}
 
-	---@param file_index integer
-	---@param branch string
-	---@param show_directory boolean
-	local function add_file(file_index, branch, show_directory)
-		local file = session.viewer_state.files[file_index]
-		local label = basename(file.path)
-		local parent = directory(file.path)
-		local status, status_highlight = status_marker(file.status)
-		local annotation = annotated_paths[file.path]
-		local old_annotation = file.old_path and annotated_paths[file.old_path]
-		local has_comments = (annotation and annotation.comments) or (old_annotation and old_annotation.comments)
-		local devicon, devicon_hl = web_icon(basename(file.path))
-		local status_part = { text = status, hl_group = status_highlight }
-		local suffix_parts = stat_parts(file)
-		table.insert(suffix_parts, status_part)
-		local suffix_texts = {}
-		for _, part in ipairs(suffix_parts) do
-			table.insert(suffix_texts, part.text)
-		end
-		local suffix = table.concat(suffix_texts, " ")
-
-		local prefix_parts = {}
-		if has_comments then
-			table.insert(prefix_parts, { text = comment_icon, hl_group = "AtlasLogInfo" })
-		end
-		if devicon then
-			table.insert(prefix_parts, { text = devicon, hl_group = devicon_hl or "AtlasTextMuted" })
-		end
-		local prefix_texts = {}
-		for _, part in ipairs(prefix_parts) do
-			table.insert(prefix_texts, part.text)
-		end
-		local prefix = #prefix_texts > 0 and (table.concat(prefix_texts, " ") .. " ") or ""
-		local available = math.max(1, width - vim.fn.strdisplaywidth(branch) - vim.fn.strdisplaywidth(prefix) - 1)
-		if vim.fn.strdisplaywidth(label .. " " .. suffix) > available then
-			suffix_parts = { status_part }
-			suffix = status
-		end
-		local suffix_width = suffix ~= "" and vim.fn.strdisplaywidth(suffix) + 1 or 0
-		local content_width = math.max(1, available - suffix_width)
-		local display_label = utils.truncate(label, content_width)
-		local path_width = content_width - vim.fn.strdisplaywidth(display_label) - 1
-		local display_path = show_directory and parent and path_width > 2 and utils.truncate(parent .. "/", path_width)
-			or ""
-		local content = display_label .. (display_path ~= "" and " " .. display_path or "")
-		local left = branch .. prefix .. content
-		local padding = suffix ~= ""
-				and math.max(1, width - vim.fn.strdisplaywidth(left) - vim.fn.strdisplaywidth(suffix) - 1)
-			or 0
-		local text = left .. string.rep(" ", padding) .. suffix
-		table.insert(lines, text)
-		local line = #lines
-		session.viewer_state.panel_items[line] = { kind = "file", index = file_index }
-
-		table.insert(highlights, { line - 1, 0, #branch, "AtlasTextMuted" })
-		local col = #branch
-		for _, part in ipairs(prefix_parts) do
-			table.insert(highlights, { line - 1, col, col + #part.text, part.hl_group })
-			col = col + #part.text + 1
-		end
-		table.insert(highlights, { line - 1, col, col + #display_label, "Normal" })
-		if display_path ~= "" then
-			local path_start = col + #display_label + 1
-			table.insert(highlights, { line - 1, path_start, path_start + #display_path, "AtlasTextMuted" })
-		end
-		local stat_col = #left + padding
-		for _, part in ipairs(suffix_parts) do
-			table.insert(highlights, { line - 1, stat_col, stat_col + #part.text, part.hl_group })
-			stat_col = stat_col + #part.text + 1
-		end
-	end
-
-	---@param node AtlasNativeDiffExplorerTree
-	---@param label string
-	---@param branch string
-	---@return boolean collapsed
-	local function add_folder(node, label, branch)
-		local collapsed = session.viewer_state.collapsed_folders[node.path] == true
-		local icon = collapsed and folder_closed_icon or folder_open_icon
-		local icon_hl = collapsed and folder_closed_icon_hl or folder_open_icon_hl
-		local available = width - vim.fn.strdisplaywidth(branch) - vim.fn.strdisplaywidth(icon) - 1
-		label = utils.truncate(label, math.max(1, available))
-		local text = branch .. icon .. " " .. label
-		table.insert(lines, text)
-		session.viewer_state.panel_items[#lines] = { kind = "folder", path = node.path }
-		table.insert(highlights, { #lines - 1, 0, #branch, "AtlasTextMuted" })
-		local icon_start = #branch
-		table.insert(highlights, { #lines - 1, icon_start, icon_start + #icon, icon_hl })
-		local label_start = icon_start + #icon + 1
-		table.insert(highlights, { #lines - 1, label_start, #text, "AtlasLogInfo" })
-		return collapsed
-	end
-
-	---@param indices integer[]
-	local function add_section(indices)
-		if not session.viewer_state.explorer.grouped then
-			for _, index in ipairs(indices) do
-				add_file(index, "  ", true)
-			end
-			return
-		end
-
-		local function add_tree(node, prefix)
-			local folders = sorted_folders(node)
-			local files = sorted_files(node, session.viewer_state.files)
-			local total = #folders + #files
-			local entry = 0
-			for _, folder in ipairs(folders) do
-				entry = entry + 1
-				local displayed, label = compact_folder(folder)
-				local last = entry == total
-				local collapsed = add_folder(displayed, label, prefix .. (last and "└ " or "├ "))
-				if not collapsed then
-					add_tree(displayed, prefix .. (last and "  " or "│ "))
-				end
-			end
-			for _, index in ipairs(files) do
-				entry = entry + 1
-				add_file(index, prefix .. (entry == total and "└ " or "├ "), false)
-			end
-		end
-		add_tree(build_tree(session.viewer_state.files, indices), "")
-	end
-
-	add_section(unreviewed)
+	add_section(ctx, unreviewed)
 	if session.review or #reviewed > 0 then
-		add_header(string.format("Reviewed (%d)", #reviewed), true)
-		add_section(reviewed)
+		add_header(headers, lines, string.format("Reviewed (%d)", #reviewed), true)
+		add_section(ctx, reviewed)
 	end
 
 	write(session, lines, highlights, headers, first_header)
