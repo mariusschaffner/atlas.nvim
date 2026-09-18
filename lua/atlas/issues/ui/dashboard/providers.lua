@@ -154,37 +154,17 @@ local function gitlab()
 	return { columns = columns, values = values, highlights = highlights, label = key_label }
 end
 
-local function default()
-	return {
-		columns = columns,
-		label = function(issue)
-			return tostring(issue.key or "")
-		end,
-		values = function(issue, _is_child, _layout, label_width)
-			local label = tostring(issue.key or "")
-			if label_width ~= nil and label_width > #label then
-				label = label .. string.rep(" ", label_width - #label)
-			end
-			return {
-				icon = "",
-				name = label .. " " .. (issue.title or ""),
-				assignee = (issue.assignee and issue.assignee.display_name) or "Unassigned",
-				reporter = (issue.reporter and issue.reporter.display_name) or "Unknown",
-				status = string.format(" %s ", issue.status or ""),
-			}
-		end,
-	}
-end
-
 local displays = {
 	gitlab = gitlab(),
 }
-local fallback = default()
 
 ---@param provider_id string|nil
 ---@return table
 function M.get(provider_id)
-	return displays[provider_id] or fallback
+	-- GitLab is the only provider atlas.providers ever registers, so this
+	-- falls back to it rather than a separate (and previously unreachable)
+	-- generic display.
+	return displays[provider_id] or displays.gitlab
 end
 
 return M

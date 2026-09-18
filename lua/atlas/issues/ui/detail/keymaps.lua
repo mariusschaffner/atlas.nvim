@@ -159,46 +159,6 @@ function M.register(buf, opts)
 		)
 	end
 
-	if supports("reporter") then
-		utils.insert_if(
-			items,
-			resolver.item("issues.change_reporter", {
-				desc = "Change reporter",
-				hint_desc = "Change Reporter",
-				callback = function()
-					local issue = state.current_issue
-					if issue == nil then
-						return
-					end
-					local on_update = state.on_update
-					actions.run("reporter", context(issue), function(result)
-						complete_action(issue, on_update, result)
-					end)
-				end,
-			})
-		)
-	end
-
-	if supports("edit_issue") then
-		utils.insert_if(
-			items,
-			resolver.item("issues.edit_issue", {
-				desc = "Edit issue",
-				hint_desc = "Edit",
-				callback = function()
-					local issue = state.current_issue
-					if issue == nil then
-						return
-					end
-					local on_update = state.on_update
-					actions.run("edit_issue", context(issue), function(result)
-						complete_action(issue, on_update, result)
-					end)
-				end,
-			})
-		)
-	end
-
 	if supports("labels") then
 		utils.insert_if(
 			items,
@@ -408,9 +368,7 @@ function M.remove(buf)
 	utils.insert_if(general, resolver.remove_item("ui.previous_item"))
 	utils.insert_if(general, resolver.remove_item("ui.open_actions"))
 	utils.insert_if(general, resolver.remove_item("issues.change_assignee"))
-	utils.insert_if(general, resolver.remove_item("issues.change_reporter"))
 	utils.insert_if(general, resolver.remove_item("issues.change_label"))
-	utils.insert_if(general, resolver.remove_item("issues.edit_issue"))
 	utils.insert_if(general, resolver.remove_item("issues.create_branch"))
 	utils.insert_if(general, resolver.remove_item("issues.go_to_pull"))
 	utils.insert_if(general, resolver.remove_item("ui.next_panel_tab"))

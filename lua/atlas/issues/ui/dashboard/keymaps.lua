@@ -1,6 +1,5 @@
 local M = {}
 
-local notify = require("atlas.core.notify")
 local resolver = require("atlas.core.keymaps")
 local utils = require("atlas.ui.shared.utils")
 local actions = require("atlas.issues.actions")
@@ -27,17 +26,8 @@ function M.register(buf, views)
 	local state = require("atlas.issues.state")
 	local provider = assert(state.provider)
 	local provider_name = provider.name
-	local capabilities = provider.capabilities
 	local function context(issue)
 		return { provider = provider, issue = issue, current_user = state.current_user }
-	end
-	local function supports(action_id)
-		for _, action in ipairs((capabilities.actions and capabilities.actions.items) or {}) do
-			if action.id == action_id then
-				return true
-			end
-		end
-		return false
 	end
 
 	local items = {}
@@ -131,25 +121,6 @@ function M.register(buf, views)
 			end,
 		})
 	)
-
-	if supports("edit_issue") then
-		utils.insert_if(
-			items,
-			resolver.item("issues.edit_issue", {
-				desc = "Edit issue",
-				hint_desc = "Edit",
-				index = 31,
-				callback = function()
-					local issue = selected_issue()
-					if issue == nil then
-						notify.warn("No issue selected")
-						return
-					end
-					actions.run("edit_issue", context(issue), controller.apply_action_result)
-				end,
-			})
-		)
-	end
 
 	M.remove(buf)
 	help.register(provider_name, items, {
