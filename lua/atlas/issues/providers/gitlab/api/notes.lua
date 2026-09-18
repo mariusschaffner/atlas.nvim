@@ -198,6 +198,29 @@ function M.reply_comment(issue, parent, body, on_done)
 	})
 end
 
+---@param path string
+---@param iid integer
+---@param comment IssueComment
+---@return string endpoint, string note_id, string discussion_id
+local function note_endpoint(path, iid, comment)
+	local note_id = tostring(comment.id)
+	local discussion_id = comment._raw and tostring(comment._raw.discussion_id or "") or ""
+	if discussion_id ~= "" then
+		return string.format(
+			"/projects/%s/issues/%d/discussions/%s/notes/%s",
+			service.url_encode(path),
+			iid,
+			discussion_id,
+			note_id
+		),
+			note_id,
+			discussion_id
+	end
+	return string.format("/projects/%s/issues/%d/notes/%s", service.url_encode(path), iid, note_id),
+		note_id,
+		discussion_id
+end
+
 ---@param issue Issue
 ---@param comment IssueComment
 ---@param body string
@@ -214,18 +237,7 @@ function M.edit_comment(issue, comment, body, on_done)
 		return nil
 	end
 
-	local note_id = tostring(comment.id)
-	local discussion_id = comment._raw and tostring(comment._raw.discussion_id or "") or ""
-	local endpoint = string.format("/projects/%s/issues/%d/notes/%s", service.url_encode(path), iid, note_id)
-	if discussion_id ~= "" then
-		endpoint = string.format(
-			"/projects/%s/issues/%d/discussions/%s/notes/%s",
-			service.url_encode(path),
-			iid,
-			discussion_id,
-			note_id
-		)
-	end
+	local endpoint, note_id, discussion_id = note_endpoint(path, iid, comment)
 	return service.request("PUT", endpoint, { body = body }, function(result, err)
 		if err then
 			on_done(nil, err)
@@ -255,18 +267,7 @@ function M.delete_comment(issue, comment, on_done)
 		return nil
 	end
 
-	local note_id = tostring(comment.id)
-	local discussion_id = comment._raw and tostring(comment._raw.discussion_id or "") or ""
-	local endpoint = string.format("/projects/%s/issues/%d/notes/%s", service.url_encode(path), iid, note_id)
-	if discussion_id ~= "" then
-		endpoint = string.format(
-			"/projects/%s/issues/%d/discussions/%s/notes/%s",
-			service.url_encode(path),
-			iid,
-			discussion_id,
-			note_id
-		)
-	end
+	local endpoint, note_id, _discussion_id = note_endpoint(path, iid, comment)
 	return service.request("DELETE", endpoint, nil, function(_, err)
 		if err then
 			on_done(false, err)
