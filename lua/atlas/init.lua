@@ -3,7 +3,6 @@ local M = {}
 local config = require("atlas.config")
 local logger = require("atlas.core.logger")
 local notify = require("atlas.core.notify")
-local picker = require("atlas.ui.picker")
 local providers = require("atlas.providers")
 
 ---@param opts AtlasConfig|nil
@@ -86,25 +85,10 @@ function M.open(domain, provider_id, opts)
 		notify.error(string.format("No %s providers configured", domain), { vim_notify = true })
 		return
 	end
-	if #ids == 1 then
-		open_with_provider(domain, ids[1], opts)
-		return
-	end
 
-	picker.select({
-		title = "Select provider:",
-		items = ids,
-		format_item = function(id)
-			local provider = providers[id]
-			return provider and provider.name or id
-		end,
-		on_select = function(choice)
-			if choice == nil then
-				return
-			end
-			open_with_provider(domain, choice, opts)
-		end,
-	})
+	-- Exactly one provider (GitLab) is ever registered (see atlas.providers),
+	-- so `ids` can only ever have 0 or 1 entries here.
+	open_with_provider(domain, ids[1], opts)
 end
 
 return M
