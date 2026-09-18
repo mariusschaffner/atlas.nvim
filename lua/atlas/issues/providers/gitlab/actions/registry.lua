@@ -27,58 +27,6 @@ local function register(action)
 end
 
 ---@param ctx AtlasIssueActionContext
----@return boolean, string|nil
-local function close_available(ctx)
-	if not has_issue(ctx) then
-		return false, "No issue selected"
-	end
-	return assert(ctx.issue).status_id ~= "closed", "Issue is already closed"
-end
-
----@param ctx AtlasIssueActionContext
----@param done fun(result: IssuesActionResult|nil, err: string|nil)
-local function close(ctx, done)
-	local issue = assert(ctx.issue)
-	local key = tostring(issue.key or "")
-	notify.loading(string.format("Closing %s...", key))
-	issues_api.set_state(key, "close", function(ok, err)
-		if not ok then
-			notify.error(err or "Close failed")
-			done(nil, err or "Close failed")
-			return
-		end
-		notify.success(string.format("Closed %s", key), { timeout = 1200 })
-		done({ issue_key = key }, nil)
-	end)
-end
-
----@param ctx AtlasIssueActionContext
----@return boolean, string|nil
-local function reopen_available(ctx)
-	if not has_issue(ctx) then
-		return false, "No issue selected"
-	end
-	return assert(ctx.issue).status_id == "closed", "Issue is not closed"
-end
-
----@param ctx AtlasIssueActionContext
----@param done fun(result: IssuesActionResult|nil, err: string|nil)
-local function reopen(ctx, done)
-	local issue = assert(ctx.issue)
-	local key = tostring(issue.key or "")
-	notify.loading(string.format("Reopening %s...", key))
-	issues_api.set_state(key, "reopen", function(ok, err)
-		if not ok then
-			notify.error(err or "Reopen failed")
-			done(nil, err or "Reopen failed")
-			return
-		end
-		notify.success(string.format("Reopened %s", key), { timeout = 1200 })
-		done({ issue_key = key }, nil)
-	end)
-end
-
----@param ctx AtlasIssueActionContext
 ---@param done fun(result: IssuesActionResult|nil, err: string|nil)
 local function transition(ctx, done)
 	local issue = assert(ctx.issue)
@@ -474,8 +422,6 @@ local function toggle_subscription(ctx, done)
 	})
 end
 
-register({ id = "close", label = "Close Issue", is_available = close_available, run = close })
-register({ id = "reopen", label = "Reopen Issue", is_available = reopen_available, run = reopen })
 register({
 	id = "transition",
 	label = "Toggle Open/Closed",

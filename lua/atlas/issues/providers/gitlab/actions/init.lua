@@ -5,8 +5,6 @@ local notify = require("atlas.core.notify")
 
 ---@alias AtlasGitLabIssueActionId
 ---| AtlasIssueActionId
----| "close"
----| "reopen"
 ---| "labels"
 
 M.items = registry.items
