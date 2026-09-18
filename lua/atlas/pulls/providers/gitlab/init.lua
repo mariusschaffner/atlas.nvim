@@ -35,7 +35,7 @@ local repositories_api = require("atlas.pulls.providers.gitlab.api.repositories"
 local reviews_api = require("atlas.pulls.providers.gitlab.api.reviews")
 local repo_detail_ui = require("atlas.pulls.providers.gitlab.ui.repo_detail")
 local users_api = require("atlas.pulls.providers.gitlab.api.users")
-local git = require("atlas.core.git")
+local views_helper = require("atlas.providers.gitlab.views_helper")
 local request_scope = require("atlas.core.requests")
 local GITLAB_REACTION_OPTIONS = require("atlas.ui.shared.emojis").gitlab()
 
@@ -210,25 +210,7 @@ local function views()
 			{ name = "Created", key = "2", scope = "created_by_me" },
 		}
 	end
-	local repo
-	for _, view in ipairs(configured) do
-		if view.current_repo then
-			local target = git.local_repository()
-			if target and target.provider == "gitlab" then
-				repo = target.repo_full_name
-			end
-			break
-		end
-	end
-	local resolved = {}
-	for i, view in ipairs(configured) do
-		resolved[i] = vim.tbl_extend("force", {}, view)
-		if view.current_repo and repo then
-			resolved[i].project = repo
-			resolved[i].scope = view.scope or "all"
-		end
-	end
-	return resolved
+	return views_helper.resolve(configured)
 end
 
 ---@param target AtlasTarget
