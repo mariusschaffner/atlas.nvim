@@ -274,30 +274,43 @@ function M.get_assignees(key, on_done)
 	})
 end
 
----@param issue Issue
----@param description string
+---@param key string
+---@param payload table
+---@param action string
+---@param extra_meta table|nil
 ---@param on_done fun(ok: boolean, err: string|nil)
 ---@return { cancel: fun() }|nil
-function M.update_description(issue, description, on_done)
-	local path, iid = normalizer.parse_key(tostring(issue.key or ""))
+local function update_issue(key, payload, action, extra_meta, on_done)
+	local path, iid = normalizer.parse_key(key)
 	if path == "" or iid == nil then
 		on_done(false, "Invalid issue key")
 		return nil
 	end
 
 	local endpoint = string.format("/projects/%s/issues/%d", service.url_encode(path), iid)
-	return service.request("PUT", endpoint, { description = description }, function(_, err)
+	local meta = vim.tbl_extend("force", { action = action, path = path, iid = iid }, extra_meta or {})
+	return service.request("PUT", endpoint, payload, function(_, err)
 		if err then
 			on_done(false, err)
 			return
 		end
 		invalidate_issue(path, iid)
 		on_done(true, nil)
-	end, {
-		action = "Update issue description",
-		path = path,
-		iid = iid,
-	})
+	end, meta)
+end
+
+---@param issue Issue
+---@param description string
+---@param on_done fun(ok: boolean, err: string|nil)
+---@return { cancel: fun() }|nil
+function M.update_description(issue, description, on_done)
+	return update_issue(
+		tostring(issue.key or ""),
+		{ description = description },
+		"Update issue description",
+		nil,
+		on_done
+	)
 end
 
 ---@param key string
@@ -305,25 +318,7 @@ end
 ---@param on_done fun(ok: boolean, err: string|nil)
 ---@return { cancel: fun() }|nil
 function M.set_state(key, state_event, on_done)
-	local path, iid = normalizer.parse_key(key)
-	if path == "" or iid == nil then
-		on_done(false, "Invalid issue key")
-		return nil
-	end
-	local endpoint = string.format("/projects/%s/issues/%d", service.url_encode(path), iid)
-	return service.request("PUT", endpoint, { state_event = state_event }, function(_, err)
-		if err then
-			on_done(false, err)
-			return
-		end
-		invalidate_issue(path, iid)
-		on_done(true, nil)
-	end, {
-		action = "Issue state change",
-		path = path,
-		iid = iid,
-		state = state_event,
-	})
+	return update_issue(key, { state_event = state_event }, "Issue state change", { state = state_event }, on_done)
 end
 
 ---@param key string
@@ -331,12 +326,6 @@ end
 ---@param on_done fun(ok: boolean, err: string|nil)
 ---@return { cancel: fun() }|nil
 function M.update_labels(key, diff, on_done)
-	local path, iid = normalizer.parse_key(key)
-	if path == "" or iid == nil then
-		on_done(false, "Invalid issue key")
-		return nil
-	end
-
 	local payload = {}
 	if diff.add and #diff.add > 0 then
 		payload.add_labels = table.concat(diff.add, ",")
@@ -349,21 +338,7 @@ function M.update_labels(key, diff, on_done)
 		return nil
 	end
 
-	local endpoint = string.format("/projects/%s/issues/%d", service.url_encode(path), iid)
-	return service.request("PUT", endpoint, payload, function(_, err)
-		if err then
-			on_done(false, err)
-			return
-		end
-		invalidate_issue(path, iid)
-		on_done(true, nil)
-	end, {
-		action = "Update labels",
-		path = path,
-		iid = iid,
-		add = diff.add,
-		remove = diff.remove,
-	})
+	return update_issue(key, payload, "Update labels", { add = diff.add, remove = diff.remove }, on_done)
 end
 
 ---@param key string
@@ -409,32 +384,13 @@ end
 ---@param on_done fun(ok: boolean, err: string|nil)
 ---@return { cancel: fun() }|nil
 function M.set_assignee_ids(key, ids, on_done)
-	local path, iid = normalizer.parse_key(key)
-	if path == "" or iid == nil then
-		on_done(false, "Invalid issue key")
-		return nil
-	end
-
 	local payload = { assignee_ids = ids }
 	if #ids == 0 then
 		-- Empty array unassigns; GitLab requires assignee_ids = [0] for clearing
 		payload = { assignee_ids = { 0 } }
 	end
 
-	local endpoint = string.format("/projects/%s/issues/%d", service.url_encode(path), iid)
-	return service.request("PUT", endpoint, payload, function(_, err)
-		if err then
-			on_done(false, err)
-			return
-		end
-		invalidate_issue(path, iid)
-		on_done(true, nil)
-	end, {
-		action = "Set assignees",
-		path = path,
-		iid = iid,
-		ids = ids,
-	})
+	return update_issue(key, payload, "Set assignees", { ids = ids }, on_done)
 end
 
 ---@param opts { project_path: string, title: string, description: string|nil, assignee_ids: integer[]|nil, labels: string[]|nil, milestone_id: integer|nil, due_date: string|nil, confidential: boolean|nil }
