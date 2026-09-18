@@ -5,6 +5,7 @@ local providers = require("atlas.providers")
 local state = require("atlas.pulls.ui.detail.state")
 local renderer = require("atlas.pulls.ui.detail.renderer")
 local detail_keymaps = require("atlas.pulls.ui.detail.keymaps")
+local detail_data = require("atlas.pulls.ui.detail.data")
 local icons = require("atlas.ui.shared.icons")
 local notify = require("atlas.core.notify")
 local request_scope = require("atlas.core.requests")
@@ -213,62 +214,8 @@ local function load_pr(pr, force_refresh)
 		return
 	end
 
-	local tab_refresh = refresh_callback(pr)
-	local core = provider.capabilities.core
 	load_active_tab(pr, { force_refresh = force_refresh })
-
-	if core.fetch_diffstat then
-		state.diffstat = "loading"
-		state.requests.run(function(done)
-			return core.fetch_diffstat(pr, { force_refresh = force_refresh }, done)
-		end, function(entries, err)
-			if not same_ref(state.current_pr, pr) then
-				return
-			end
-			state.diffstat = err and err or (entries or {})
-			tab_refresh()
-		end)
-	end
-
-	local pipelines = provider.capabilities.pipelines
-	if pipelines then
-		state.pipelines = "loading"
-		state.requests.run(function(done)
-			return pipelines.fetch(pr, { force_refresh = force_refresh }, done)
-		end, function(items, err)
-			if not same_ref(state.current_pr, pr) then
-				return
-			end
-			state.pipelines = err and err or (items or {})
-			tab_refresh()
-		end)
-	end
-
-	if core.fetch_reviewers then
-		state.reviewers = "loading"
-		state.requests.run(function(done)
-			return core.fetch_reviewers(pr, { force_refresh = force_refresh }, done)
-		end, function(reviewers, err)
-			if not same_ref(state.current_pr, pr) then
-				return
-			end
-			state.reviewers = err and err or (reviewers or {})
-			tab_refresh()
-		end)
-	end
-
-	if core.fetch_merge_checks then
-		state.merge_checks = "loading"
-		state.requests.run(function(done)
-			return core.fetch_merge_checks(pr, { force_refresh = force_refresh }, done)
-		end, function(checks, err)
-			if not same_ref(state.current_pr, pr) then
-				return
-			end
-			state.merge_checks = err and err or (checks or {})
-			tab_refresh()
-		end)
-	end
+	detail_data.load_pr(pr, force_refresh, same_ref, refresh_callback(pr))
 end
 
 local function clear_pr()
