@@ -89,6 +89,7 @@ function M.list_issues(view, opts, on_done)
 		per_page = tostring(opts.max_results or 50),
 		order_by = view.order_by or "updated_at",
 		sort = view.sort or "desc",
+		with_labels_details = "true",
 	}
 	if view.labels then
 		params.labels = view.labels

@@ -4,6 +4,15 @@ local helper = require("atlas.issues.ui.presentation")
 local icons = require("atlas.ui.shared.icons")
 local state = require("atlas.issues.state")
 local utils = require("atlas.ui.shared.utils")
+local highlights = require("atlas.ui.shared.highlights")
+
+local LABELS_ICON = icons.pulls("tag")
+
+---@param hex string|nil
+---@return string
+local function label_hl(hex)
+	return highlights.label_hl(hex, "AtlasGLIssueLabel_", "AtlasChipActive")
+end
 
 local function columns()
 	return {
@@ -17,7 +26,7 @@ local function columns()
 		},
 		{
 			key = "labels",
-			name = string.format("%s Labels", icons.general("tag")),
+			name = string.format("%s Labels", LABELS_ICON),
 			max_width = 22,
 			can_grow = false,
 		},
@@ -48,10 +57,15 @@ end
 local function labels_value(issue)
 	local names = {}
 	for _, label in ipairs(issue.labels or {}) do
-		table.insert(names, tostring(label.name or ""))
+		local name = tostring(label.name or "")
+		if name ~= "" then
+			table.insert(names, name)
+		end
 	end
-	local joined = #names > 0 and table.concat(names, ", ") or "None"
-	return string.format("%s %s", icons.general("tag"), utils.truncate(joined, 20))
+	if #names == 0 then
+		return ""
+	end
+	return string.format("%s %s", LABELS_ICON, utils.truncate(table.concat(names, ", "), 20))
 end
 
 ---@param issue Issue
@@ -145,6 +159,27 @@ local function gitlab()
 						end_col = #ctx.text,
 						hl_group = title_hl,
 					})
+				end
+			end
+			return #spans > 0 and spans or nil
+		end
+
+		if col.key == "labels" then
+			local spans = {}
+			local cursor = 1
+			local icon_start, icon_end = ctx.text:find(LABELS_ICON, cursor, true)
+			if icon_start then
+				table.insert(spans, { start_col = icon_start - 1, end_col = icon_end, hl_group = "AtlasTextWarning" })
+				cursor = icon_end + 1
+			end
+			for _, label in ipairs(issue.labels or {}) do
+				local name = tostring(label.name or "")
+				if name ~= "" then
+					local start_col, end_col = ctx.text:find(name, cursor, true)
+					if start_col then
+						table.insert(spans, { start_col = start_col - 1, end_col = end_col, hl_group = label_hl(label.color) })
+						cursor = end_col + 1
+					end
 				end
 			end
 			return #spans > 0 and spans or nil
