@@ -22,12 +22,10 @@ end
 ---@return PullsDetailHeaderField
 local function remove_source_branch_field(pr)
 	---@cast pr GitLabPullRequest
-	local enabled = pr.remove_source_branch == true
 	return {
 		label = "Delete source branch",
-		value = enabled and "Yes" or "No",
-		hl = enabled and "AtlasTextPositive" or "AtlasTextMuted",
-		editable = true,
+		kind = "toggle",
+		enabled = pr.remove_source_branch == true,
 	}
 end
 

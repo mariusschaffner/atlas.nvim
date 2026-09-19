@@ -11,7 +11,7 @@ local state = require("atlas.issues.ui.detail.milestone.state")
 local ns = vim.api.nvim_create_namespace("atlas.issues.milestone_detail")
 local header_ns = vim.api.nvim_create_namespace("atlas.issues.milestone_detail.header")
 local PADDING_X = 1
-local BAR_WIDTH = 24
+local PROGRESS_BAR_WIDTH = 16
 
 local TABS = {
 	{ key = "description", label = "Description", icon = { icon = icons.general("overview") } },
@@ -45,28 +45,66 @@ local function work_item_stats(work_items)
 	return completed, total, percent
 end
 
+--- A compact bracketed gauge (e.g. "[██████░░░░] 67% (2/3)") rendered as its
+--- own field box, rather than a bare full-width block bar.
+---@param completed integer
+---@param total integer
 ---@param percent integer
----@param width integer
----@return string, integer filled_len
-local function progress_bar(percent, width)
-	local filled = math.max(0, math.min(width, math.floor((percent / 100) * width + 0.5)))
-	return string.rep("█", filled) .. string.rep("░", width - filled), filled
+---@return IssuesDetailHeaderField
+local function progress_field(completed, total, percent)
+	local filled = math.max(0, math.min(PROGRESS_BAR_WIDTH, math.floor((percent / 100) * PROGRESS_BAR_WIDTH + 0.5)))
+	local filled_str = string.rep("█", filled)
+	local empty_str = string.rep("░", PROGRESS_BAR_WIDTH - filled)
+
+	local spans = {}
+	local cursor = 0
+	local value = "["
+	cursor = cursor + 1
+
+	local filled_start = cursor
+	value = value .. filled_str
+	cursor = cursor + #filled_str
+	if #filled_str > 0 then
+		table.insert(spans, { start_col = filled_start, end_col = cursor, hl_group = "AtlasTextPositive" })
+	end
+
+	local empty_start = cursor
+	value = value .. empty_str
+	cursor = cursor + #empty_str
+	if #empty_str > 0 then
+		table.insert(spans, { start_col = empty_start, end_col = cursor, hl_group = "AtlasTextMuted" })
+	end
+
+	value = value .. "] "
+	cursor = cursor + 2
+
+	local pct_text = string.format("%d%%", percent)
+	local pct_start = cursor
+	value = value .. pct_text
+	cursor = cursor + #pct_text
+	table.insert(spans, {
+		start_col = pct_start,
+		end_col = cursor,
+		hl_group = percent >= 100 and "AtlasTextPositive" or "AtlasTextMuted",
+	})
+
+	value = value .. string.format(" (%d/%d)", completed, total)
+
+	return { label = "Progress", value = value, hl = spans }
 end
 
 ---@param milestone IssueMilestone
 ---@param width integer
 ---@return string[], table[]
 local function render_header(milestone, width)
-	local title_line = string.format(" %s %s", icons.general("milestone"), tostring(milestone.title or ""))
+	local title_field = {
+		label = "Milestone",
+		value = tostring(milestone.title or ""),
+		border_hl = milestone.state == "closed" and "AtlasGLIssueClosed" or "AtlasGLIssueOpen",
+	}
+	local lines, spans = field_box.render_columns({}, {}, { width = width, top_field = title_field })
 
 	local fields = {}
-	if milestone.state then
-		table.insert(fields, {
-			label = "Status",
-			value = milestone.state == "closed" and "Closed" or "Active",
-			hl = milestone.state == "closed" and "AtlasGLIssueClosedChip" or "AtlasGLIssueOpenChip",
-		})
-	end
 	if milestone.start_date and milestone.start_date ~= "" then
 		table.insert(fields, { label = "Start date", value = milestone.start_date, hl = "AtlasTextMuted" })
 	end
@@ -80,45 +118,13 @@ local function render_header(milestone, width)
 	elseif state.work_items ~= nil then
 		completed, total, percent = work_item_stats(state.work_items)
 		table.insert(fields, { label = "Work items", value = tostring(total), hl = "AtlasTextMuted" })
+		if total > 0 then
+			table.insert(fields, progress_field(completed, total, percent))
+		end
 	end
 
 	local field_lines, field_spans = field_box.render(fields, { width = width })
-
-	local lines = { title_line, "" }
-	local spans = {
-		{ line = 0, line_hl_group = "AtlasTabInactive" },
-		{ line = 0, start_col = 1, end_col = #title_line, hl_group = "AtlasGLMilestone" },
-	}
-	for _, l in ipairs(field_lines) do
-		table.insert(lines, l)
-	end
-	for _, span in ipairs(field_spans) do
-		table.insert(spans, {
-			line = span.line + 2,
-			start_col = span.start_col,
-			end_col = span.end_col,
-			hl_group = span.hl_group,
-		})
-	end
-
-	if total ~= nil and total > 0 then
-		local bar, filled_len = progress_bar(percent, BAR_WIDTH)
-		local bar_line = string.format(" %s %d%% (%d/%d closed)", bar, percent, completed, total)
-		table.insert(lines, bar_line)
-		local bar_line_index = #lines - 1
-		table.insert(spans, {
-			line = bar_line_index,
-			start_col = 1,
-			end_col = 1 + filled_len,
-			hl_group = "AtlasTextPositive",
-		})
-		table.insert(spans, {
-			line = bar_line_index,
-			start_col = 1 + filled_len,
-			end_col = 1 + BAR_WIDTH,
-			hl_group = "AtlasTextMuted",
-		})
-	end
+	utils.append_block(lines, spans, { lines = field_lines, highlights = field_spans })
 	table.insert(lines, "")
 
 	local tab_lines, tab_spans = tabs.render(TABS, state.current_tab, width, {

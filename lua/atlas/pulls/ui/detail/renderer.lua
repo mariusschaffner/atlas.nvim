@@ -137,14 +137,9 @@ local function render_header(pr, tab_items, width)
 			and provider_detail.header_fields(pr, details, state.details_loading)
 		or {}
 
-	-- Title (now includes "- <status>", foreground-colored, in place of the
-	-- old standalone status chip)
-	local title_lines, title_spans = header.render_title(pr, width)
-	utils.append_block(lines, spans, { lines = title_lines, highlights = title_spans })
-	table.insert(lines, "")
-
 	-- Fields, two columns: Assignee/Reviewers/Labels on the left,
-	-- Delete-source-branch/Branch/Checks on the right.
+	-- Delete-source-branch/Branch/Checks on the right. Title spans both
+	-- columns as the first row, its border color conveying PR status.
 	local left_fields = {}
 	utils.insert_if(left_fields, provider_fields.assignee)
 	utils.insert_if(left_fields, reviewers_field())
@@ -155,7 +150,10 @@ local function render_header(pr, tab_items, width)
 	table.insert(right_fields, header.branch_field(pr.source.branch, pr.destination.branch, state.diffstat))
 	utils.insert_if(right_fields, merge_checks_field())
 
-	local field_lines, field_spans = field_box.render_columns(left_fields, right_fields, { width = width })
+	local field_lines, field_spans = field_box.render_columns(left_fields, right_fields, {
+		width = width,
+		top_field = header.title_field(pr),
+	})
 	utils.append_block(lines, spans, { lines = field_lines, highlights = field_spans })
 	table.insert(lines, "")
 

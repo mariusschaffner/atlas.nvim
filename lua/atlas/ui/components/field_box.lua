@@ -1,9 +1,12 @@
 -- Renders GitLab detail fields (Assignee, Reviewer, Labels, ...) as bordered
--- boxes with the same styling as the main filter bar, two per row. Each box
--- is sized to its own content (title/value), capped at a max width so a
--- long value can't stretch the layout or push its row-mate off-screen.
--- Editable fields get a distinct border color so they're noticeable at a
--- glance.
+-- boxes with the same styling as the main filter bar. Each box is sized to
+-- its own content (title/value), capped at a max width so a long value
+-- can't stretch the layout or push its row-mate off-screen. Editable fields
+-- get a distinct border color so they're noticeable at a glance; a field
+-- can also set an explicit `border_hl` (e.g. to reflect open/closed status
+-- on a title box) which takes precedence over the editable convention. A
+-- field with `kind = "toggle"` renders as a compact checkbox line instead
+-- of a bordered box, for on/off settings that don't need their own frame.
 local M = {}
 
 local bordered_box = require("atlas.ui.components.bordered_box")
@@ -13,12 +16,17 @@ local ui_utils = require("atlas.ui.utils")
 local DEFAULT_MAX_FIELD_WIDTH = 40
 local MIN_FIELD_WIDTH = 12
 local GAP = 2
+local DEFAULT_COLUMN_GAP = 4
 
 ---@class AtlasFieldBoxField
 ---@field label string
 ---@field value string
 ---@field hl string|table[]|nil
 ---@field editable boolean|nil
+---@field border_hl string|nil Explicit border color override, takes precedence over `editable`.
+---@field kind "toggle"|nil
+---@field enabled boolean|nil Toggle state, only used when kind == "toggle".
+---@field right_content { lines: string[], highlights: table[]|nil }|nil Only meaningful on a full-width `top_field`.
 
 ---@param text string
 ---@param hl string|table[]|nil
@@ -48,6 +56,9 @@ end
 ---@param cap integer
 ---@return integer
 local function box_width_for(field, cap)
+	if field.kind == "toggle" then
+		return math.max(MIN_FIELD_WIDTH, math.min(cap, ui_utils.text_width(field.label) + 2))
+	end
 	return math.max(MIN_FIELD_WIDTH, math.min(cap, natural_width(field)))
 end
 
@@ -55,7 +66,25 @@ end
 ---@param box_width integer
 ---@return string[] lines
 ---@return table[] highlights
-local function render_one(field, box_width)
+local function render_toggle(field, box_width)
+	local checked = field.enabled == true
+	local mark = checked and "◉" or "○"
+	local text = string.format("%s %s", mark, field.label)
+	local hl = checked and "AtlasTextPositive" or "AtlasTextMuted"
+	local line = ui_utils.pad_right(text, box_width)
+	return { line }, { { line = 0, start_col = 0, end_col = #text, hl_group = hl } }
+end
+
+---@param field AtlasFieldBoxField
+---@param box_width integer
+---@param total_width integer|nil Available width for right_content; defaults to box_width (no reserved space).
+---@return string[] lines
+---@return table[] highlights
+local function render_one(field, box_width, total_width)
+	if field.kind == "toggle" then
+		return render_toggle(field, box_width)
+	end
+
 	local value = field.value or ""
 	local content_highlights = {}
 	for _, span in ipairs(value_hl_spans(value, field.hl)) do
@@ -68,12 +97,13 @@ local function render_one(field, box_width)
 	end
 
 	return bordered_box.render({
-		width = box_width,
+		width = total_width or box_width,
 		box_width = box_width,
 		title = field.label,
 		content_lines = { value },
 		content_highlights = content_highlights,
-		border_hl = field.editable and "AtlasFieldBoxBorderEditable" or "AtlasFieldBoxBorder",
+		right_content = field.right_content,
+		border_hl = field.border_hl or (field.editable and "AtlasFieldBoxBorderEditable" or "AtlasFieldBoxBorder"),
 	})
 end
 
@@ -81,10 +111,11 @@ end
 ---@param left_spans table[]
 ---@param right_lines string[]
 ---@param right_spans table[]
+---@param gap_width integer|nil
 ---@return string[] lines
 ---@return table[] highlights
-local function merge_rows(left_lines, left_spans, right_lines, right_spans)
-	local gap = string.rep(" ", GAP)
+local function merge_rows(left_lines, left_spans, right_lines, right_spans, gap_width)
+	local gap = string.rep(" ", gap_width or GAP)
 	local lines = {}
 	for i = 1, #left_lines do
 		lines[i] = left_lines[i] .. gap .. (right_lines[i] or "")
@@ -128,22 +159,38 @@ end
 --- on the left, Linked MR/Linked Branches on the right) rather than
 --- row-major pairing — every box in a column shares that column's width, so
 --- they align below each other regardless of what's in the other column.
+--- An optional `top_field` renders full-width above both columns (e.g. a
+--- title box with no second column).
 ---@param left_fields AtlasFieldBoxField[]
 ---@param right_fields AtlasFieldBoxField[]
----@param opts { width: integer, max_field_width: integer|nil }
+---@param opts { width: integer, max_field_width: integer|nil, column_gap: integer|nil, top_field: AtlasFieldBoxField|nil }
 ---@return string[] lines
 ---@return table[] highlights
 function M.render_columns(left_fields, right_fields, opts)
 	local width = math.max(1, opts.width)
+	local column_gap = opts.column_gap or DEFAULT_COLUMN_GAP
 	local max_field_width = opts.max_field_width or DEFAULT_MAX_FIELD_WIDTH
-	local cap = math.min(max_field_width, math.max(MIN_FIELD_WIDTH, math.floor((width - GAP) / 2)))
+	local cap = math.min(max_field_width, math.max(MIN_FIELD_WIDTH, math.floor((width - column_gap) / 2)))
+
+	local lines, spans = {}, {}
+
+	if opts.top_field then
+		local reserve = 0
+		if opts.top_field.right_content then
+			local rc_text = opts.top_field.right_content.lines and opts.top_field.right_content.lines[1] or ""
+			reserve = ui_utils.text_width(rc_text) + 2
+		end
+		local top_box_width = math.max(MIN_FIELD_WIDTH, width - reserve)
+		local top_lines, top_spans = render_one(opts.top_field, top_box_width, width)
+		shared_utils.append_block(lines, spans, { lines = top_lines, highlights = top_spans })
+	end
 
 	---@param fields AtlasFieldBoxField[]
 	---@return integer
 	local function column_width(fields)
 		local w = MIN_FIELD_WIDTH
 		for _, field in ipairs(fields) do
-			w = math.max(w, natural_width(field))
+			w = math.max(w, box_width_for(field, cap))
 		end
 		return math.min(cap, w)
 	end
@@ -155,32 +202,34 @@ function M.render_columns(left_fields, right_fields, opts)
 	local right_lines, right_spans = stack(right_fields, right_width)
 
 	if right_width == 0 then
-		return left_lines, left_spans
+		shared_utils.append_block(lines, spans, { lines = left_lines, highlights = left_spans })
+		return lines, spans
 	end
 	if left_width == 0 then
-		return right_lines, right_spans
+		shared_utils.append_block(lines, spans, { lines = right_lines, highlights = right_spans })
+		return lines, spans
 	end
 
-	local gap = string.rep(" ", GAP)
+	local gap = string.rep(" ", column_gap)
 	local blank_left = string.rep(" ", left_width)
 	local blank_right = string.rep(" ", right_width)
 	local rows = math.max(#left_lines, #right_lines)
 
-	local lines = {}
+	local columns_lines = {}
 	for i = 1, rows do
-		lines[i] = (left_lines[i] or blank_left) .. gap .. (right_lines[i] or blank_right)
+		columns_lines[i] = (left_lines[i] or blank_left) .. gap .. (right_lines[i] or blank_right)
 	end
 
-	local spans = {}
+	local columns_spans = {}
 	for _, span in ipairs(left_spans) do
-		table.insert(spans, span)
+		table.insert(columns_spans, span)
 	end
 	for _, span in ipairs(right_spans) do
 		if span.line_hl_group ~= nil then
-			table.insert(spans, span)
+			table.insert(columns_spans, span)
 		else
 			local prefix_len = #(left_lines[span.line + 1] or blank_left) + #gap
-			table.insert(spans, {
+			table.insert(columns_spans, {
 				line = span.line,
 				start_col = prefix_len + span.start_col,
 				end_col = prefix_len + span.end_col,
@@ -189,6 +238,7 @@ function M.render_columns(left_fields, right_fields, opts)
 		end
 	end
 
+	shared_utils.append_block(lines, spans, { lines = columns_lines, highlights = columns_spans })
 	return lines, spans
 end
 

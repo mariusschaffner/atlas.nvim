@@ -303,9 +303,12 @@
 
 ---@class PullsDetailHeaderField
 ---@field label string
----@field value string
+---@field value string|nil
 ---@field hl string|table[]|nil hl group name, or list of {start_col, end_col, hl_group} relative to the value
 ---@field editable boolean|nil whether this field can be edited from the detail panel (styled with a distinct border)
+---@field border_hl string|nil explicit border color override, e.g. for a title field's open/merged/declined/draft status
+---@field kind "toggle"|nil renders as a compact checkbox line instead of a bordered box
+---@field enabled boolean|nil toggle state, only used when kind == "toggle"
 
 ---@class PullsDetailChip
 ---@field label string

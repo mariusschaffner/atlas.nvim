@@ -75,59 +75,17 @@ local function add_span(spans, lines, line, start_col, end_col, hl_group)
 	})
 end
 
+--- Title as a full-width field box (no second column), its border color
+--- conveying open/merged/declined/draft status in place of the old
+--- standalone status chip and author byline.
 ---@param pr PullRequest
----@param width integer
----@return string[], table[]
-function M.render_title(pr, width)
-	local author_name = presentation.user_handle(pr.author)
-	local created_text = utils.relative_time_text(pr.created_on)
-
-	local id_text = string.format("#%s", pr.id)
-	local title_text = pr.title
-	local title_lines = utils.wrap_line(string.format("%s %s", id_text, title_text), math.max(1, width - 1))
-	for index, line in ipairs(title_lines) do
-		title_lines[index] = " " .. line
-	end
-
-	-- Append "- <status>" directly to the (already-wrapped) last title line,
-	-- foreground-colored only, in place of the old standalone status chip.
-	local raw_state = tostring(pr.state or "")
-	local state_text = raw_state:sub(1, 1):upper() .. raw_state:sub(2)
-	local state_hl = presentation.pr_state_fg_hl(pr.state)
-	local last_title_idx = #title_lines
-	local before_len = #title_lines[last_title_idx]
-	local status_sep = " - "
-	title_lines[last_title_idx] = title_lines[last_title_idx] .. status_sep .. state_text
-	local status_start = before_len + #status_sep
-	local status_end = status_start + #state_text
-
-	local author_icon, author_icon_hl = icons.general("user")
-	local by_prefix = string.format(" %s by @", author_icon)
-	local by_sep = " - "
-	local byline = by_prefix .. author_name .. by_sep .. created_text
-
-	local lines = vim.list_extend({}, title_lines)
-	vim.list_extend(lines, { byline })
-
-	local spans = {}
-	for line = 0, #title_lines do
-		table.insert(spans, { line = line, line_hl_group = "AtlasTabInactive" })
-	end
-
-	add_span(spans, lines, 0, 1, 1 + #id_text, "AtlasTextMuted")
-	add_span(spans, lines, last_title_idx - 1, status_start, status_end, state_hl)
-	local author_line = #title_lines
-	add_span(spans, lines, author_line, 1, 1 + #author_icon, author_icon_hl)
-
-	local author_start = #by_prefix - 1
-	local author_end = author_start + #("@" .. author_name)
-	add_span(spans, lines, author_line, author_start, author_end, presentation.author_hl(author_name))
-
-	local ts_start = author_end + #by_sep
-	local ts_end = ts_start + #created_text
-	add_span(spans, lines, author_line, ts_start, ts_end, "AtlasTextMuted")
-
-	return lines, spans
+---@return PullsDetailHeaderField
+function M.title_field(pr)
+	return {
+		label = string.format("#%s", pr.id),
+		value = pr.title,
+		border_hl = presentation.pr_state_fg_hl(pr.state),
+	}
 end
 
 ---@param src string

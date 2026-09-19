@@ -109,6 +109,7 @@
 ---@field value string
 ---@field hl string|table[]|nil hl group name, or list of {start_col, end_col, hl_group} relative to the value
 ---@field editable boolean|nil whether this field can be edited from the detail panel (styled with a distinct border)
+---@field border_hl string|nil explicit border color override, e.g. for the title field's open/closed status
 
 ---@class IssuesDetailTabModule
 ---@field render fun(issue: Issue, details: IssueDetails|nil, width: integer): string[], table[], table<integer, table>|nil
