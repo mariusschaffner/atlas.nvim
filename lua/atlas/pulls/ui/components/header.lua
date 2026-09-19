@@ -18,6 +18,7 @@ end
 function M.assignee_field(logins)
 	if #logins == 0 then
 		return {
+			id = "assignee",
 			label = "Assignees",
 			value = "Unassigned",
 			hl = "AtlasTextMuted",
@@ -47,6 +48,7 @@ function M.assignee_field(logins)
 	end
 
 	return {
+		id = "assignee",
 		label = "Assignees",
 		value = table.concat(parts, ", "),
 		hl = spans,
@@ -82,6 +84,7 @@ end
 ---@return PullsDetailHeaderField
 function M.title_field(pr)
 	return {
+		id = "title",
 		label = string.format("Title - %s", pr.id),
 		value = pr.title,
 		border_hl = presentation.pr_state_fg_hl(pr.state),

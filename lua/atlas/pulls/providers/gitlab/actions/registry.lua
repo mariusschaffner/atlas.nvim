@@ -2,13 +2,15 @@ local M = {}
 
 local actions = require("atlas.pulls.actions")
 local action_utils = require("atlas.pulls.actions.utils")
-local icons = require("atlas.ui.shared.icons")
 local picker = require("atlas.ui.picker")
 local core_notify = require("atlas.core.notify")
 local core_utils = require("atlas.core.utils")
 local pullrequests_api = require("atlas.pulls.providers.gitlab.api.pullrequests")
 local users_api = require("atlas.pulls.providers.gitlab.api.users")
 local service = require("atlas.providers.gitlab.client")
+local inline_field_edit = require("atlas.ui.inline_field_edit")
+local users_completion = require("atlas.providers.gitlab.completion.users")
+local detail_state = require("atlas.pulls.ui.detail.state")
 
 ---@param ctx AtlasPullActionContext
 ---@return boolean
@@ -151,82 +153,112 @@ local function edit_assignees(ctx, done)
 		return
 	end
 
-	---@param assignees PullsAuthor[]
-	local function open_picker(assignees)
-		users_api.list_members(path, "", function(members, err)
-			if err or members == nil then
-				notify(ctx, "error", err or "Failed to load members")
-				done(nil, err or "Failed to load members")
-				return
-			end
-			if #members == 0 then
-				notify(ctx, "warn", "No assignable members")
-				done(nil, "No assignable members")
-				return
-			end
-			notify(ctx, "success", "Members loaded", 1200)
-
-			local original = {}
-			for _, a in ipairs(assignees) do
-				local id = tonumber(a.id)
-				if id then
-					table.insert(original, { id = id, username = a.username, name = a.name or a.username })
-				end
-			end
-
-			picker.multi_select({
-				items = members,
-				selected = vim.deepcopy(original),
-				key = function(item)
-					return tostring(item.id or "")
-				end,
-				format_item = function(item)
-					return string.format(
-						"%s %s (@%s)",
-						icons.general("user"),
-						item.name or item.username,
-						item.username
-					)
-				end,
-				title = string.format("Assignees for %s", pr_label(pr)),
-				on_done = function(selected)
-					local id_key = function(item)
-						return tonumber(item.id)
-					end
-					if not core_utils.selection_changed(original, selected, id_key) then
-						done({ changed_pr = false, message = "No changes" }, nil)
-						return
-					end
-
-					local final_ids = {}
-					for _, it in ipairs(selected) do
-						local id = tonumber(it.id)
-						if id then
-							table.insert(final_ids, id)
-						end
-					end
-
-					notify(ctx, "loading", string.format("Updating assignees on %s...", pr_label(pr)))
-					pullrequests_api.update_assignees(pr, final_ids, function(ok, set_err)
-						if not ok then
-							notify(ctx, "error", set_err or "Failed")
-							done(nil, set_err or "Failed")
-							return
-						end
-						local msg = string.format("%d assignee(s)", #final_ids)
-						notify(ctx, "success", msg, 1200)
-						done({ changed_pr = true, message = msg }, nil)
-					end)
-				end,
-			})
-		end)
-	end
-
-	notify(ctx, "loading", "Loading members...")
-	if ctx.details then
-		open_picker(ctx.details.assignees or {})
+	local header_win = detail_state.header_win
+	local region = detail_state.header_regions and detail_state.header_regions.assignee
+	if header_win == nil or not vim.api.nvim_win_is_valid(header_win) or region == nil then
+		local message = "Assignee field is not visible"
+		notify(ctx, "warn", message)
+		done(nil, message)
 		return
 	end
+
+	---@param assignees PullsAuthor[]
+	local function open_editor(assignees)
+		local original = {}
+		local by_username = {}
+		local seed_names = {}
+		for _, a in ipairs(assignees) do
+			local id = tonumber(a.id)
+			local username = tostring(a.username or "")
+			if id and username ~= "" then
+				table.insert(original, { id = id, username = username, name = a.name or username })
+				table.insert(seed_names, username)
+				by_username[username:lower()] = { id = id, username = username, name = a.name or username }
+			end
+		end
+
+		local completion = users_completion.for_project(users_api.list_members, path, function(user)
+			local username = tostring(user.username or "")
+			if username == "" then
+				return nil
+			end
+			return {
+				name = username,
+				display = string.format("%s (@%s)", user.name or username, username),
+				menu = "member",
+			}
+		end, function(users)
+			for _, user in ipairs(users) do
+				local username = tostring(user.username or "")
+				if username ~= "" then
+					by_username[username:lower()] = user
+				end
+			end
+		end)
+
+		inline_field_edit.start({
+			anchor_win = header_win,
+			row = region.row,
+			col = region.col,
+			width = region.width,
+			height = region.height,
+			seed_text = table.concat(seed_names, ", "),
+			multi_value = true,
+			seed_resolved = seed_names,
+			completion = completion,
+			on_save = function(text, save_done)
+				local selected = {}
+				for _, segment in ipairs(vim.split(text, ",", { plain = true })) do
+					local trimmed = vim.trim(segment)
+					if trimmed ~= "" then
+						local user = by_username[trimmed:lower()]
+						if user then
+							table.insert(selected, user)
+						end
+					end
+				end
+
+				local id_key = function(item)
+					return tonumber(item.id)
+				end
+				if not core_utils.selection_changed(original, selected, id_key) then
+					save_done(true)
+					done({ changed_pr = false, message = "No changes" }, nil)
+					return
+				end
+
+				local final_ids = {}
+				for _, it in ipairs(selected) do
+					local id = tonumber(it.id)
+					if id then
+						table.insert(final_ids, id)
+					end
+				end
+
+				notify(ctx, "loading", string.format("Updating assignees on %s...", pr_label(pr)))
+				pullrequests_api.update_assignees(pr, final_ids, function(ok, set_err)
+					if not ok then
+						save_done(false, set_err or "Failed")
+						return
+					end
+					local msg = string.format("%d assignee(s)", #final_ids)
+					notify(ctx, "success", msg, 1200)
+					save_done(true)
+					done({ changed_pr = true, message = msg }, nil)
+				end)
+			end,
+			on_cancel = function()
+				done({ changed_pr = false, message = "Cancelled" }, nil)
+			end,
+			on_done = function() end,
+		})
+	end
+
+	if ctx.details then
+		open_editor(ctx.details.assignees or {})
+		return
+	end
+	notify(ctx, "loading", "Loading pull request...")
 	pullrequests_api.fetch_pullrequest(pr, { force_load = false }, function(details, err)
 		if err or details == nil then
 			local message = tostring(err or "Failed to load merge request")
@@ -234,7 +266,7 @@ local function edit_assignees(ctx, done)
 			done(nil, message)
 			return
 		end
-		open_picker(details.assignees or {})
+		open_editor(details.assignees or {})
 	end)
 end
 

@@ -52,12 +52,26 @@ function M.register(buf, views)
 			index = 10,
 			opts = { nowait = true, silent = true },
 			callback = function()
-				vim.ui.input({ prompt = "Filter: ", default = state.filter_text or "" }, function(input)
-					if input == nil then
-						return
-					end
-					require("atlas.ui.dashboard").apply_filter_text(input)
-				end)
+				local dashboard = require("atlas.ui.dashboard")
+				local dashboard_body = require("atlas.ui.dashboard_body")
+				local win = dashboard.win()
+				local region = dashboard_body.filter_region()
+				if win == nil or region == nil then
+					return
+				end
+				require("atlas.ui.inline_field_edit").start({
+					anchor_win = win,
+					row = region.row,
+					col = region.col,
+					width = region.width,
+					height = region.height,
+					seed_text = state.filter_text or "",
+					on_save = function(text, done)
+						dashboard.apply_filter_text(text)
+						done(true)
+					end,
+					on_done = function() end,
+				})
 			end,
 		})
 	)

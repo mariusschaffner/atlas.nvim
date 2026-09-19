@@ -49,7 +49,13 @@ end
 ---@return IssuesDetailHeaderField
 local function labels_field(details, loading)
 	if loading then
-		return { label = "Labels", value = spinner.with_text("Loading..."), hl = "AtlasTextMuted", editable = supports("labels") }
+		return {
+			id = "labels",
+			label = "Labels",
+			value = spinner.with_text("Loading..."),
+			hl = "AtlasTextMuted",
+			editable = supports("labels"),
+		}
 	end
 
 	local names, spans, cursor = {}, {}, 0
@@ -63,10 +69,16 @@ local function labels_field(details, loading)
 	end
 
 	if #names == 0 then
-		return { label = "Labels", value = "None", hl = "AtlasTextMuted", editable = supports("labels") }
+		return { id = "labels", label = "Labels", value = "None", hl = "AtlasTextMuted", editable = supports("labels") }
 	end
 
-	return { label = "Labels", value = table.concat(names, ", "), hl = spans, editable = supports("labels") }
+	return {
+		id = "labels",
+		label = "Labels",
+		value = table.concat(names, ", "),
+		hl = spans,
+		editable = supports("labels"),
+	}
 end
 
 ---@param issue Issue
@@ -96,7 +108,13 @@ function M.header_fields(issue, details, loading)
 			value = string.format("%s %s", user_icon, reporter_name),
 			hl = helper.person_hl(reporter_name),
 		},
-		assignee = { label = "Assignee", value = assignee_text, hl = assignee_hl, editable = supports("assign") },
+		assignee = {
+			id = "assignee",
+			label = "Assignee",
+			value = assignee_text,
+			hl = assignee_hl,
+			editable = supports("assign"),
+		},
 		labels = labels_field(details, loading),
 		milestone = milestone_text ~= "" and { label = "Milestone", value = milestone_text, hl = "AtlasTextMuted" } or nil,
 	}

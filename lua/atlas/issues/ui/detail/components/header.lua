@@ -9,7 +9,9 @@ local field_box = require("atlas.ui.components.field_box")
 ---@param middle_fields IssuesDetailHeaderField[]|nil Labels, Milestone.
 ---@param right_fields IssuesDetailHeaderField[]|nil Linked MR, Linked Branches.
 ---@param status_badge IssuesTitleStatus|nil Border color for the title field (open/closed); its `.text` is unused now that the border color conveys status.
----@return string[], table[]
+---@return string[] lines
+---@return table[] highlights
+---@return table<string, AtlasFieldBoxRegion> regions
 function M.render(issue, width, left_fields, middle_fields, right_fields, status_badge)
 	local title_field = {
 		label = (status_badge and status_badge.label) or issue.key,

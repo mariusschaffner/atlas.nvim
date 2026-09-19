@@ -1,11 +1,13 @@
 local M = {}
 
-local md_editor = require("atlas.ui.popups.editor")
 local picker = require("atlas.ui.picker")
 local review = require("atlas.pulls.actions.review")
 local utils = require("atlas.pulls.actions.utils")
 local ui_utils = require("atlas.ui.shared.utils")
 local core_utils = require("atlas.core.utils")
+local inline_edit = require("atlas.ui.inline_edit")
+local inline_field_edit = require("atlas.ui.inline_field_edit")
+local detail_state = require("atlas.pulls.ui.detail.state")
 
 local has_pr = utils.has_pr
 local notify = utils.notify
@@ -152,34 +154,45 @@ M.edit_title = {
 	is_available = has_pr,
 	run = function(context, done)
 		local pr = assert(context.pr)
-		md_editor.open({
-			key = "pr-title-edit-" .. tostring(pr.id),
-			title = " Edit Title ",
-			width_ratio = 0.5,
-			height_ratio = 0.12,
-			initial_text = pr.title or "",
-			on_save = function(text)
-				local title = text and vim.trim(text) or ""
+		local header_win = detail_state.header_win
+		local region = detail_state.header_regions and detail_state.header_regions.title
+		if header_win == nil or not vim.api.nvim_win_is_valid(header_win) or region == nil then
+			local message = "Title field is not visible"
+			notify(context, "warn", message)
+			done(nil, message)
+			return
+		end
+
+		inline_field_edit.start({
+			anchor_win = header_win,
+			row = region.row,
+			col = region.col,
+			width = region.width,
+			height = region.height,
+			seed_text = pr.title or "",
+			on_save = function(text, save_done)
+				local title = vim.trim(text)
 				if title == "" or title == pr.title then
+					save_done(true)
 					done({ changed_pr = false }, nil)
 					return
 				end
 				notify(context, "loading", "Updating title...")
 				context.provider.capabilities.core.update_title(pr, title, function(ok, err)
 					if err or ok == false then
-						local message = tostring(err or "Unknown error")
-						notify(context, "error", "Title update failed: " .. message)
-						done(nil, message)
+						save_done(false, tostring(err or "Unknown error"))
 						return
 					end
 					pr.title = title
 					notify(context, "success", "Title updated", 1200)
+					save_done(true)
 					done({ changed_pr = true, message = "Title updated" }, nil)
 				end)
 			end,
 			on_cancel = function()
 				done({ changed_pr = false }, nil)
 			end,
+			on_done = function() end,
 		})
 	end,
 }
@@ -203,14 +216,26 @@ M.edit_description = {
 		---@param current string
 		local function edit(current)
 			current = ui_utils.normalize_newlines(current)
-			md_editor.open({
-				key = "pr-description-edit-" .. tostring(pr.id),
-				title = " Edit Description ",
-				initial_text = current,
-				on_save = function(text)
+			-- Description is a tab-body field (the whole "Description" tab IS
+			-- the field, no neighbors sharing its buffer), so it uses the
+			-- whole-buffer inline_edit pattern -- same as the dedicated
+			-- `ui.comments.edit` keymap in the overview tab already does.
+			require("atlas.pulls.ui.detail").select_tab("overview")
+			local buf = detail_state.buf
+			if buf == nil or not vim.api.nvim_buf_is_valid(buf) or inline_edit.is_active(buf) then
+				done(nil, "Description is not editable right now")
+				return
+			end
+			require("atlas.pulls.ui.detail.keymaps").remove(buf)
+
+			inline_edit.start({
+				buf = buf,
+				text = current,
+				on_save = function(text, save_done)
 					local description = text or ""
 					if description == current then
 						notify(context, "info", "Description unchanged", 1200)
+						save_done(true)
 						done({ changed_pr = false, message = "No changes" }, nil)
 						return
 					end
@@ -219,19 +244,25 @@ M.edit_description = {
 						if err or ok == false then
 							local message = tostring(err or "Unknown error")
 							notify(context, "error", "Description update failed: " .. message)
-							done(nil, message)
+							save_done(false, message)
 							return
 						end
 						if context.details then
 							context.details.description = description
 						end
 						notify(context, "success", "Description updated", 1200)
+						save_done(true)
 						done({ changed_pr = true, message = "Description updated" }, nil)
 					end)
 				end,
 				on_cancel = function()
 					notify(context, "info", "Description unchanged", 1200)
 					done({ changed_pr = false }, nil)
+				end,
+				on_done = function()
+					if buf and vim.api.nvim_buf_is_valid(buf) then
+						require("atlas.pulls.ui.detail.keymaps").register(buf)
+					end
 				end,
 			})
 		end
@@ -297,6 +328,15 @@ M.edit_reviewers = {
 		local pr = assert(context.pr)
 		local core = context.provider.capabilities.core
 
+		local header_win = detail_state.header_win
+		local region = detail_state.header_regions and detail_state.header_regions.reviewers
+		if header_win == nil or not vim.api.nvim_win_is_valid(header_win) or region == nil then
+			local message = "Reviewers field is not visible"
+			notify(context, "warn", message)
+			done(nil, message)
+			return
+		end
+
 		notify(context, "loading", "Loading reviewers...")
 		core.fetch_default_reviewers({
 			repo_slug = pr.repo_full_name,
@@ -317,30 +357,62 @@ M.edit_reviewers = {
 				done({ changed_pr = false, message = "No reviewers available" }, nil)
 				return
 			end
-
-			local original = {}
-			for _, reviewer in ipairs(reviewers) do
-				if reviewer.selected then
-					table.insert(original, reviewer)
-				end
-			end
 			notify(context, "success", "Reviewers loaded", 1200)
 
-			picker.multi_select({
-				items = reviewers,
-				selected = original,
-				key = function(reviewer)
-					return reviewer.provider_id
+			local original, by_username, seed_names = {}, {}, {}
+			for _, reviewer in ipairs(reviewers) do
+				local username = tostring(reviewer.label or ""):gsub("^@", "")
+				if username ~= "" then
+					by_username[username:lower()] = reviewer
+					if reviewer.selected then
+						table.insert(original, reviewer)
+						table.insert(seed_names, username)
+					end
+				end
+			end
+
+			---@type AtlasFieldCompletionProvider
+			local completion = {
+				fetch = function(query, on_items)
+					local q = vim.trim(query):lower()
+					local items = {}
+					for _, reviewer in ipairs(reviewers) do
+						local username = tostring(reviewer.label or ""):gsub("^@", "")
+						if username ~= "" and (q == "" or username:lower():find(q, 1, true) == 1) then
+							table.insert(items, { name = username, menu = "reviewer" })
+						end
+					end
+					on_items(items)
 				end,
-				format_item = function(reviewer)
-					return reviewer.label
-				end,
-				title = string.format("Reviewers for #%s", tostring(pr.id or "")),
-				on_done = function(chosen)
+			}
+
+			inline_field_edit.start({
+				anchor_win = header_win,
+				row = region.row,
+				col = region.col,
+				width = region.width,
+				height = region.height,
+				seed_text = table.concat(seed_names, ", "),
+				multi_value = true,
+				seed_resolved = seed_names,
+				completion = completion,
+				on_save = function(text, save_done)
+					local chosen = {}
+					for _, segment in ipairs(vim.split(text, ",", { plain = true })) do
+						local trimmed = vim.trim(segment)
+						if trimmed ~= "" then
+							local reviewer = by_username[trimmed:lower()]
+							if reviewer then
+								table.insert(chosen, reviewer)
+							end
+						end
+					end
+
 					local provider_id_key = function(reviewer)
 						return reviewer.provider_id
 					end
 					if not core_utils.selection_changed(original, chosen, provider_id_key) then
+						save_done(true)
 						done({ changed_pr = false, message = "No changes" }, nil)
 						return
 					end
@@ -350,13 +422,18 @@ M.edit_reviewers = {
 						if update_err or ok == false then
 							local message = tostring(update_err or "Unknown error")
 							notify(context, "error", "Update reviewers failed: " .. message)
-							done(nil, message)
+							save_done(false, message)
 							return
 						end
 						notify(context, "success", "Reviewers updated", 1200)
+						save_done(true)
 						done({ changed_pr = true, message = "Reviewers updated" }, nil)
 					end)
 				end,
+				on_cancel = function()
+					done({ changed_pr = false, message = "Cancelled" }, nil)
+				end,
+				on_done = function() end,
 			})
 		end)
 	end,

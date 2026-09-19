@@ -38,6 +38,13 @@ local DEFAULT_COLUMN_GAP = 4
 ---@field kind "toggle"|"text"|nil
 ---@field enabled boolean|nil Toggle state, only used when kind == "toggle".
 ---@field right_content { lines: string[], highlights: table[]|nil }|nil Only meaningful on a full-width `top_field`.
+---@field id string|nil When set, the field's interior region (for inline-editing overlays) is reported back via the `regions` return value.
+
+---@class AtlasFieldBoxRegion
+---@field row integer 0-indexed row of the field's interior, relative to the returned `lines`.
+---@field col integer 0-indexed col where the field's interior starts.
+---@field width integer Interior width (content area, inside any border).
+---@field height integer Number of interior content rows.
 
 ---@param text string
 ---@param hl string|table[]|nil
@@ -118,12 +125,15 @@ end
 ---@param total_width integer|nil Available width for right_content; defaults to box_width (no reserved space).
 ---@return string[] lines
 ---@return table[] highlights
+---@return AtlasFieldBoxRegion region The field's interior region, relative to the returned `lines`.
 local function render_one(field, box_width, total_width)
 	if field.kind == "toggle" then
-		return render_toggle(field, box_width)
+		local lines, highlights = render_toggle(field, box_width)
+		return lines, highlights, { row = 0, col = 0, width = box_width, height = 1 }
 	end
 	if field.kind == "text" then
-		return render_text(field, box_width)
+		local lines, highlights = render_text(field, box_width)
+		return lines, highlights, { row = 0, col = 0, width = box_width, height = 1 }
 	end
 
 	local content_lines, content_highlights = {}, {}
@@ -152,7 +162,7 @@ local function render_one(field, box_width, total_width)
 		end
 	end
 
-	return bordered_box.render({
+	local lines, highlights = bordered_box.render({
 		width = total_width or box_width,
 		box_width = box_width,
 		title = field.label,
@@ -162,6 +172,8 @@ local function render_one(field, box_width, total_width)
 		right_content = field.right_content,
 		border_hl = field.border_hl or (field.editable and "AtlasFieldBoxBorderEditable" or "AtlasFieldBoxBorder"),
 	})
+	local region = { row = 1, col = 1, width = box_width - 2, height = #content_lines }
+	return lines, highlights, region
 end
 
 ---@param left_lines string[]
@@ -203,13 +215,22 @@ end
 ---@param box_width integer
 ---@return string[] lines
 ---@return table[] highlights
+---@return table<string, AtlasFieldBoxRegion> regions Keyed by `field.id`, row relative to the returned `lines`.
 local function stack(fields, box_width)
-	local lines, spans = {}, {}
+	local lines, spans, regions = {}, {}, {}
 	for _, field in ipairs(fields) do
-		local field_lines, field_spans = render_one(field, box_width)
+		local field_lines, field_spans, field_region = render_one(field, box_width)
+		if field.id and field_region then
+			regions[field.id] = {
+				row = #lines + field_region.row,
+				col = field_region.col,
+				width = field_region.width,
+				height = field_region.height,
+			}
+		end
 		shared_utils.append_block(lines, spans, { lines = field_lines, highlights = field_spans })
 	end
-	return lines, spans
+	return lines, spans, regions
 end
 
 --- N independent, full-height column stacks (e.g. Author/Assignee on the
@@ -223,12 +244,13 @@ end
 ---@param opts { width: integer, max_field_width: integer|nil, column_gap: integer|nil, top_field: AtlasFieldBoxField|nil }
 ---@return string[] lines
 ---@return table[] highlights
+---@return table<string, AtlasFieldBoxRegion> regions Keyed by `id` for any field (top_field or column field) that set one.
 function M.render_columns(columns, opts)
 	local width = math.max(1, opts.width)
 	local column_gap = opts.column_gap or DEFAULT_COLUMN_GAP
 	local max_field_width = opts.max_field_width or DEFAULT_MAX_FIELD_WIDTH
 
-	local lines, spans = {}, {}
+	local lines, spans, regions = {}, {}, {}
 
 	if opts.top_field then
 		local reserve = 0
@@ -237,7 +259,11 @@ function M.render_columns(columns, opts)
 			reserve = ui_utils.text_width(rc_text) + 2
 		end
 		local top_box_width = math.max(MIN_FIELD_WIDTH, width - reserve)
-		local top_lines, top_spans = render_one(opts.top_field, top_box_width, width)
+		local top_lines, top_spans, top_region = render_one(opts.top_field, top_box_width, width)
+		if opts.top_field.id and top_region then
+			regions[opts.top_field.id] =
+				{ row = top_region.row, col = top_region.col, width = top_region.width, height = top_region.height }
+		end
 		shared_utils.append_block(lines, spans, { lines = top_lines, highlights = top_spans })
 	end
 
@@ -249,7 +275,7 @@ function M.render_columns(columns, opts)
 	end
 	local n = #nonempty
 	if n == 0 then
-		return lines, spans
+		return lines, spans, regions
 	end
 
 	local total_gap = column_gap * (n - 1)
@@ -265,20 +291,35 @@ function M.render_columns(columns, opts)
 		return math.min(cap, w)
 	end
 
-	local col_widths, col_lines, col_spans, max_rows = {}, {}, {}, 0
+	local col_widths, col_lines, col_spans, col_regions, max_rows = {}, {}, {}, {}, 0
 	for i, col in ipairs(nonempty) do
 		local w = column_width(col)
 		col_widths[i] = w
-		local l, s = stack(col, w)
+		local l, s, r = stack(col, w)
 		col_lines[i] = l
 		col_spans[i] = s
+		col_regions[i] = r
 		max_rows = math.max(max_rows, #l)
 	end
 
 	local gap = string.rep(" ", column_gap)
 	local blanks = {}
+	local col_offsets = {}
 	for i = 1, n do
 		blanks[i] = string.rep(" ", col_widths[i])
+		col_offsets[i] = (i == 1) and 0 or (col_offsets[i - 1] + col_widths[i - 1] + column_gap)
+	end
+
+	local row_base = #lines
+	for i = 1, n do
+		for id, region in pairs(col_regions[i]) do
+			regions[id] = {
+				row = row_base + region.row,
+				col = col_offsets[i] + region.col,
+				width = region.width,
+				height = region.height,
+			}
+		end
 	end
 
 	local columns_lines = {}
@@ -311,7 +352,7 @@ function M.render_columns(columns, opts)
 	end
 
 	shared_utils.append_block(lines, spans, { lines = columns_lines, highlights = columns_spans })
-	return lines, spans
+	return lines, spans, regions
 end
 
 ---@param fields AtlasFieldBoxField[]

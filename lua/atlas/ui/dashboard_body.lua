@@ -5,6 +5,16 @@ local filter_bar = require("atlas.ui.filter_bar")
 local ui_state = require("atlas.ui.state")
 local ns = vim.api.nvim_create_namespace("atlas.ui")
 
+---@type AtlasFieldBoxRegion|nil
+local filter_region = nil
+
+--- The filter bar's interior region from the last render, for anchoring an
+--- inline field edit overlay (`ui.filter` keymap). nil before the first render.
+---@return AtlasFieldBoxRegion|nil
+function M.filter_region()
+	return filter_region
+end
+
 ---@param buf integer
 ---@param spans table[]
 local function apply_spans(buf, spans)
@@ -36,7 +46,8 @@ function M.render(render_body)
 	local width = vim.api.nvim_win_get_width(win)
 	local height = vim.api.nvim_win_get_height(win)
 
-	local bar_lines, bar_spans = filter_bar.render(dashboard_host.domain(), width)
+	local bar_lines, bar_spans, bar_region = filter_bar.render(dashboard_host.domain(), width)
+	filter_region = bar_region
 	local body_lines, body_spans, body_line_map = render_body(width, height, #bar_lines)
 
 	local lines = vim.list_extend({}, bar_lines)

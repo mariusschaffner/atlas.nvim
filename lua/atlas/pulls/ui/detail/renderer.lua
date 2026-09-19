@@ -72,13 +72,31 @@ local function reviewers_field()
 	end
 	local editable = supports_action("edit_reviewers")
 	if state.reviewers == "loading" then
-		return { label = "Reviewers", value = spinner.with_text("Loading..."), hl = "AtlasTextMuted", editable = editable }
+		return {
+			id = "reviewers",
+			label = "Reviewers",
+			value = spinner.with_text("Loading..."),
+			hl = "AtlasTextMuted",
+			editable = editable,
+		}
 	end
 	if type(state.reviewers) == "string" then
-		return { label = "Reviewers", value = state.reviewers, hl = "AtlasLogError", editable = editable }
+		return {
+			id = "reviewers",
+			label = "Reviewers",
+			value = state.reviewers,
+			hl = "AtlasLogError",
+			editable = editable,
+		}
 	end
 	if #state.reviewers == 0 then
-		return { label = "Reviewers", value = "no reviewers yet", hl = "AtlasTextMuted", editable = editable }
+		return {
+			id = "reviewers",
+			label = "Reviewers",
+			value = "no reviewers yet",
+			hl = "AtlasTextMuted",
+			editable = editable,
+		}
 	end
 
 	local parts, spans, cursor = {}, {}, 0
@@ -89,7 +107,7 @@ local function reviewers_field()
 		table.insert(spans, { start_col = cursor, end_col = cursor + #style.icon, hl_group = style.hl })
 		cursor = cursor + #token + (i < #state.reviewers and 2 or 0)
 	end
-	return { label = "Reviewers", value = table.concat(parts, ", "), hl = spans, editable = editable }
+	return { id = "reviewers", label = "Reviewers", value = table.concat(parts, ", "), hl = spans, editable = editable }
 end
 
 --- Merge checks + the delete-source-branch toggle, grouped into one
@@ -137,7 +155,9 @@ end
 ---@param pr PullRequest
 ---@param tab_items PullsDetailTab[]
 ---@param width integer
----@return string[], table[]
+---@return string[] lines
+---@return table[] highlights
+---@return table<string, AtlasFieldBoxRegion> regions
 local function render_header(pr, tab_items, width)
 	local lines, spans = {}, {}
 	local details = state.current_details
@@ -167,7 +187,7 @@ local function render_header(pr, tab_items, width)
 	local readiness_fields = {}
 	utils.insert_if(readiness_fields, merge_readiness_field(provider_fields.delete_source_branch))
 
-	local field_lines, field_spans =
+	local field_lines, field_spans, field_regions =
 		field_box.render_columns({ left_fields, middle_fields, branch_fields, readiness_fields }, {
 			width = width,
 			top_field = header.title_field(pr),
@@ -193,7 +213,7 @@ local function render_header(pr, tab_items, width)
 		utils.append_block(lines, spans, { lines = tab_lines, highlights = tab_spans })
 	end
 
-	return lines, spans
+	return lines, spans, field_regions or {}
 end
 
 ---@param tab_items PullsDetailTab[]
@@ -215,12 +235,14 @@ function M.render(tab_items, get_tab_module)
 	local tab_mod = pr ~= nil and get_tab_module(state.current_tab) or nil
 
 	if has_header then
-		local header_lines, header_spans = {}, {}
+		local header_lines, header_spans, header_regions = {}, {}, {}
 		if pr ~= nil then
-			header_lines, header_spans = render_header(pr, tab_items, vim.api.nvim_win_get_width(header_win))
+			header_lines, header_spans, header_regions =
+				render_header(pr, tab_items, vim.api.nvim_win_get_width(header_win))
 		end
 		set_lines(header_buf, header_lines)
 		utils.apply_spans_clamped(header_buf, header_ns, header_spans)
+		state.header_regions = header_regions
 		detail_ui.resize_header(#header_lines)
 	end
 

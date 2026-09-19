@@ -10,6 +10,10 @@ local issues_api = require("atlas.issues.providers.gitlab.api.issues")
 local users_api = require("atlas.issues.providers.gitlab.api.users")
 local labels_api = require("atlas.issues.providers.gitlab.api.labels")
 local service = require("atlas.providers.gitlab.client")
+local inline_field_edit = require("atlas.ui.inline_field_edit")
+local users_completion = require("atlas.providers.gitlab.completion.users")
+local labels_completion = require("atlas.providers.gitlab.completion.labels")
+local detail_state = require("atlas.issues.ui.detail.state")
 
 ---@param ctx AtlasIssueActionContext
 ---@return boolean
@@ -75,74 +79,6 @@ local function reopen_issue_available(ctx)
 	return true, nil
 end
 
----@param key string
----@param current_assignees IssueUser[]
----@param members IssueUser[]
----@param done fun(result: IssuesActionResult|nil, err: string|nil)
-local function open_assignees_picker(key, current_assignees, members, done)
-	notify.clear()
-
-	if #members == 0 then
-		local message = "No assignable members"
-		notify.warn(message)
-		done(nil, message)
-		return
-	end
-
-	local original = {}
-	for _, assignee in ipairs(current_assignees) do
-		if tonumber(assignee.id) then
-			table.insert(original, assignee)
-		end
-	end
-
-	picker.multi_select({
-		items = members,
-		selected = vim.deepcopy(original),
-		key = function(item)
-			return tostring(item.id or item.account_id or "")
-		end,
-		format_item = function(item)
-			return string.format(
-				"%s %s (@%s)",
-				icons.general("user"),
-				item.display_name or item.account_id or item.name or item.username,
-				item.account_id or item.username
-			)
-		end,
-		title = string.format("Assignees for %s", key),
-		on_done = function(selected)
-			local id_key = function(item)
-				return tonumber(item.id)
-			end
-			if not core_utils.selection_changed(original, selected, id_key) then
-				done(nil, nil)
-				return
-			end
-
-			local final_ids = {}
-			for _, it in ipairs(selected) do
-				local id = tonumber(it.id)
-				if id then
-					table.insert(final_ids, id)
-				end
-			end
-
-			notify.loading(string.format("Updating assignees on %s...", key))
-			issues_api.set_assignee_ids(key, final_ids, function(ok, set_err)
-				if not ok then
-					notify.error(set_err or "Failed")
-					done(nil, set_err or "Failed")
-					return
-				end
-				local msg = string.format("%d assignee(s)", #final_ids)
-				notify.success(msg, { timeout = 1200 })
-				done({ issue_key = key }, nil)
-			end)
-		end,
-	})
-end
-
 ---@param ctx AtlasIssueActionContext
 ---@param done fun(result: IssuesActionResult|nil, err: string|nil)
 local function assign(ctx, done)
@@ -154,6 +90,15 @@ local function assign(ctx, done)
 		local err = "Could not determine project path"
 		notify.error(err)
 		done(nil, err)
+		return
+	end
+
+	local header_win = detail_state.header_win
+	local region = detail_state.header_regions and detail_state.header_regions.assignee
+	if header_win == nil or not vim.api.nvim_win_is_valid(header_win) or region == nil then
+		local message = "Assignee field is not visible"
+		notify.warn(message)
+		done(nil, message)
 		return
 	end
 
@@ -174,79 +119,104 @@ local function assign(ctx, done)
 			done(nil, message)
 			return
 		end
-		open_assignees_picker(key, values.assignees, values.members, done)
-	end)
-end
+		notify.clear()
 
----@param ctx AtlasIssueActionContext
----@param done fun(result: IssuesActionResult|nil, err: string|nil)
----@param key string
----@param current_labels IssueLabel[]
----@param all_labels IssueLabel[]
----@param done fun(result: IssuesActionResult|nil, err: string|nil)
-local function open_labels_picker(key, current_labels, all_labels, done)
-	notify.clear()
-	if #all_labels == 0 then
-		local message = "No labels available"
-		notify.warn(message)
-		done(nil, message)
-		return
-	end
-
-	local original = {}
-	local original_set = {}
-	for _, label in ipairs(current_labels) do
-		local name = tostring(label.name or "")
-		if name ~= "" then
-			table.insert(original, { name = name, color = label.color })
-			original_set[name] = true
+		local original = {}
+		local by_username = {}
+		local seed_names = {}
+		for _, assignee in ipairs(values.assignees or {}) do
+			if tonumber(assignee.id) then
+				table.insert(original, assignee)
+			end
+			local username = tostring(assignee.account_id or "")
+			if username ~= "" then
+				table.insert(seed_names, username)
+				by_username[username:lower()] = assignee
+			end
 		end
-	end
-
-	picker.multi_select({
-		items = all_labels,
-		selected = vim.deepcopy(original),
-		key = function(item)
-			return tostring(item.name or "")
-		end,
-		format_item = function(item)
-			return tostring(item.name or "")
-		end,
-		title = string.format("Labels for %s", key),
-		on_done = function(selected)
-			local selected_set = {}
-			for _, it in ipairs(selected) do
-				selected_set[it.name] = true
+		for _, member in ipairs(values.members or {}) do
+			local username = tostring(member.account_id or "")
+			if username ~= "" then
+				by_username[username:lower()] = member
 			end
-			local adds, removes = {}, {}
-			for name, _ in pairs(selected_set) do
-				if not original_set[name] then
-					table.insert(adds, name)
+		end
+
+		local completion = users_completion.for_project(users_api.list_members, path, function(user)
+			local username = tostring(user.account_id or "")
+			if username == "" then
+				return nil
+			end
+			return {
+				name = username,
+				display = string.format("%s (@%s)", user.display_name or username, username),
+				menu = "member",
+			}
+		end, function(users)
+			for _, user in ipairs(users) do
+				local username = tostring(user.account_id or "")
+				if username ~= "" then
+					by_username[username:lower()] = user
 				end
 			end
-			for name, _ in pairs(original_set) do
-				if not selected_set[name] then
-					table.insert(removes, name)
-				end
-			end
-			if #adds == 0 and #removes == 0 then
-				done(nil, nil)
-				return
-			end
+		end)
 
-			notify.loading(string.format("Updating labels on %s...", key))
-			issues_api.update_labels(key, { add = adds, remove = removes }, function(ok, set_err)
-				if not ok then
-					notify.error(set_err or "Failed")
-					done(nil, set_err or "Failed")
+		inline_field_edit.start({
+			anchor_win = header_win,
+			row = region.row,
+			col = region.col,
+			width = region.width,
+			height = region.height,
+			seed_text = table.concat(seed_names, ", "),
+			multi_value = true,
+			seed_resolved = seed_names,
+			completion = completion,
+			on_save = function(text, save_done)
+				local selected = {}
+				for _, segment in ipairs(vim.split(text, ",", { plain = true })) do
+					local trimmed = vim.trim(segment)
+					if trimmed ~= "" then
+						local user = by_username[trimmed:lower()]
+						if user then
+							table.insert(selected, user)
+						end
+					end
+				end
+
+				local id_key = function(item)
+					return tonumber(item.id)
+				end
+				if not core_utils.selection_changed(original, selected, id_key) then
+					save_done(true)
+					done(nil, nil)
 					return
 				end
-				local msg = string.format("+%d / -%d label(s)", #adds, #removes)
-				notify.success(msg, { timeout = 1200 })
-				done({ issue_key = key }, nil)
-			end)
-		end,
-	})
+
+				local final_ids = {}
+				for _, it in ipairs(selected) do
+					local id = tonumber(it.id)
+					if id then
+						table.insert(final_ids, id)
+					end
+				end
+
+				notify.loading(string.format("Updating assignees on %s...", key))
+				issues_api.set_assignee_ids(key, final_ids, function(ok, set_err)
+					if not ok then
+						save_done(false, set_err or "Failed")
+						return
+					end
+					local msg = string.format("%d assignee(s)", #final_ids)
+					notify.success(msg, { timeout = 1200 })
+					save_done(true)
+					done({ issue_key = key }, nil)
+				end)
+			end,
+			on_cancel = function()
+				done(nil, nil)
+			end,
+			on_done = function() end,
+		})
+	end)
 end
 
 ---@param ctx AtlasIssueActionContext
@@ -263,6 +233,15 @@ local function labels(ctx, done)
 		return
 	end
 
+	local header_win = detail_state.header_win
+	local region = detail_state.header_regions and detail_state.header_regions.labels
+	if header_win == nil or not vim.api.nvim_win_is_valid(header_win) or region == nil then
+		local message = "Labels field is not visible"
+		notify.warn(message)
+		done(nil, message)
+		return
+	end
+
 	notify.loading("Loading labels...")
 	issues_api.fetch_issue_labels(key, function(current_labels, current_err)
 		if current_err or current_labels == nil then
@@ -271,16 +250,72 @@ local function labels(ctx, done)
 			done(nil, message)
 			return
 		end
+		notify.clear()
 
-		labels_api.list(path, function(all_labels, labels_err)
-			if labels_err or all_labels == nil then
-				local message = labels_err or "Failed to load labels"
-				notify.error(message)
-				done(nil, message)
-				return
+		local original_set, seed_names = {}, {}
+		for _, label in ipairs(current_labels) do
+			local name = tostring(label.name or "")
+			if name ~= "" then
+				original_set[name] = true
+				table.insert(seed_names, name)
 			end
-			open_labels_picker(key, current_labels, all_labels, done)
-		end)
+		end
+
+		local completion = labels_completion.for_project(labels_api.list, path)
+
+		inline_field_edit.start({
+			anchor_win = header_win,
+			row = region.row,
+			col = region.col,
+			width = region.width,
+			height = region.height,
+			seed_text = table.concat(seed_names, ", "),
+			multi_value = true,
+			seed_resolved = seed_names,
+			completion = completion,
+			on_save = function(text, save_done)
+				local selected_set = {}
+				for _, segment in ipairs(vim.split(text, ",", { plain = true })) do
+					local trimmed = vim.trim(segment)
+					if trimmed ~= "" then
+						selected_set[trimmed] = true
+					end
+				end
+
+				local adds, removes = {}, {}
+				for name, _ in pairs(selected_set) do
+					if not original_set[name] then
+						table.insert(adds, name)
+					end
+				end
+				for name, _ in pairs(original_set) do
+					if not selected_set[name] then
+						table.insert(removes, name)
+					end
+				end
+				if #adds == 0 and #removes == 0 then
+					save_done(true)
+					done(nil, nil)
+					return
+				end
+
+				notify.loading(string.format("Updating labels on %s...", key))
+				issues_api.update_labels(key, { add = adds, remove = removes }, function(ok, set_err)
+					if not ok then
+						save_done(false, set_err or "Failed")
+						return
+					end
+					local msg = string.format("+%d / -%d label(s)", #adds, #removes)
+					notify.success(msg, { timeout = 1200 })
+					save_done(true)
+					done({ issue_key = key }, nil)
+				end)
+			end,
+			on_cancel = function()
+				done(nil, nil)
+			end,
+			on_done = function() end,
+		})
 	end)
 end
 

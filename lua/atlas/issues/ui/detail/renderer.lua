@@ -83,7 +83,9 @@ end
 ---@param issue Issue
 ---@param tab_items IssuesDetailTabDefinition[]
 ---@param width integer
----@return string[], table[]
+---@return string[] lines
+---@return table[] highlights
+---@return table<string, AtlasFieldBoxRegion> regions
 local function render_header(issue, tab_items, width)
 	local lines, spans = {}, {}
 	local details = state.current_details
@@ -107,7 +109,8 @@ local function render_header(issue, tab_items, width)
 	utils.insert_if(right_fields, linked_mr_field())
 	utils.insert_if(right_fields, linked_branches_field())
 
-	local header_lines, header_spans = header.render(issue, width, left_fields, middle_fields, right_fields, status_badge)
+	local header_lines, header_spans, header_regions =
+		header.render(issue, width, left_fields, middle_fields, right_fields, status_badge)
 	utils.append_block(lines, spans, { lines = header_lines, highlights = header_spans })
 	table.insert(lines, "")
 
@@ -121,7 +124,7 @@ local function render_header(issue, tab_items, width)
 		utils.append_block(lines, spans, { lines = tab_lines, highlights = tab_spans })
 	end
 
-	return lines, spans
+	return lines, spans, header_regions or {}
 end
 
 ---@param tab_items IssuesDetailTabDefinition[]
@@ -142,12 +145,13 @@ function M.render(tab_items, get_tab_module)
 	local has_header = utils.window.valid(header_win) and utils.buffer.valid(header_buf)
 
 	if has_header then
-		local header_lines, header_spans = {}, {}
+		local header_lines, header_spans, header_regions = {}, {}, {}
 		if issue ~= nil then
-			header_lines, header_spans = render_header(issue, tab_items, vim.api.nvim_win_get_width(header_win))
+			header_lines, header_spans, header_regions = render_header(issue, tab_items, vim.api.nvim_win_get_width(header_win))
 		end
 		set_lines(header_buf, header_lines)
 		utils.apply_spans(header_buf, header_ns, header_spans)
+		state.header_regions = header_regions
 		detail_ui.resize_header(#header_lines)
 	end
 
