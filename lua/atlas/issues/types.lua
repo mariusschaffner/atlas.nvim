@@ -57,8 +57,13 @@
 ---@field title string
 ---@field web_url string|nil
 ---@field due_date string|nil
+---@field start_date string|nil
 ---@field description string|nil
 ---@field state string|nil "active"|"closed"
+
+---@class MilestoneWorkItem Bare-text list entry (merge requests linked to a milestone).
+---@field key string
+---@field title string
 
 --------------------------------------------------------------------------------
 -- Group

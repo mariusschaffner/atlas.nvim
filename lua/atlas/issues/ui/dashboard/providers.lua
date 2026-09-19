@@ -142,15 +142,22 @@ local function gitlab()
 	end
 
 	---@param milestone IssueMilestone
+	---@return string
+	local function milestone_status_value(milestone)
+		local label = milestone.state == "closed" and "Closed" or "Active"
+		return string.format(" %s ", label)
+	end
+
+	---@param milestone IssueMilestone
 	---@param child_count integer
 	local function milestone_values(milestone, child_count)
 		return {
 			icon = MILESTONE_ICON,
-			name = string.format("Milestone: %s", tostring(milestone.title or "")),
+			name = tostring(milestone.title or ""),
 			assignee = "",
 			labels = "",
 			children_count = tostring(child_count),
-			status = "",
+			status = milestone_status_value(milestone),
 		}
 	end
 
@@ -169,6 +176,10 @@ local function gitlab()
 			end
 			if col.key == "children_count" then
 				return { { start_col = 0, end_col = #ctx.padded, hl_group = "AtlasTextMuted" } }
+			end
+			if col.key == "status" then
+				local hl = milestone.state == "closed" and "AtlasGLIssueClosedChip" or "AtlasGLIssueOpenChip"
+				return { { start_col = 0, end_col = #ctx.padded, hl_group = hl } }
 			end
 			return nil
 		end

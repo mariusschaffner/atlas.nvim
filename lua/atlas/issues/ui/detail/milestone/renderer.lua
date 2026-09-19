@@ -11,10 +11,12 @@ local state = require("atlas.issues.ui.detail.milestone.state")
 local ns = vim.api.nvim_create_namespace("atlas.issues.milestone_detail")
 local header_ns = vim.api.nvim_create_namespace("atlas.issues.milestone_detail.header")
 local PADDING_X = 1
+local BAR_WIDTH = 24
 
 local TABS = {
 	{ key = "description", label = "Description", icon = { icon = icons.general("overview") } },
 	{ key = "work_items", label = "Work Items", icon = { icon = icons.general("conversation") } },
+	{ key = "merge_requests", label = "Merge Requests", icon = { icon = icons.pulls("pr") } },
 }
 M.tabs = TABS
 
@@ -27,6 +29,28 @@ local function set_lines(buf, lines)
 	vim.api.nvim_set_option_value("modifiable", true, { buf = buf })
 	vim.api.nvim_buf_set_lines(buf, 0, -1, false, lines)
 	vim.api.nvim_set_option_value("modifiable", false, { buf = buf })
+end
+
+---@param work_items Issue[]
+---@return integer completed, integer total, integer percent
+local function work_item_stats(work_items)
+	local total = #work_items
+	local completed = 0
+	for _, issue in ipairs(work_items) do
+		if issue.status_id == "closed" then
+			completed = completed + 1
+		end
+	end
+	local percent = total > 0 and math.floor((completed / total) * 100 + 0.5) or 0
+	return completed, total, percent
+end
+
+---@param percent integer
+---@param width integer
+---@return string, integer filled_len
+local function progress_bar(percent, width)
+	local filled = math.max(0, math.min(width, math.floor((percent / 100) * width + 0.5)))
+	return string.rep("█", filled) .. string.rep("░", width - filled), filled
 end
 
 ---@param milestone IssueMilestone
@@ -43,8 +67,19 @@ local function render_header(milestone, width)
 			v1_hl = milestone.state == "closed" and "AtlasGLIssueClosedChip" or "AtlasGLIssueOpenChip",
 		})
 	end
+	if milestone.start_date and milestone.start_date ~= "" then
+		table.insert(fields, { k1 = "Start date:", v1 = milestone.start_date, v1_hl = "AtlasTextMuted" })
+	end
 	if milestone.due_date and milestone.due_date ~= "" then
 		table.insert(fields, { k1 = "Due date:", v1 = milestone.due_date, v1_hl = "AtlasTextMuted" })
+	end
+
+	local completed, total, percent
+	if state.work_items_loading then
+		table.insert(fields, { k1 = "Work items:", v1 = spinner.with_text("Loading..."), v1_hl = "AtlasTextMuted" })
+	elseif state.work_items ~= nil then
+		completed, total, percent = work_item_stats(state.work_items)
+		table.insert(fields, { k1 = "Work items:", v1 = tostring(total), v1_hl = "AtlasTextMuted" })
 	end
 
 	local field_lines, field_spans = {}, {}
@@ -80,9 +115,6 @@ local function render_header(milestone, width)
 	for _, l in ipairs(field_lines) do
 		table.insert(lines, l)
 	end
-	if #fields > 0 then
-		table.insert(lines, "")
-	end
 	for _, span in ipairs(field_spans) do
 		table.insert(spans, {
 			line = span.line + 2,
@@ -91,6 +123,26 @@ local function render_header(milestone, width)
 			hl_group = span.hl_group,
 		})
 	end
+
+	if total ~= nil and total > 0 then
+		local bar, filled_len = progress_bar(percent, BAR_WIDTH)
+		local bar_line = string.format(" %s %d%% (%d/%d closed)", bar, percent, completed, total)
+		table.insert(lines, bar_line)
+		local bar_line_index = #lines - 1
+		table.insert(spans, {
+			line = bar_line_index,
+			start_col = 1,
+			end_col = 1 + filled_len,
+			hl_group = "AtlasTextPositive",
+		})
+		table.insert(spans, {
+			line = bar_line_index,
+			start_col = 1 + filled_len,
+			end_col = 1 + BAR_WIDTH,
+			hl_group = "AtlasTextMuted",
+		})
+	end
+	table.insert(lines, "")
 
 	local tab_lines, tab_spans = tabs.render(TABS, state.current_tab, width, {
 		active_hl = "AtlasFilterActive",
@@ -122,24 +174,28 @@ local function render_description()
 	return lines, spans
 end
 
+---@param items table[]|nil
+---@param loading boolean
+---@param loading_text string
+---@param empty_text string
+---@param unavailable_text string
 ---@return string[], table[]
-local function render_work_items()
+local function render_bare_list(items, loading, loading_text, empty_text, unavailable_text)
 	local lines, spans = {}, {}
-	if state.work_items_loading then
-		utils.push(lines, spans, spinner.with_text("Loading work items..."), "AtlasTextMuted", PADDING_X)
+	if loading then
+		utils.push(lines, spans, spinner.with_text(loading_text), "AtlasTextMuted", PADDING_X)
 		return lines, spans
 	end
-	local items = state.work_items
 	if items == nil then
-		utils.push(lines, spans, "Work items unavailable.", "AtlasTextMuted", PADDING_X)
+		utils.push(lines, spans, unavailable_text, "AtlasTextMuted", PADDING_X)
 		return lines, spans
 	end
 	if #items == 0 then
-		utils.push(lines, spans, "No linked issues", "AtlasTextMuted", PADDING_X)
+		utils.push(lines, spans, empty_text, "AtlasTextMuted", PADDING_X)
 		return lines, spans
 	end
-	for _, issue in ipairs(items) do
-		local text = string.format("%s  %s", tostring(issue.key or ""), tostring(issue.title or ""))
+	for _, item in ipairs(items) do
+		local text = string.format("%s  %s", tostring(item.key or ""), tostring(item.title or ""))
 		utils.push(lines, spans, text, nil, PADDING_X)
 	end
 	return lines, spans
@@ -174,7 +230,16 @@ function M.render()
 	if milestone == nil then
 		lines, spans = { "", "  Nothing selected..." }, {}
 	elseif state.current_tab == "work_items" then
-		lines, spans = render_work_items()
+		lines, spans =
+			render_bare_list(state.work_items, state.work_items_loading, "Loading work items...", "No linked issues", "Work items unavailable.")
+	elseif state.current_tab == "merge_requests" then
+		lines, spans = render_bare_list(
+			state.merge_requests,
+			state.merge_requests_loading,
+			"Loading merge requests...",
+			"No linked merge requests",
+			"Merge requests unavailable."
+		)
 	else
 		lines, spans = render_description()
 	end

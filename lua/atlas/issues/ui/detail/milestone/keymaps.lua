@@ -34,6 +34,18 @@ function M.register(buf)
 
 	utils.insert_if(
 		items,
+		resolver.item("ui.comments.edit", {
+			desc = "Edit description",
+			hint_desc = "Edit",
+			opts = { nowait = true, silent = true },
+			callback = function()
+				require("atlas.issues.ui.detail.milestone").edit_description()
+			end,
+		})
+	)
+
+	utils.insert_if(
+		items,
 		resolver.item("ui.help", {
 			desc = "Toggle help",
 			hint = false,
@@ -67,6 +79,7 @@ function M.remove(buf)
 	local items = {}
 	utils.insert_if(items, resolver.remove_item("ui.next_panel_tab"))
 	utils.insert_if(items, resolver.remove_item("ui.previous_panel_tab"))
+	utils.insert_if(items, resolver.remove_item("ui.comments.edit"))
 	utils.insert_if(items, resolver.remove_item("ui.help"))
 	utils.insert_if(items, resolver.remove_item("ui.close"))
 	help.remove("General", items, { buffer = buf })

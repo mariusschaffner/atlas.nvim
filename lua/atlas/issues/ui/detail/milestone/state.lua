@@ -12,7 +12,9 @@ local request_scope = require("atlas.core.requests")
 ---@field description_loading boolean
 ---@field work_items Issue[]|nil
 ---@field work_items_loading boolean
----@field current_tab "description"|"work_items"
+---@field merge_requests MilestoneWorkItem[]|nil
+---@field merge_requests_loading boolean
+---@field current_tab "description"|"work_items"|"merge_requests"
 ---@field requests AtlasRequestScope
 local M = {
 	win = nil,
@@ -26,6 +28,8 @@ local M = {
 	description_loading = false,
 	work_items = nil,
 	work_items_loading = false,
+	merge_requests = nil,
+	merge_requests_loading = false,
 	current_tab = "description",
 	requests = request_scope.new(),
 }
@@ -42,6 +46,8 @@ function M.reset()
 	M.description_loading = false
 	M.work_items = nil
 	M.work_items_loading = false
+	M.merge_requests = nil
+	M.merge_requests_loading = false
 	M.current_tab = "description"
 	M.requests.cancel()
 	M.requests = request_scope.new()

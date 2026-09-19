@@ -77,6 +77,33 @@ local function load_work_items(id)
 	end)
 end
 
+local function load_merge_requests(id)
+	local core = state.provider and state.provider.capabilities.core
+	local fetch = core and core.fetch_milestone_merge_requests
+	if not fetch then
+		state.merge_requests = nil
+		state.merge_requests_loading = false
+		render_if_open()
+		return
+	end
+	state.merge_requests_loading = true
+	state.requests.run(function(done)
+		return fetch(state.project_path, id, done)
+	end, function(items, err)
+		if not same_milestone(id) then
+			return
+		end
+		state.merge_requests_loading = false
+		if items == nil then
+			notify.error(tostring(err or "Failed to load merge requests"))
+			state.merge_requests = nil
+		else
+			state.merge_requests = items
+		end
+		render_if_open()
+	end)
+end
+
 ---@return boolean
 function M.is_open()
 	return detail_ui.is_showing("milestone")
@@ -110,6 +137,7 @@ function M.open(milestone, opts)
 	state.current_milestone = milestone
 	state.description = milestone.description
 	state.work_items = nil
+	state.merge_requests = nil
 	state.current_tab = "description"
 
 	if state.buf and vim.api.nvim_buf_is_valid(state.buf) then
@@ -119,6 +147,75 @@ function M.open(milestone, opts)
 	render()
 	load_description(milestone.id)
 	load_work_items(milestone.id)
+	load_merge_requests(milestone.id)
+end
+
+--- Edit the milestone description inline. No-op when not on the Description
+--- tab, when the provider doesn't support it, or while already editing.
+function M.edit_description()
+	local milestone = state.current_milestone
+	local buf = state.buf
+	if milestone == nil or milestone.id == nil or buf == nil or not vim.api.nvim_buf_is_valid(buf) then
+		return
+	end
+	if state.current_tab ~= "description" then
+		return
+	end
+	local core = state.provider and state.provider.capabilities.core
+	local update = core and core.update_milestone_description
+	if not update then
+		notify.warn("Provider does not support editing milestone descriptions")
+		return
+	end
+	local inline_edit = require("atlas.ui.inline_edit")
+	if inline_edit.is_active(buf) then
+		return
+	end
+
+	local current = tostring(state.description or "")
+	local milestone_id = milestone.id
+	local project_path = state.project_path
+	local keymaps = require("atlas.issues.ui.detail.milestone.keymaps")
+
+	keymaps.remove(buf)
+	inline_edit.start({
+		buf = buf,
+		text = current,
+		on_save = function(text, done)
+			local updated = text or ""
+			if updated == current then
+				done(true)
+				return
+			end
+			notify.loading("Updating description...")
+			update(project_path, milestone_id, updated, function(ok, err)
+				if not same_milestone(milestone_id) then
+					done(true)
+					return
+				end
+				if not ok then
+					notify.error("Description update failed: " .. tostring(err or "Unknown error"))
+					done(false, err)
+					return
+				end
+				state.description = updated
+				if state.current_milestone then
+					state.current_milestone.description = updated
+				end
+				notify.success("Description updated", { timeout = 1200 })
+				done(true)
+			end)
+		end,
+		on_cancel = function()
+			notify.info("Description unchanged", { timeout = 1200 })
+		end,
+		on_done = function()
+			if buf and vim.api.nvim_buf_is_valid(buf) then
+				keymaps.register(buf)
+			end
+			render_if_open()
+		end,
+	})
 end
 
 ---@param step 1|-1
