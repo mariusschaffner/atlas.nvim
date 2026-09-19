@@ -8,7 +8,10 @@
 -- field with `kind = "toggle"` renders as a compact checkbox line instead
 -- of a bordered box, for on/off settings that don't need their own frame.
 -- `kind = "text"` renders as a plain, unboxed value line (no label shown),
--- for read-only info that doesn't need its own frame either.
+-- for read-only info that doesn't need its own frame either. A field with
+-- `rows` set renders a multi-line box (one row per line, e.g. a "Merge
+-- Readiness" box listing several checks) instead of the single-line
+-- `value`.
 local M = {}
 
 local bordered_box = require("atlas.ui.components.bordered_box")
@@ -20,10 +23,16 @@ local MIN_FIELD_WIDTH = 12
 local GAP = 2
 local DEFAULT_COLUMN_GAP = 4
 
+---@class AtlasFieldBoxRow
+---@field text string
+---@field hl string|table[]|nil
+
 ---@class AtlasFieldBoxField
 ---@field label string
+---@field label_hl table[]|nil Spans {start_col, end_col, hl_group} relative to `label`, layered over `border_hl`.
 ---@field value string
 ---@field hl string|table[]|nil
+---@field rows AtlasFieldBoxRow[]|nil When set, renders a multi-line box (one row per line) instead of the single-line `value`/`hl`.
 ---@field editable boolean|nil
 ---@field border_hl string|nil Explicit border color override, takes precedence over `editable`.
 ---@field kind "toggle"|"text"|nil
@@ -50,7 +59,17 @@ local function natural_width(field)
 	-- label_w = title_w + 2, for " Title ") to close the border without
 	-- overflowing box_width by a column; box_width = interior_width + 2.
 	local title_w = ui_utils.text_width(field.label) + 5
-	local value_w = ui_utils.text_width(field.value or "") + 2 -- "│" + "│"
+
+	local value_w = 0
+	if field.rows then
+		for _, row in ipairs(field.rows) do
+			value_w = math.max(value_w, ui_utils.text_width(row.text or ""))
+		end
+		value_w = value_w + 2 -- "│" + "│"
+	else
+		value_w = ui_utils.text_width(field.value or "") + 2 -- "│" + "│"
+	end
+
 	return math.max(title_w, value_w)
 end
 
@@ -107,22 +126,38 @@ local function render_one(field, box_width, total_width)
 		return render_text(field, box_width)
 	end
 
-	local value = field.value or ""
-	local content_highlights = {}
-	for _, span in ipairs(value_hl_spans(value, field.hl)) do
-		table.insert(content_highlights, {
-			line = 0,
-			start_col = span.start_col,
-			end_col = span.end_col,
-			hl_group = span.hl_group,
-		})
+	local content_lines, content_highlights = {}, {}
+	if field.rows then
+		for i, row in ipairs(field.rows) do
+			table.insert(content_lines, row.text or "")
+			for _, span in ipairs(value_hl_spans(row.text or "", row.hl)) do
+				table.insert(content_highlights, {
+					line = i - 1,
+					start_col = span.start_col,
+					end_col = span.end_col,
+					hl_group = span.hl_group,
+				})
+			end
+		end
+	else
+		local value = field.value or ""
+		content_lines = { value }
+		for _, span in ipairs(value_hl_spans(value, field.hl)) do
+			table.insert(content_highlights, {
+				line = 0,
+				start_col = span.start_col,
+				end_col = span.end_col,
+				hl_group = span.hl_group,
+			})
+		end
 	end
 
 	return bordered_box.render({
 		width = total_width or box_width,
 		box_width = box_width,
 		title = field.label,
-		content_lines = { value },
+		title_highlights = field.label_hl,
+		content_lines = content_lines,
 		content_highlights = content_highlights,
 		right_content = field.right_content,
 		border_hl = field.border_hl or (field.editable and "AtlasFieldBoxBorderEditable" or "AtlasFieldBoxBorder"),

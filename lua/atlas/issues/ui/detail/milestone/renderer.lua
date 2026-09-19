@@ -124,17 +124,20 @@ local function render_header(milestone, width)
 	}
 	local lines, spans = field_box.render_columns({}, { width = width, top_field = title_field })
 
-	local fields = {}
+	-- One row, three columns: Start date, Due date, Progress side by side.
+	local start_date_col = {}
 	if milestone.start_date and milestone.start_date ~= "" then
-		table.insert(fields, { label = "Start date", value = milestone.start_date, hl = "AtlasTextMuted" })
+		table.insert(start_date_col, { label = "Start date", value = milestone.start_date, hl = "AtlasTextMuted" })
 	end
+	local due_date_col = {}
 	if milestone.due_date and milestone.due_date ~= "" then
-		table.insert(fields, { label = "Due date", value = milestone.due_date, hl = "AtlasTextMuted" })
+		table.insert(due_date_col, { label = "Due date", value = milestone.due_date, hl = "AtlasTextMuted" })
 	end
+	local progress_col = {}
+	utils.insert_if(progress_col, progress_field())
 
-	utils.insert_if(fields, progress_field())
-
-	local field_lines, field_spans = field_box.render(fields, { width = width })
+	local field_lines, field_spans =
+		field_box.render_columns({ start_date_col, due_date_col, progress_col }, { width = width })
 	utils.append_block(lines, spans, { lines = field_lines, highlights = field_spans })
 	table.insert(lines, "")
 

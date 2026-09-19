@@ -92,36 +92,46 @@ local function reviewers_field()
 	return { label = "Reviewers", value = table.concat(parts, ", "), hl = spans, editable = editable }
 end
 
+--- Merge checks + the delete-source-branch toggle, grouped into one
+--- "Merge Readiness" box with one row per item, rather than separate
+--- one-line text fields.
+---@param delete_source_branch_field PullsDetailHeaderField|nil
 ---@return PullsDetailHeaderField|nil
-local function merge_checks_field()
-	if state.merge_checks == nil then
-		return nil
-	end
-	local prefix = "Checks: "
+local function merge_readiness_field(delete_source_branch_field)
+	local rows = {}
+
 	if state.merge_checks == "loading" then
-		return { value = prefix .. spinner.with_text("Loading..."), hl = "AtlasTextMuted", kind = "text" }
+		table.insert(rows, { text = spinner.with_text("Loading..."), hl = "AtlasTextMuted" })
+	elseif type(state.merge_checks) == "string" then
+		table.insert(rows, { text = state.merge_checks, hl = "AtlasLogError" })
+	elseif type(state.merge_checks) == "table" and #state.merge_checks > 0 then
+		local checks = vim.list_slice(state.merge_checks --[[@as PullsMergeCheck[] ]])
+		table.sort(checks, function(a, b)
+			return (MERGE_CHECK_PRIORITY[a.state] or math.huge) < (MERGE_CHECK_PRIORITY[b.state] or math.huge)
+		end)
+		for _, check in ipairs(checks) do
+			local pair = MERGE_CHECK_STATE[check.state] or MERGE_CHECK_STATE.muted
+			table.insert(rows, {
+				text = string.format("%s %s", pair.icon, check.label),
+				hl = { { start_col = 0, end_col = #pair.icon, hl_group = pair.hl } },
+			})
+		end
 	end
-	if type(state.merge_checks) == "string" then
-		return { value = prefix .. state.merge_checks, hl = "AtlasLogError", kind = "text" }
+
+	if delete_source_branch_field then
+		local checked = delete_source_branch_field.enabled == true
+		local mark = checked and "◉" or "○"
+		table.insert(rows, {
+			text = string.format("%s %s", mark, delete_source_branch_field.label),
+			hl = checked and "AtlasTextPositive" or "AtlasTextMuted",
+		})
 	end
-	if #state.merge_checks == 0 then
+
+	if #rows == 0 then
 		return nil
 	end
 
-	local checks = vim.list_slice(state.merge_checks --[[@as PullsMergeCheck[] ]])
-	table.sort(checks, function(a, b)
-		return (MERGE_CHECK_PRIORITY[a.state] or math.huge) < (MERGE_CHECK_PRIORITY[b.state] or math.huge)
-	end)
-
-	local parts, spans, cursor = {}, {}, #prefix
-	for i, check in ipairs(checks) do
-		local pair = MERGE_CHECK_STATE[check.state] or MERGE_CHECK_STATE.muted
-		local token = string.format("%s %s", pair.icon, check.label)
-		table.insert(parts, token)
-		table.insert(spans, { start_col = cursor, end_col = cursor + #pair.icon, hl_group = pair.hl })
-		cursor = cursor + #token + (i < #checks and 2 or 0)
-	end
-	return { value = prefix .. table.concat(parts, ", "), hl = spans, kind = "text" }
+	return { label = "Merge Readiness", rows = rows }
 end
 
 ---@param pr PullRequest
@@ -138,11 +148,11 @@ local function render_header(pr, tab_items, width)
 			and provider_detail.header_fields(pr, details, state.details_loading)
 		or {}
 
-	-- Fields, three columns: Assignee/Reviewers on the left, Labels in the
-	-- middle, Source/Target branch + Checks + Delete-source-branch on the
-	-- right (checks and the toggle are plain text, not boxed, and the
-	-- toggle sits last). Title spans all columns as the first row, its
-	-- border color conveying PR status.
+	-- Fields, four columns: Assignee/Reviewers on the left, Labels next,
+	-- Source/Target branch after that, and a "Merge Readiness" box (checks
+	-- + the delete-source-branch toggle as rows) on the far right. Title
+	-- spans all columns as the first row, its border color conveying PR
+	-- status.
 	local left_fields = {}
 	utils.insert_if(left_fields, provider_fields.assignee)
 	utils.insert_if(left_fields, reviewers_field())
@@ -150,16 +160,18 @@ local function render_header(pr, tab_items, width)
 	local middle_fields = {}
 	utils.insert_if(middle_fields, provider_fields.labels)
 
-	local right_fields = {}
-	table.insert(right_fields, header.source_branch_field(pr.source.branch, state.diffstat))
-	table.insert(right_fields, header.target_branch_field(pr.destination.branch))
-	utils.insert_if(right_fields, merge_checks_field())
-	utils.insert_if(right_fields, provider_fields.delete_source_branch)
+	local branch_fields = {}
+	table.insert(branch_fields, header.source_branch_field(pr.source.branch, state.diffstat))
+	table.insert(branch_fields, header.target_branch_field(pr.destination.branch))
 
-	local field_lines, field_spans = field_box.render_columns({ left_fields, middle_fields, right_fields }, {
-		width = width,
-		top_field = header.title_field(pr),
-	})
+	local readiness_fields = {}
+	utils.insert_if(readiness_fields, merge_readiness_field(provider_fields.delete_source_branch))
+
+	local field_lines, field_spans =
+		field_box.render_columns({ left_fields, middle_fields, branch_fields, readiness_fields }, {
+			width = width,
+			top_field = header.title_field(pr),
+		})
 	utils.append_block(lines, spans, { lines = field_lines, highlights = field_spans })
 	table.insert(lines, "")
 

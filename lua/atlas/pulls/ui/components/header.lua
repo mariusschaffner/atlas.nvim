@@ -89,10 +89,12 @@ function M.title_field(pr)
 end
 
 ---@param diffstat PullsDiffstatEntry[]|"loading"|string|nil
----@return string
-local function diffstat_suffix(diffstat)
+---@param base_len integer Length of the label text before the suffix, so spans land at the right absolute offset.
+---@return string suffix
+---@return table[] spans Absolute {start_col, end_col, hl_group} within `base .. suffix`.
+local function diffstat_suffix(diffstat, base_len)
 	if type(diffstat) ~= "table" then
-		return ""
+		return "", {}
 	end
 	local additions, deletions = 0, 0
 	for _, entry in ipairs(diffstat) do
@@ -100,9 +102,23 @@ local function diffstat_suffix(diffstat)
 		deletions = deletions + (tonumber(entry.lines_removed) or 0)
 	end
 	if additions + deletions == 0 then
-		return ""
+		return "", {}
 	end
-	return string.format(" (+%d, -%d)", additions, deletions)
+
+	local plus = string.format("+%d", additions)
+	local minus = string.format("-%d", deletions)
+	local suffix = string.format(" (%s, %s)", plus, minus)
+
+	local plus_start = base_len + 2 -- " ("
+	local plus_end = plus_start + #plus
+	local minus_start = plus_end + 2 -- ", "
+	local minus_end = minus_start + #minus
+
+	return suffix,
+		{
+			{ start_col = plus_start, end_col = plus_end, hl_group = "AtlasTextPositive" },
+			{ start_col = minus_start, end_col = minus_end, hl_group = "AtlasLogError" },
+		}
 end
 
 ---@param src string
@@ -113,8 +129,12 @@ function M.source_branch_field(src, diffstat)
 	local value = string.format("%s %s", branch_icon, src)
 	local src_start = #branch_icon + 1
 
+	local base = "Source Branch"
+	local suffix, suffix_spans = diffstat_suffix(diffstat, #base)
+
 	return {
-		label = "Source Branch" .. diffstat_suffix(diffstat),
+		label = base .. suffix,
+		label_hl = suffix_spans,
 		value = value,
 		hl = { { start_col = src_start, end_col = src_start + #src, hl_group = highlights.dynamic_for(src) or "AtlasTextMuted" } },
 	}

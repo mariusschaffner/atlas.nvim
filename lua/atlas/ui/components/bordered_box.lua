@@ -15,16 +15,31 @@ local TL, TR, BL, BR, H, V = "┌", "┐", "└", "┘", "─", "│"
 
 ---@param interior_width integer
 ---@param title string|nil
----@return string
-local function build_top(interior_width, title)
+---@param title_highlights table[]|nil Spans {start_col, end_col, hl_group} relative to `title` itself.
+---@return string top
+---@return table[] highlights Spans {start_col, end_col, hl_group} relative to the returned `top` line.
+local function build_top(interior_width, title, title_highlights)
 	if title == nil or title == "" then
-		return TL .. string.rep(H, math.max(0, interior_width)) .. TR
+		return TL .. string.rep(H, math.max(0, interior_width)) .. TR, {}
 	end
 
 	local label = string.format(" %s ", title)
 	local label_w = text_width(label)
 	local remaining = math.max(0, interior_width - 1 - label_w)
-	return TL .. H .. label .. string.rep(H, remaining) .. TR
+	local top = TL .. H .. label .. string.rep(H, remaining) .. TR
+
+	local title_offset = #TL + #H + 1 -- leading space in label
+	local title_len = #title
+	local highlights = {}
+	for _, span in ipairs(title_highlights or {}) do
+		local sc = math.min(span.start_col, title_len)
+		local ec = math.min(span.end_col, title_len)
+		if ec > sc then
+			table.insert(highlights, { start_col = title_offset + sc, end_col = title_offset + ec, hl_group = span.hl_group })
+		end
+	end
+
+	return top, highlights
 end
 
 ---@param interior_width integer
@@ -36,6 +51,7 @@ end
 ---@param opts {
 ---  width: integer,
 ---  title: string|nil,
+---  title_highlights: table[]|nil Spans {start_col, end_col, hl_group} relative to `title` itself.
 ---  content_lines: string[],
 ---  content_highlights: table[]|nil,
 ---  box_width: integer|nil Exact box width, bypassing the ratio-based sizing below.
@@ -70,9 +86,12 @@ function M.render(opts)
 	local lines = {}
 	local highlights = {}
 
-	local top = build_top(interior_width, opts.title)
+	local top, top_title_highlights = build_top(interior_width, opts.title, opts.title_highlights)
 	table.insert(lines, top)
 	table.insert(highlights, { line = 0, start_col = 0, end_col = #top, hl_group = border_hl })
+	for _, span in ipairs(top_title_highlights) do
+		table.insert(highlights, { line = 0, start_col = span.start_col, end_col = span.end_col, hl_group = span.hl_group })
+	end
 
 	local right_content_row = opts.right_content_row or math.ceil(#content_lines / 2)
 
