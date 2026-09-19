@@ -138,10 +138,10 @@ local function group_by_milestone(root_groups, milestones)
 	for _, id in ipairs(order) do
 		local bucket = buckets[id]
 		local key = "milestone:" .. id
-		-- Milestones start collapsed by default; seed once so a later
+		-- Milestones start expanded by default; seed once so a later
 		-- refetch/refresh doesn't clobber a user's manual toggle.
 		if M.collapsed_issue_keys[key] == nil then
-			M.collapsed_issue_keys[key] = true
+			M.collapsed_issue_keys[key] = false
 		end
 		table.insert(result, { kind = "milestone", key = key, milestone = bucket.milestone, children = bucket.children })
 	end

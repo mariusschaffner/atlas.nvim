@@ -30,6 +30,7 @@ local next_id = 0
 
 ---@class AtlasStatuslineOptions
 ---@field help_key string|fun(): string|nil
+---@field notifications_hint (fun(): AtlasStatuslineNotice|nil)|nil
 ---@field left_padding integer|nil
 
 ---@class AtlasStatusline
@@ -146,6 +147,37 @@ local function clean_key(key)
 	return (key:gsub("[<>]", ""))
 end
 
+local NOTIFICATIONS_STATE_MODULES = {
+	issues = "atlas.issues.state",
+	pulls = "atlas.pulls.state",
+}
+
+--- Notification bell + unread count for whichever domain is currently
+--- active, moved here from the filter bar so it lives next to the "g?
+--- help" indicator instead of taking up filter-bar width. Lazily requires
+--- atlas.ui.dashboard (which itself requires this module) to avoid a
+--- circular require at load time — safe since this only runs at render
+--- time, long after both modules have finished loading.
+---@return AtlasStatuslineNotice|nil
+local function notifications_hint()
+	local domain = require("atlas.ui.dashboard").domain()
+	local mod = domain and NOTIFICATIONS_STATE_MODULES[domain]
+	local provider = mod and require(mod).provider
+	if not (provider and provider.capabilities and provider.capabilities.notifications) then
+		return nil
+	end
+
+	local notif_state = require("atlas.ui.notifications.state")
+	local count = notif_state.unread_count or 0
+	local bell, bell_hl = icons.general(count > 0 and "bell_unread" or "bell")
+	local text = count > 0 and string.format("%s %d", bell, count) or bell
+	local notif_keys = keymaps.resolve("ui.notifications.open")
+	if notif_keys and notif_keys[1] then
+		text = string.format("%s (%s)", text, clean_key(notif_keys[1]))
+	end
+	return { text = text, hl_group = bell_hl }
+end
+
 --- Builds "key desc | key desc | ..." hint segments from whatever keymaps are
 --- currently registered (via atlas.ui.popups.help) for the buffer being
 --- rendered, so the statusline always reflects the active view/tab without
@@ -205,7 +237,7 @@ end
 ---@param segments AtlasStatuslineSegment[]
 ---@param current_notice AtlasStatuslineNotice|nil
 ---@param available integer|nil
----@param options { help_key: string|nil, left_padding: integer|nil }|nil
+---@param options { help_key: string|nil, notifications_hint: AtlasStatuslineNotice|nil, left_padding: integer|nil }|nil
 ---@return string
 function M.format(segments, current_notice, available, options)
 	options = options or {}
@@ -217,6 +249,19 @@ function M.format(segments, current_notice, available, options)
 		fitted[#fitted + 1] = {
 			text = normalize(current_notice.text),
 			hl_group = current_notice.hl_group,
+			align = "right",
+		}
+	end
+	if options.notifications_hint then
+		-- Always visible, right next to the help indicator.
+		fitted[#fitted + 1] = {
+			text = "|",
+			hl_group = "AtlasFooterText",
+			align = "right",
+		}
+		fitted[#fitted + 1] = {
+			text = options.notifications_hint.text,
+			hl_group = options.notifications_hint.hl_group,
 			align = "right",
 		}
 	end
@@ -416,6 +461,7 @@ function Statusline:render()
 	end
 	return M.format(segments, self.notice, nil, {
 		help_key = help_key,
+		notifications_hint = self.options.notifications_hint and self.options.notifications_hint(),
 		left_padding = self.options.left_padding,
 	})
 end
@@ -436,6 +482,7 @@ M.default = M.new({
 		local keys = keymaps.resolve("ui.help")
 		return keys and keys[1]
 	end,
+	notifications_hint = notifications_hint,
 })
 
 ---@param id integer|nil
