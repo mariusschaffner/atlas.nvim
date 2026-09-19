@@ -3,7 +3,7 @@ local M = {}
 local utils = require("atlas.ui.shared.utils")
 local icons = require("atlas.ui.shared.icons")
 local spinner = require("atlas.ui.components.spinner")
-local table_tree = require("atlas.ui.components.table_tree")
+local field_box = require("atlas.ui.components.field_box")
 local tabs = require("atlas.ui.components.tabs")
 local detail_ui = require("atlas.ui.detail")
 local state = require("atlas.issues.ui.detail.milestone.state")
@@ -62,50 +62,27 @@ local function render_header(milestone, width)
 	local fields = {}
 	if milestone.state then
 		table.insert(fields, {
-			k1 = "Status:",
-			v1 = milestone.state == "closed" and "Closed" or "Active",
-			v1_hl = milestone.state == "closed" and "AtlasGLIssueClosedChip" or "AtlasGLIssueOpenChip",
+			label = "Status",
+			value = milestone.state == "closed" and "Closed" or "Active",
+			hl = milestone.state == "closed" and "AtlasGLIssueClosedChip" or "AtlasGLIssueOpenChip",
 		})
 	end
 	if milestone.start_date and milestone.start_date ~= "" then
-		table.insert(fields, { k1 = "Start date:", v1 = milestone.start_date, v1_hl = "AtlasTextMuted" })
+		table.insert(fields, { label = "Start date", value = milestone.start_date, hl = "AtlasTextMuted" })
 	end
 	if milestone.due_date and milestone.due_date ~= "" then
-		table.insert(fields, { k1 = "Due date:", v1 = milestone.due_date, v1_hl = "AtlasTextMuted" })
+		table.insert(fields, { label = "Due date", value = milestone.due_date, hl = "AtlasTextMuted" })
 	end
 
 	local completed, total, percent
 	if state.work_items_loading then
-		table.insert(fields, { k1 = "Work items:", v1 = spinner.with_text("Loading..."), v1_hl = "AtlasTextMuted" })
+		table.insert(fields, { label = "Work items", value = spinner.with_text("Loading..."), hl = "AtlasTextMuted" })
 	elseif state.work_items ~= nil then
 		completed, total, percent = work_item_stats(state.work_items)
-		table.insert(fields, { k1 = "Work items:", v1 = tostring(total), v1_hl = "AtlasTextMuted" })
+		table.insert(fields, { label = "Work items", value = tostring(total), hl = "AtlasTextMuted" })
 	end
 
-	local field_lines, field_spans = {}, {}
-	if #fields > 0 then
-		field_lines, _, field_spans = table_tree.render({
-			columns = {
-				{ key = "k1", name = "", can_grow = false },
-				{ key = "v1", name = "", can_grow = true, grow_last = true },
-			},
-			rows = fields,
-			width = width,
-			margin = 1,
-			show_header = false,
-			column_gap = 2,
-			fill = true,
-			cell_hl = function(row, col)
-				if col.key == "k1" then
-					return { { start_col = 0, end_col = #row.k1, hl_group = "AtlasTextMuted" } }
-				end
-				if col.key == "v1" and row.v1_hl then
-					return { { start_col = 0, end_col = #tostring(row.v1), hl_group = row.v1_hl } }
-				end
-				return nil
-			end,
-		})
-	end
+	local field_lines, field_spans = field_box.render(fields, { width = width })
 
 	local lines = { title_line, "" }
 	local spans = {

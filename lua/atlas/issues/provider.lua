@@ -93,7 +93,6 @@
 
 ---@class IssuesProviderDetail
 ---@field header_fields (fun(issue: Issue, details: IssueDetails|nil, loading: boolean): IssuesDetailHeaderField[])|nil
----@field chips (fun(issue: Issue, details: IssueDetails|nil, loading: boolean): IssuesDetailChip[])|nil
 ---@field tabs (fun(): IssuesDetailTabDefinition[])|nil
 
 --------------------------------------------------------------------------------
@@ -104,10 +103,7 @@
 ---@field label string
 ---@field value string
 ---@field hl string|table[]|nil hl group name, or list of {start_col, end_col, hl_group} relative to the value
-
----@class IssuesDetailChip
----@field label string
----@field hl string|nil
+---@field editable boolean|nil whether this field can be edited from the detail panel (styled with a distinct border)
 
 ---@class IssuesDetailTabModule
 ---@field render fun(issue: Issue, details: IssueDetails|nil, width: integer): string[], table[], table<integer, table>|nil

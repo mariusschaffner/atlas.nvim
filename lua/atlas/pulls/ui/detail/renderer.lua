@@ -27,7 +27,19 @@ local function set_lines(buf, lines)
 	vim.api.nvim_set_option_value("modifiable", false, { buf = buf })
 end
 
--- Reviewers / merge checks (folded into the header fields, two-column grid)
+-- Reviewers / merge checks (folded into the header fields, one box per field)
+
+---@param action_id string
+---@return boolean
+local function supports_action(action_id)
+	local capability = state.provider and state.provider.capabilities.actions
+	for _, action in ipairs(capability and capability.items or {}) do
+		if action.id == action_id then
+			return true
+		end
+	end
+	return false
+end
 
 local DECISION_ICONS = {
 	approved = { icon = icons.pulls_status("successful"), hl = "AtlasTextPositive" },
@@ -57,14 +69,15 @@ local function reviewers_field()
 	if state.reviewers == nil then
 		return nil
 	end
+	local editable = supports_action("edit_reviewers")
 	if state.reviewers == "loading" then
-		return { label = "Reviewers", value = spinner.with_text("Loading..."), hl = "AtlasTextMuted" }
+		return { label = "Reviewers", value = spinner.with_text("Loading..."), hl = "AtlasTextMuted", editable = editable }
 	end
 	if type(state.reviewers) == "string" then
-		return { label = "Reviewers", value = state.reviewers, hl = "AtlasLogError" }
+		return { label = "Reviewers", value = state.reviewers, hl = "AtlasLogError", editable = editable }
 	end
 	if #state.reviewers == 0 then
-		return { label = "Reviewers", value = "no reviewers yet", hl = "AtlasTextMuted" }
+		return { label = "Reviewers", value = "no reviewers yet", hl = "AtlasTextMuted", editable = editable }
 	end
 
 	local parts, spans, cursor = {}, {}, 0
@@ -75,7 +88,7 @@ local function reviewers_field()
 		table.insert(spans, { start_col = cursor, end_col = cursor + #style.icon, hl_group = style.hl })
 		cursor = cursor + #token + (i < #state.reviewers and 2 or 0)
 	end
-	return { label = "Reviewers", value = table.concat(parts, ", "), hl = spans }
+	return { label = "Reviewers", value = table.concat(parts, ", "), hl = spans, editable = editable }
 end
 
 ---@return PullsDetailHeaderField|nil
@@ -122,17 +135,13 @@ local function render_header(pr, tab_items, width)
 			and provider_detail.header_fields
 			and provider_detail.header_fields(pr, details, state.details_loading)
 		or {}
-	local extra_chips = provider_detail
-			and provider_detail.chips
-			and provider_detail.chips(pr, details, state.details_loading)
-		or {}
 
 	-- Title
 	local title_lines, title_spans = header.render_title(pr, width)
 	utils.append_block(lines, spans, { lines = title_lines, highlights = title_spans })
 	table.insert(lines, "")
 
-	-- Fields, two columns (Repo/Assignees/Branch/Reviewers/Checks)
+	-- Fields, one box per field (Repo/Assignees/Branch/Labels/Reviewers/Checks)
 	local trailing_fields = {}
 	local reviewers = reviewers_field()
 	if reviewers then
@@ -149,7 +158,6 @@ local function render_header(pr, tab_items, width)
 	-- Chips
 	local chip_lines, chip_spans = chips.render(pr, {
 		width = width,
-		extra_chips = extra_chips,
 		pipelines = state.pipelines,
 		loading = state.details_loading or state.pipelines == "loading",
 	})

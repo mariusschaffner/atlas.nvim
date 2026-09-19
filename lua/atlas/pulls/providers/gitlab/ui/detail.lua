@@ -3,6 +3,20 @@ local M = {}
 
 local header = require("atlas.pulls.ui.components.header")
 local icons = require("atlas.ui.shared.icons")
+local highlights = require("atlas.ui.shared.highlights")
+local spinner = require("atlas.ui.components.spinner")
+local actions = require("atlas.pulls.providers.gitlab.actions")
+
+---@param action_id string
+---@return boolean
+local function supports(action_id)
+	for _, action in ipairs(actions.items or {}) do
+		if action.id == action_id then
+			return true
+		end
+	end
+	return false
+end
 
 ---@param pr PullRequest
 ---@return PullsDetailHeaderField
@@ -13,7 +27,40 @@ local function remove_source_branch_field(pr)
 		label = "Delete source branch",
 		value = enabled and "Yes" or "No",
 		hl = enabled and "AtlasTextPositive" or "AtlasTextMuted",
+		editable = true,
 	}
+end
+
+---@param hex string|nil
+---@return string
+local function label_fg_hl(hex)
+	return highlights.label_fg_hl(hex, "AtlasGLPRLabelFg_", "AtlasChipActive")
+end
+
+---@param details PullRequestDetails|nil
+---@param loading boolean
+---@return PullsDetailHeaderField
+local function labels_field(details, loading)
+	if loading then
+		return { label = "Labels", value = spinner.with_text("Loading..."), hl = "AtlasTextMuted" }
+	end
+
+	---@cast details GitLabPullRequestDetails
+	local names, spans, cursor = {}, {}, 0
+	for _, label in ipairs(details and details.labels or {}) do
+		local name = tostring(label.name or "")
+		if name ~= "" then
+			table.insert(spans, { start_col = cursor, end_col = cursor + #name, hl_group = label_fg_hl(label.color) })
+			table.insert(names, name)
+			cursor = cursor + #name + 2
+		end
+	end
+
+	if #names == 0 then
+		return { label = "Labels", value = "None", hl = "AtlasTextMuted" }
+	end
+
+	return { label = "Labels", value = table.concat(names, ", "), hl = spans }
 end
 
 ---@param pr PullRequest
@@ -38,53 +85,11 @@ function M.header_fields(pr, details, loading)
 		end
 	end
 
-	table.insert(fields, header.assignee_field(logins))
+	local assignee_field = header.assignee_field(logins)
+	assignee_field.editable = supports("edit_assignees")
+	table.insert(fields, assignee_field)
+	table.insert(fields, labels_field(details, loading))
 	return fields
-end
-
----@param _pr PullRequest
----@param details PullRequestDetails|nil
----@param loading boolean
----@return PullsDetailChip[]
-function M.chips(_pr, details, loading)
-	if details == nil or loading then
-		return {}
-	end
-
-	local chips = {}
-	local MAX_LABELS = 10
-	---@cast details GitLabPullRequestDetails
-	local labels = details.labels
-	local shown = 0
-	for _, label in ipairs(labels) do
-		---@cast label GitLabPullsLabel
-		local name = label.name
-		if name ~= "" then
-			if shown >= MAX_LABELS then
-				break
-			end
-			local bg = label.color and label.color:gsub("^#", "") or nil
-			local fg = label.text_color and label.text_color:gsub("^#", "") or nil
-			local hl = "AtlasTabInactive"
-			if bg and bg:match("^%x%x%x%x%x%x$") then
-				hl = "AtlasGLLabel_" .. bg
-				local opts = { bg = "#" .. bg, bold = true }
-				if fg and fg:match("^%x%x%x%x%x%x$") then
-					opts.fg = "#" .. fg
-				else
-					opts.fg = "#1e1e2e"
-				end
-				vim.api.nvim_set_hl(0, hl, opts)
-			end
-			table.insert(chips, { label = name, hl = hl })
-			shown = shown + 1
-		end
-	end
-	local remaining = #labels - shown
-	if remaining > 0 then
-		table.insert(chips, { label = string.format("+%d more", remaining), hl = "AtlasTextMuted" })
-	end
-	return chips
 end
 
 ---@return PullsDetailTab[]

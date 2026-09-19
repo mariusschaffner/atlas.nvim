@@ -305,6 +305,7 @@
 ---@field label string
 ---@field value string
 ---@field hl string|table[]|nil hl group name, or list of {start_col, end_col, hl_group} relative to the value
+---@field editable boolean|nil whether this field can be edited from the detail panel (styled with a distinct border)
 
 ---@class PullsDetailChip
 ---@field label string
@@ -312,7 +313,6 @@
 
 ---@class PullsProviderDetail
 ---@field header_fields (fun(pr: PullRequest, details: PullRequestDetails|nil, loading: boolean): PullsDetailHeaderField[])|nil
----@field chips (fun(pr: PullRequest, details: PullRequestDetails|nil, loading: boolean): PullsDetailChip[])|nil
 ---@field tabs (fun(): PullsDetailTab[])|nil
 
 ---@class PullsDetailTabModule

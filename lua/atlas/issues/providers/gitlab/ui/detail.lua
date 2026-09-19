@@ -5,6 +5,18 @@ local icons = require("atlas.ui.shared.icons")
 local helper = require("atlas.issues.ui.presentation")
 local spinner = require("atlas.ui.components.spinner")
 local highlights = require("atlas.ui.shared.highlights")
+local actions = require("atlas.issues.providers.gitlab.actions")
+
+---@param action_id string
+---@return boolean
+local function supports(action_id)
+	for _, action in ipairs(actions.items or {}) do
+		if action.id == action_id then
+			return true
+		end
+	end
+	return false
+end
 
 ---@param status_id string|nil
 ---@return string
@@ -15,11 +27,42 @@ local function state_chip_hl(status_id)
 	return "AtlasGLIssueOpenChip"
 end
 
+---@param hex string|nil
+---@return string
+local function label_fg_hl(hex)
+	return highlights.label_fg_hl(hex, "AtlasGLIssueLabelFg_", "AtlasChipActive")
+end
+
+---@param details IssueDetails|nil
+---@param loading boolean
+---@return IssuesDetailHeaderField
+local function labels_field(details, loading)
+	if loading then
+		return { label = "Labels", value = spinner.with_text("Loading..."), hl = "AtlasTextMuted", editable = supports("labels") }
+	end
+
+	local names, spans, cursor = {}, {}, 0
+	for _, label in ipairs(details and details.labels or {}) do
+		local name = tostring(label.name or "")
+		if name ~= "" then
+			table.insert(spans, { start_col = cursor, end_col = cursor + #name, hl_group = label_fg_hl(label.color) })
+			table.insert(names, name)
+			cursor = cursor + #name + 2
+		end
+	end
+
+	if #names == 0 then
+		return { label = "Labels", value = "None", hl = "AtlasTextMuted", editable = supports("labels") }
+	end
+
+	return { label = "Labels", value = table.concat(names, ", "), hl = spans, editable = supports("labels") }
+end
+
 ---@param issue Issue
 ---@param details IssueDetails|nil
 ---@param loading boolean
 ---@return IssuesDetailHeaderField[]
-function M.header_fields(issue, details, _loading)
+function M.header_fields(issue, details, loading)
 	local user_icon = icons.general("user")
 
 	local assignee = details and details.assignees[1] or issue.assignee
@@ -47,39 +90,14 @@ function M.header_fields(issue, details, _loading)
 			value = string.format("%s %s", user_icon, reporter_name),
 			hl = helper.person_hl(reporter_name),
 		},
-		{ label = "Assignee", value = assignee_text, hl = assignee_hl },
+		{ label = "Assignee", value = assignee_text, hl = assignee_hl, editable = supports("assign") },
 	}
 	if milestone_text ~= "" then
 		table.insert(fields, { label = "Milestone", value = milestone_text, hl = "AtlasTextMuted" })
 	end
+	table.insert(fields, labels_field(details, loading))
 
 	return fields
-end
-
----@param hex string|nil
----@return string
-local function label_hl(hex)
-	return highlights.label_hl(hex, "AtlasGLIssueLabel_", "AtlasChipActive")
-end
-
----@param _issue Issue
----@param details IssueDetails|nil
----@param loading boolean
----@return IssuesDetailChip[]
-function M.chips(_issue, details, loading)
-	local chips = {}
-	if loading then
-		table.insert(chips, { label = spinner.with_text("Loading..."), hl = "AtlasTextMuted" })
-		return chips
-	end
-
-	for _, label in ipairs(details and details.labels or {}) do
-		local name = tostring(label.name or "")
-		if name ~= "" then
-			table.insert(chips, { label = name, hl = label_hl(label.color) })
-		end
-	end
-	return chips
 end
 
 ---@return IssuesDetailTabDefinition[]

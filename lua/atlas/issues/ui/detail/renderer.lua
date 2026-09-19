@@ -3,7 +3,6 @@ local M = {}
 local utils = require("atlas.ui.shared.utils")
 local spinner = require("atlas.ui.components.spinner")
 local header = require("atlas.issues.ui.detail.components.header")
-local chips = require("atlas.issues.ui.detail.components.chips")
 local tabs = require("atlas.ui.components.tabs")
 local state = require("atlas.issues.ui.detail.state")
 local detail_ui = require("atlas.ui.detail")
@@ -93,10 +92,6 @@ local function render_header(issue, tab_items, width)
 			and provider_detail.header_fields
 			and provider_detail.header_fields(issue, details, state.details_loading)
 		or {}
-	local extra_chips = provider_detail
-			and provider_detail.chips
-			and provider_detail.chips(issue, details, state.details_loading)
-		or {}
 
 	local secondary_fields = {}
 	utils.insert_if(secondary_fields, linked_mr_field())
@@ -104,12 +99,6 @@ local function render_header(issue, tab_items, width)
 
 	local header_lines, header_spans = header.render(issue, width, extra_fields, secondary_fields)
 	utils.append_block(lines, spans, { lines = header_lines, highlights = header_spans })
-
-	local chip_lines, chip_spans = chips.render({ width = width, extra_chips = extra_chips })
-	if #chip_lines > 0 then
-		utils.append_block(lines, spans, { lines = chip_lines, highlights = chip_spans })
-		table.insert(lines, "")
-	end
 
 	if #tab_items > 1 then
 		local tab_lines, tab_spans = tabs.render(tab_items, state.current_tab, width, {
