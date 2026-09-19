@@ -78,6 +78,7 @@ function M.render(domain, width)
 		title = "Filter",
 		content_lines = { content },
 		content_highlights = { { line = 0, start_col = 0, end_col = #content, hl_group = "AtlasTextMuted" } },
+		border_hl = "AtlasFilterBarBorder",
 		right_content = join_actions(build_actions(domain)),
 	})
 end

@@ -60,6 +60,7 @@ local groups = {
 
 	AtlasFilterActive = { fg = "#89b4fa", bold = true, underline = true },
 	AtlasFilterBarBackground = { bg = "#313244" },
+	AtlasFilterBarBorder = { fg = "#89b4fa" },
 }
 
 function M.setup()
