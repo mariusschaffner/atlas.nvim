@@ -61,11 +61,15 @@ local function milestone(raw)
 	if title == nil then
 		return nil
 	end
-	-- REST gives a numeric id + absolute web_url; GraphQL gives a GID string id
-	-- (unusable for REST lookups) + a relative webPath. Only the REST id is
-	-- ever used (to bucket issues by milestone), so a GraphQL-sourced id is
-	-- intentionally left nil rather than stored as a misleading GID string.
+	-- REST gives a plain numeric id + absolute web_url. GraphQL gives a Global
+	-- ID string ("gid://gitlab/Milestone/123") + a relative webPath instead;
+	-- pull the trailing integer out of the GID so both sources end up with
+	-- the same REST-compatible id (needed to bucket issues by milestone and
+	-- to look the milestone up again from the milestone detail view).
 	local id = tonumber(raw.id)
+	if id == nil and type(raw.id) == "string" then
+		id = tonumber(raw.id:match("(%d+)$"))
+	end
 	local web_url = json.safe_str(raw.web_url)
 	if web_url == nil then
 		local web_path = json.safe_str(raw.webPath)
