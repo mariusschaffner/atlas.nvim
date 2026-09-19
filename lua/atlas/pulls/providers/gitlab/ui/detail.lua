@@ -66,14 +66,12 @@ end
 ---@param pr PullRequest
 ---@param details PullRequestDetails|nil
 ---@param loading boolean
----@return PullsDetailHeaderField[]
+---@return PullsProviderHeaderFields
 function M.header_fields(pr, details, loading)
-	local fields = { remove_source_branch_field(pr) }
+	local delete_source_branch = remove_source_branch_field(pr)
 	if details == nil then
-		if loading then
-			table.insert(fields, header.loading_field("Assignees"))
-		end
-		return fields
+		local assignee = loading and header.loading_field("Assignees") or nil
+		return { assignee = assignee, delete_source_branch = delete_source_branch }
 	end
 	---@cast details GitLabPullRequestDetails
 
@@ -87,9 +85,12 @@ function M.header_fields(pr, details, loading)
 
 	local assignee_field = header.assignee_field(logins)
 	assignee_field.editable = supports("edit_assignees")
-	table.insert(fields, assignee_field)
-	table.insert(fields, labels_field(details, loading))
-	return fields
+
+	return {
+		assignee = assignee_field,
+		labels = labels_field(details, loading),
+		delete_source_branch = delete_source_branch,
+	}
 end
 
 ---@return PullsDetailTab[]

@@ -311,8 +311,13 @@
 ---@field label string
 ---@field hl string|nil
 
+---@class PullsProviderHeaderFields
+---@field assignee PullsDetailHeaderField|nil
+---@field labels PullsDetailHeaderField|nil
+---@field delete_source_branch PullsDetailHeaderField
+
 ---@class PullsProviderDetail
----@field header_fields (fun(pr: PullRequest, details: PullRequestDetails|nil, loading: boolean): PullsDetailHeaderField[])|nil
+---@field header_fields (fun(pr: PullRequest, details: PullRequestDetails|nil, loading: boolean): PullsProviderHeaderFields)|nil
 ---@field tabs (fun(): PullsDetailTab[])|nil
 
 ---@class PullsDetailTabModule

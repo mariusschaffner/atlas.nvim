@@ -20,11 +20,17 @@ end
 
 ---@param status_id string|nil
 ---@return string
-local function state_chip_hl(status_id)
+local function state_fg_hl(status_id)
 	if status_id == "closed" then
-		return "AtlasGLIssueClosedChip"
+		return "AtlasGLIssueClosed"
 	end
-	return "AtlasGLIssueOpenChip"
+	return "AtlasGLIssueOpen"
+end
+
+---@param issue Issue
+---@return IssuesTitleStatus
+function M.title_status(issue)
+	return { text = tostring(issue.status or "Open"), hl = state_fg_hl(issue.status_id) }
 end
 
 ---@param hex string|nil
@@ -81,21 +87,16 @@ function M.header_fields(issue, details, loading)
 
 	local fields = {
 		{
-			label = "Status",
-			value = tostring(issue.status or "Open"),
-			hl = state_chip_hl(issue.status_id),
-		},
-		{
 			label = "Author",
 			value = string.format("%s %s", user_icon, reporter_name),
 			hl = helper.person_hl(reporter_name),
 		},
 		{ label = "Assignee", value = assignee_text, hl = assignee_hl, editable = supports("assign") },
+		labels_field(details, loading),
 	}
 	if milestone_text ~= "" then
 		table.insert(fields, { label = "Milestone", value = milestone_text, hl = "AtlasTextMuted" })
 	end
-	table.insert(fields, labels_field(details, loading))
 
 	return fields
 end

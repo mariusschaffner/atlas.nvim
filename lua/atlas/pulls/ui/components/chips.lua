@@ -1,6 +1,5 @@
 local M = {}
 
-local presentation = require("atlas.pulls.ui.presentation")
 local pipeline_utils = require("atlas.pulls.pipelines")
 local icons = require("atlas.ui.shared.icons")
 local utils = require("atlas.ui.shared.utils")
@@ -8,13 +7,11 @@ local spinner = require("atlas.ui.components.spinner")
 
 local render_chips = utils.render_chips
 
----@param pr PullRequest
+---@param _pr PullRequest
 ---@param opts { width: integer, padding_x?: integer, extra_chips?: PullsDetailChip[], pipelines?: PullsPipeline[]|"loading"|string, loading?: boolean }
 ---@return string[], table[]
-function M.render(pr, opts)
-	local chips = {
-		{ label = tostring(pr.state or "UNKNOWN"), hl = presentation.pr_state_hl(pr.state) },
-	}
+function M.render(_pr, opts)
+	local chips = {}
 
 	for _, chip in ipairs(opts.extra_chips or {}) do
 		table.insert(chips, chip)

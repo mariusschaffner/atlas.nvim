@@ -92,12 +92,13 @@ local function render_header(issue, tab_items, width)
 			and provider_detail.header_fields
 			and provider_detail.header_fields(issue, details, state.details_loading)
 		or {}
+	local status_badge = provider_detail and provider_detail.title_status and provider_detail.title_status(issue) or nil
 
 	local secondary_fields = {}
 	utils.insert_if(secondary_fields, linked_mr_field())
 	utils.insert_if(secondary_fields, linked_branches_field())
 
-	local header_lines, header_spans = header.render(issue, width, extra_fields, secondary_fields)
+	local header_lines, header_spans = header.render(issue, width, extra_fields, secondary_fields, status_badge)
 	utils.append_block(lines, spans, { lines = header_lines, highlights = header_spans })
 
 	if #tab_items > 1 then

@@ -62,6 +62,27 @@ function M.pr_state_hl(pr_state)
 	return "AtlasTextMuted"
 end
 
+--- Same as pr_state_hl but foreground-only, no chip background fill — used
+--- next to the PR title rather than as a standalone pill.
+---@param pr_state string|nil
+---@return string
+function M.pr_state_fg_hl(pr_state)
+	local lower = tostring(pr_state or ""):lower()
+	if lower == "open" then
+		return "AtlasPROpen"
+	end
+	if lower == "merged" then
+		return "AtlasPRMerged"
+	end
+	if lower == "declined" then
+		return "AtlasPRDeclined"
+	end
+	if lower == "draft" then
+		return "AtlasPRDraft"
+	end
+	return "AtlasTextMuted"
+end
+
 ---@param pr PullRequest
 ---@return PullsRepo
 function M.repo(pr)

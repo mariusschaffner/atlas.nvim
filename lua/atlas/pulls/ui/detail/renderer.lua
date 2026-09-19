@@ -3,6 +3,7 @@ local M = {}
 local utils = require("atlas.ui.shared.utils")
 local state = require("atlas.pulls.ui.detail.state")
 local header = require("atlas.pulls.ui.components.header")
+local field_box = require("atlas.ui.components.field_box")
 local chips = require("atlas.pulls.ui.components.chips")
 local detail_tabs = require("atlas.pulls.ui.components.tabs")
 local icons = require("atlas.ui.shared.icons")
@@ -131,27 +132,30 @@ local function render_header(pr, tab_items, width)
 	local details = state.current_details
 	local provider = state.provider
 	local provider_detail = provider and provider.capabilities.ui and provider.capabilities.ui.detail
-	local extra_fields = provider_detail
+	local provider_fields = provider_detail
 			and provider_detail.header_fields
 			and provider_detail.header_fields(pr, details, state.details_loading)
 		or {}
 
-	-- Title
+	-- Title (now includes "- <status>", foreground-colored, in place of the
+	-- old standalone status chip)
 	local title_lines, title_spans = header.render_title(pr, width)
 	utils.append_block(lines, spans, { lines = title_lines, highlights = title_spans })
 	table.insert(lines, "")
 
-	-- Fields, one box per field (Repo/Assignees/Branch/Labels/Reviewers/Checks)
-	local trailing_fields = {}
-	local reviewers = reviewers_field()
-	if reviewers then
-		table.insert(trailing_fields, reviewers)
-	end
-	local checks = merge_checks_field()
-	if checks then
-		table.insert(trailing_fields, checks)
-	end
-	local field_lines, field_spans = header.render_fields(pr, width, extra_fields, trailing_fields, state.diffstat)
+	-- Fields, two columns: Assignee/Reviewers/Labels on the left,
+	-- Delete-source-branch/Branch/Checks on the right.
+	local left_fields = {}
+	utils.insert_if(left_fields, provider_fields.assignee)
+	utils.insert_if(left_fields, reviewers_field())
+	utils.insert_if(left_fields, provider_fields.labels)
+
+	local right_fields = {}
+	utils.insert_if(right_fields, provider_fields.delete_source_branch)
+	table.insert(right_fields, header.branch_field(pr.source.branch, pr.destination.branch, state.diffstat))
+	utils.insert_if(right_fields, merge_checks_field())
+
+	local field_lines, field_spans = field_box.render_columns(left_fields, right_fields, { width = width })
 	utils.append_block(lines, spans, { lines = field_lines, highlights = field_spans })
 	table.insert(lines, "")
 

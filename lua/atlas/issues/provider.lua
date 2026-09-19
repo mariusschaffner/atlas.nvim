@@ -91,8 +91,13 @@
 -- Detail interface
 --------------------------------------------------------------------------------
 
+---@class IssuesTitleStatus
+---@field text string
+---@field hl string
+
 ---@class IssuesProviderDetail
 ---@field header_fields (fun(issue: Issue, details: IssueDetails|nil, loading: boolean): IssuesDetailHeaderField[])|nil
+---@field title_status (fun(issue: Issue): IssuesTitleStatus)|nil
 ---@field tabs (fun(): IssuesDetailTabDefinition[])|nil
 
 --------------------------------------------------------------------------------

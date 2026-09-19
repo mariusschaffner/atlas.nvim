@@ -4,7 +4,6 @@ local icons = require("atlas.ui.shared.icons")
 local highlights = require("atlas.ui.shared.highlights")
 local spinner = require("atlas.ui.components.spinner")
 local table_tree = require("atlas.ui.components.table_tree")
-local field_box = require("atlas.ui.components.field_box")
 local utils = require("atlas.ui.shared.utils")
 local presentation = require("atlas.pulls.ui.presentation")
 
@@ -90,6 +89,18 @@ function M.render_title(pr, width)
 		title_lines[index] = " " .. line
 	end
 
+	-- Append "- <status>" directly to the (already-wrapped) last title line,
+	-- foreground-colored only, in place of the old standalone status chip.
+	local raw_state = tostring(pr.state or "")
+	local state_text = raw_state:sub(1, 1):upper() .. raw_state:sub(2)
+	local state_hl = presentation.pr_state_fg_hl(pr.state)
+	local last_title_idx = #title_lines
+	local before_len = #title_lines[last_title_idx]
+	local status_sep = " - "
+	title_lines[last_title_idx] = title_lines[last_title_idx] .. status_sep .. state_text
+	local status_start = before_len + #status_sep
+	local status_end = status_start + #state_text
+
 	local author_icon, author_icon_hl = icons.general("user")
 	local by_prefix = string.format(" %s by @", author_icon)
 	local by_sep = " - "
@@ -104,6 +115,7 @@ function M.render_title(pr, width)
 	end
 
 	add_span(spans, lines, 0, 1, 1 + #id_text, "AtlasTextMuted")
+	add_span(spans, lines, last_title_idx - 1, status_start, status_end, state_hl)
 	local author_line = #title_lines
 	add_span(spans, lines, author_line, 1, 1 + #author_icon, author_icon_hl)
 
@@ -122,7 +134,7 @@ end
 ---@param dst string
 ---@param diffstat PullsDiffstatEntry[]|"loading"|string|nil
 ---@return PullsDetailHeaderField
-local function branch_field(src, dst, diffstat)
+function M.branch_field(src, dst, diffstat)
 	local branch_icon = icons.pulls("branch")
 	local arrow = " → "
 	local value = string.format("%s %s%s%s", branch_icon, src, arrow, dst)
@@ -153,62 +165,6 @@ local function branch_field(src, dst, diffstat)
 	end
 
 	return { label = "Branch", value = value, hl = spans }
-end
-
----@param pr PullRequest
----@param width integer
----@param extra_fields PullsDetailHeaderField[]|nil
----@param trailing_fields PullsDetailHeaderField[]|nil Appended after Branch (e.g. Reviewers, Checks), still part of the same field stack.
----@param diffstat PullsDiffstatEntry[]|"loading"|string|nil
----@return string[], table[]
-function M.render_fields(pr, width, extra_fields, trailing_fields, diffstat)
-	local repo_name = pr.repo_full_name
-	local src = pr.source.branch
-	local dst = pr.destination.branch
-
-	local fields = {
-		{
-			label = "Repo",
-			value = string.format("%s %s", icons.pulls("repo"), repo_name),
-			hl = highlights.dynamic_for(repo_name) or "AtlasTextMuted",
-		},
-	}
-
-	for _, field in ipairs(extra_fields or {}) do
-		table.insert(fields, field)
-	end
-	table.insert(fields, branch_field(src, dst, diffstat))
-	for _, field in ipairs(trailing_fields or {}) do
-		table.insert(fields, field)
-	end
-
-	return field_box.render(fields, { width = width })
-end
-
----@param pr PullRequest
----@param width integer
----@param extra_fields PullsDetailHeaderField[]|nil
----@return string[], table[]
-function M.render(pr, width, extra_fields)
-	local lines, spans = M.render_title(pr, width)
-	table.insert(lines, "")
-
-	local field_lines, field_spans = M.render_fields(pr, width, extra_fields)
-	local offset = #lines
-	for _, l in ipairs(field_lines) do
-		table.insert(lines, l)
-	end
-	for _, span in ipairs(field_spans) do
-		table.insert(spans, {
-			line = offset + span.line,
-			start_col = span.start_col,
-			end_col = span.end_col,
-			hl_group = span.hl_group,
-		})
-	end
-	table.insert(lines, "")
-
-	return lines, spans
 end
 
 ---@param repo PullsRepo

@@ -112,6 +112,87 @@ local function merge_rows(left_lines, left_spans, right_lines, right_spans)
 end
 
 ---@param fields AtlasFieldBoxField[]
+---@param box_width integer
+---@return string[] lines
+---@return table[] highlights
+local function stack(fields, box_width)
+	local lines, spans = {}, {}
+	for _, field in ipairs(fields) do
+		local field_lines, field_spans = render_one(field, box_width)
+		shared_utils.append_block(lines, spans, { lines = field_lines, highlights = field_spans })
+	end
+	return lines, spans
+end
+
+--- Two independent, full-height column stacks (e.g. Author/Assignee/Labels
+--- on the left, Linked MR/Linked Branches on the right) rather than
+--- row-major pairing — every box in a column shares that column's width, so
+--- they align below each other regardless of what's in the other column.
+---@param left_fields AtlasFieldBoxField[]
+---@param right_fields AtlasFieldBoxField[]
+---@param opts { width: integer, max_field_width: integer|nil }
+---@return string[] lines
+---@return table[] highlights
+function M.render_columns(left_fields, right_fields, opts)
+	local width = math.max(1, opts.width)
+	local max_field_width = opts.max_field_width or DEFAULT_MAX_FIELD_WIDTH
+	local cap = math.min(max_field_width, math.max(MIN_FIELD_WIDTH, math.floor((width - GAP) / 2)))
+
+	---@param fields AtlasFieldBoxField[]
+	---@return integer
+	local function column_width(fields)
+		local w = MIN_FIELD_WIDTH
+		for _, field in ipairs(fields) do
+			w = math.max(w, natural_width(field))
+		end
+		return math.min(cap, w)
+	end
+
+	local left_width = #left_fields > 0 and column_width(left_fields) or 0
+	local right_width = #right_fields > 0 and column_width(right_fields) or 0
+
+	local left_lines, left_spans = stack(left_fields, left_width)
+	local right_lines, right_spans = stack(right_fields, right_width)
+
+	if right_width == 0 then
+		return left_lines, left_spans
+	end
+	if left_width == 0 then
+		return right_lines, right_spans
+	end
+
+	local gap = string.rep(" ", GAP)
+	local blank_left = string.rep(" ", left_width)
+	local blank_right = string.rep(" ", right_width)
+	local rows = math.max(#left_lines, #right_lines)
+
+	local lines = {}
+	for i = 1, rows do
+		lines[i] = (left_lines[i] or blank_left) .. gap .. (right_lines[i] or blank_right)
+	end
+
+	local spans = {}
+	for _, span in ipairs(left_spans) do
+		table.insert(spans, span)
+	end
+	for _, span in ipairs(right_spans) do
+		if span.line_hl_group ~= nil then
+			table.insert(spans, span)
+		else
+			local prefix_len = #(left_lines[span.line + 1] or blank_left) + #gap
+			table.insert(spans, {
+				line = span.line,
+				start_col = prefix_len + span.start_col,
+				end_col = prefix_len + span.end_col,
+				hl_group = span.hl_group,
+			})
+		end
+	end
+
+	return lines, spans
+end
+
+---@param fields AtlasFieldBoxField[]
 ---@param opts { width: integer, max_field_width: integer|nil }
 ---@return string[] lines
 ---@return table[] highlights
