@@ -103,9 +103,11 @@ function M.header_fields(issue, details, loading)
 	local assignee_hl = helper.person_hl(assignee and assignee.display_name or nil)
 
 	return {
+		-- No icon here: Author now renders as plain informational text
+		-- (Author/MR/Branch info line below the field boxes), not a box.
 		author = {
 			label = "Author",
-			value = string.format("%s %s", user_icon, reporter_name),
+			value = reporter_name,
 			hl = helper.person_hl(reporter_name),
 		},
 		assignee = {
