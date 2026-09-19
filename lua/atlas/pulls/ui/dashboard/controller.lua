@@ -336,7 +336,11 @@ function M.apply_filter_text(text)
 	local parsed = require("atlas.ui.filter_query").parse(text, { domain = "pulls" })
 	local view = parsed.query
 	view.name = "Custom"
-	view.project = view.project or (state.active_view and state.active_view.project)
+	-- Always scoped to the current repo, regardless of any project: token
+	-- the user typed — this plugin is a per-repo tool, not a cross-project
+	-- search client.
+	local provider = state.provider
+	view.project = provider and provider.current_repo_project and provider.current_repo_project() or nil
 
 	if parsed.status_filters then
 		local any = false

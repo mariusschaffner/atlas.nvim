@@ -227,6 +227,7 @@ end
 return {
 	views = views,
 	search_view = search_view,
+	current_repo_project = views_helper.current_repo_project,
 	capabilities = {
 		core = {
 			fetch_user = users_api.fetch_user,

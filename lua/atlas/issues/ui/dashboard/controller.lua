@@ -369,7 +369,11 @@ function M.apply_filter_text(text)
 	local view = parsed.query
 	view.name = "Custom"
 	view.state = view.state or "opened"
-	view.project = view.project or (state.active_view and state.active_view.project)
+	-- Always scoped to the current repo, regardless of any project: token
+	-- the user typed — this plugin is a per-repo tool, not a cross-project
+	-- search client.
+	local provider = state.provider
+	view.project = provider and provider.current_repo_project and provider.current_repo_project() or nil
 	M.switch_view(view)
 end
 

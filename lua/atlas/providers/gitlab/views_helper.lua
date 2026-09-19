@@ -32,4 +32,16 @@ function M.resolve(configured)
 	return resolved
 end
 
+--- The local repo's GitLab full_name (owner/repo), or nil outside a GitLab
+--- repo. Used to force every filter-bar-driven view to the current repo,
+--- regardless of what the user types.
+---@return string|nil
+function M.current_repo_project()
+	local target = git.local_repository()
+	if target and target.provider == "gitlab" then
+		return target.repo_full_name
+	end
+	return nil
+end
+
 return M

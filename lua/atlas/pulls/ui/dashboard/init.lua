@@ -78,7 +78,11 @@ function M.init(provider, opts)
 	end
 
 	state.views = state.provider_views
-	state.active_view = (opts and opts.initial_view) or { name = "Custom", scope = "all" }
+	state.active_view = (opts and opts.initial_view) or {
+		name = "Custom",
+		scope = "all",
+		project = provider.current_repo_project and provider.current_repo_project() or nil,
+	}
 	-- Explicit reset: the singleton pulls state module persists gpo/gpm
 	-- toggles across close/reopen within a session, so without this a fresh
 	-- "state:open" default would misrepresent what's actually loaded after a

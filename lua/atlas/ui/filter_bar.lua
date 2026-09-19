@@ -2,8 +2,8 @@
 -- (dashboard_tabs.lua) and the per-domain filter row that used to be
 -- duplicated in issues/pulls renderer.lua. One bordered box, always
 -- visible, showing the active domain's filter_text (which always includes
--- a live-editable `view:<domain>` token) plus the notification/refresh
--- hints in the remaining width.
+-- a live-editable `view:<domain>` token) plus the notification hint in the
+-- remaining width.
 local M = {}
 
 local bordered_box = require("atlas.ui.components.bordered_box")
@@ -42,15 +42,6 @@ local function build_actions(domain)
 		})
 	end
 
-	local keys = resolver.resolve("ui.refresh_view")
-	local refresh_key = keys and keys[1]
-	if refresh_key then
-		if #actions > 0 then
-			table.insert(actions, { label = "|", hl_group = "AtlasTextMuted" })
-		end
-		table.insert(actions, { label = string.format("Refresh (%s)", refresh_key), hl_group = "AtlasTextMuted" })
-	end
-
 	return actions
 end
 
@@ -87,7 +78,6 @@ function M.render(domain, width)
 		title = "Filter",
 		content_lines = { content },
 		content_highlights = { { line = 0, start_col = 0, end_col = #content, hl_group = "AtlasTextMuted" } },
-		content_background_hl = "AtlasFilterBarBackground",
 		right_content = join_actions(build_actions(domain)),
 	})
 end
