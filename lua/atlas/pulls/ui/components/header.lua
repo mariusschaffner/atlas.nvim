@@ -88,6 +88,23 @@ function M.title_field(pr)
 	}
 end
 
+---@param diffstat PullsDiffstatEntry[]|"loading"|string|nil
+---@return string
+local function diffstat_suffix(diffstat)
+	if type(diffstat) ~= "table" then
+		return ""
+	end
+	local additions, deletions = 0, 0
+	for _, entry in ipairs(diffstat) do
+		additions = additions + (tonumber(entry.lines_added) or 0)
+		deletions = deletions + (tonumber(entry.lines_removed) or 0)
+	end
+	if additions + deletions == 0 then
+		return ""
+	end
+	return string.format(" (+%d, -%d)", additions, deletions)
+end
+
 ---@param src string
 ---@param diffstat PullsDiffstatEntry[]|"loading"|string|nil
 ---@return PullsDetailHeaderField
@@ -95,29 +112,12 @@ function M.source_branch_field(src, diffstat)
 	local branch_icon = icons.pulls("branch")
 	local value = string.format("%s %s", branch_icon, src)
 	local src_start = #branch_icon + 1
-	local spans = {
-		{ start_col = src_start, end_col = src_start + #src, hl_group = highlights.dynamic_for(src) or "AtlasTextMuted" },
+
+	return {
+		label = "Source Branch" .. diffstat_suffix(diffstat),
+		value = value,
+		hl = { { start_col = src_start, end_col = src_start + #src, hl_group = highlights.dynamic_for(src) or "AtlasTextMuted" } },
 	}
-
-	if type(diffstat) == "table" then
-		local additions, deletions = 0, 0
-		for _, entry in ipairs(diffstat) do
-			additions = additions + (tonumber(entry.lines_added) or 0)
-			deletions = deletions + (tonumber(entry.lines_removed) or 0)
-		end
-		if additions + deletions > 0 then
-			local sep = "  |  "
-			local plus = string.format("+%d", additions)
-			local minus = string.format("-%d", deletions)
-			local base = #value + #sep
-			table.insert(spans, { start_col = base, end_col = base + #plus, hl_group = "AtlasTextPositive" })
-			local minus_start = base + #plus + 2
-			table.insert(spans, { start_col = minus_start, end_col = minus_start + #minus, hl_group = "AtlasLogError" })
-			value = value .. sep .. plus .. ", " .. minus
-		end
-	end
-
-	return { label = "Source Branch", value = value, hl = spans }
 end
 
 ---@param dst string

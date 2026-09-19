@@ -109,6 +109,7 @@ local function render_header(issue, tab_items, width)
 
 	local header_lines, header_spans = header.render(issue, width, left_fields, middle_fields, right_fields, status_badge)
 	utils.append_block(lines, spans, { lines = header_lines, highlights = header_spans })
+	table.insert(lines, "")
 
 	if #tab_items > 1 then
 		local tab_lines, tab_spans = tabs.render(tab_items, state.current_tab, width, {

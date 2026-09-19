@@ -161,6 +161,7 @@ local function render_header(pr, tab_items, width)
 		top_field = header.title_field(pr),
 	})
 	utils.append_block(lines, spans, { lines = field_lines, highlights = field_spans })
+	table.insert(lines, "")
 
 	-- Chips
 	local chip_lines, chip_spans = chips.render(pr, {
