@@ -103,6 +103,30 @@ function M.register(buf, views)
 
 	utils.insert_if(
 		items,
+		resolver.item("ui.toggle_fold", {
+			desc = "Toggle milestone/group fold",
+			hint_desc = "Fold",
+			opts = { nowait = true, silent = true },
+			callback = function()
+				controller.toggle_current_issue_collapsed()
+			end,
+		})
+	)
+
+	utils.insert_if(
+		items,
+		resolver.item("ui.toggle_all_folds", {
+			desc = "Toggle all milestone/group folds",
+			hint = false,
+			opts = { nowait = true, silent = true },
+			callback = function()
+				controller.toggle_all_issues_collapsed()
+			end,
+		})
+	)
+
+	utils.insert_if(
+		items,
 		resolver.item("ui.refresh", {
 			desc = "Reload selected issue",
 			hint = false,

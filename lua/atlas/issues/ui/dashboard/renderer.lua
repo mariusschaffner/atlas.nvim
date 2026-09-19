@@ -49,16 +49,30 @@ local function render_filter_row(lines, spans, width)
 end
 
 ---@param issue Issue
----@param is_child boolean|nil
+---@param opts { depth: integer, is_last: boolean|nil }|nil
 ---@param layout "plain"|"compact"
 ---@param label_width integer|nil
 ---@return table
-local function issue_to_row(issue, is_child, layout, label_width)
+local function issue_to_row(issue, opts, layout, label_width)
 	local display = providers.get(state.provider and state.provider.id)
-	local row_data = display.values(issue, is_child == true, layout, label_width)
+	local row_data = display.values(issue, opts, layout, label_width)
 
 	row_data._item = { kind = "issue", key = issue.key, _issue = issue }
 	row_data._issue = issue
+	row_data.children = row_data.children or {}
+	return row_data
+end
+
+---@param milestone IssueMilestone
+---@param child_count integer
+---@return table
+local function milestone_to_row(milestone, child_count)
+	local display = providers.get(state.provider and state.provider.id)
+	local key = "milestone:" .. tostring(milestone.id)
+	local row_data = display.milestone_values and display.milestone_values(milestone, child_count) or {}
+
+	row_data._item = { kind = "milestone", key = key, _milestone = milestone }
+	row_data._milestone = milestone
 	row_data.children = row_data.children or {}
 	return row_data
 end
@@ -95,24 +109,57 @@ local function cell_hl(row, col, ctx)
 	if row.kind == "meta" then
 		return { { start_col = 0, end_col = #ctx.padded, hl_group = "AtlasTextMuted" } }
 	end
-	if col.key == "icon" and row._fold_icon_hl then
-		return { { start_col = 0, end_col = #ctx.padded, hl_group = row._fold_icon_hl } }
-	end
 	local display = providers.get(state.provider and state.provider.id)
 	return display.highlights and display.highlights(row, col, ctx) or nil
+end
+
+---@param issue_groups IssuesGroup[]
+---@param out Issue[]
+local function collect_issues(issue_groups, out)
+	for _, group in ipairs(issue_groups) do
+		if group.kind == "milestone" then
+			collect_issues(group.children, out)
+		else
+			table.insert(out, group.issue)
+			for _, child in ipairs(group.children) do
+				table.insert(out, child)
+			end
+		end
+	end
 end
 
 ---@param issue_groups IssuesGroup[]
 ---@return Issue[]
 local function flatten_issues(issue_groups)
 	local issues = {}
-	for _, group in ipairs(issue_groups) do
-		table.insert(issues, group.issue)
-		for _, child in ipairs(group.children) do
-			table.insert(issues, child)
-		end
-	end
+	collect_issues(issue_groups, issues)
 	return issues
+end
+
+---@param group IssuesGroup
+---@param depth integer
+---@param is_last boolean
+---@param label_width integer|nil
+---@return table
+local function group_to_row(group, depth, is_last, label_width)
+	if group.kind == "milestone" then
+		local row = milestone_to_row(group.milestone, #group.children)
+		local count = #group.children
+		for index, child_group in ipairs(group.children) do
+			table.insert(row.children, group_to_row(child_group, depth + 1, index == count, label_width))
+		end
+		return row
+	end
+
+	local row = issue_to_row(group.issue, { depth = depth, is_last = is_last }, "plain", label_width)
+	local count = #group.children
+	for index, child_issue in ipairs(group.children) do
+		table.insert(
+			row.children,
+			issue_to_row(child_issue, { depth = depth + 1, is_last = index == count }, "plain", label_width)
+		)
+	end
+	return row
 end
 
 ---@param issue_groups IssuesGroup[]
@@ -120,20 +167,9 @@ end
 local function issues_to_rows(issue_groups)
 	local label_width = max_label_width(flatten_issues(issue_groups))
 	local rows = {}
-	for _, group in ipairs(issue_groups) do
-		local children = group.children
-		local root_row = issue_to_row(group.issue, false, "plain", label_width)
-
-		for _, child in ipairs(children) do
-			table.insert(root_row.children, issue_to_row(child, true, "plain", label_width))
-		end
-		if #children > 0 then
-			local issue_key = tostring(group.issue.key or "")
-			local collapsed = state.collapsed_issue_keys[issue_key] == true
-			root_row.icon, root_row._fold_icon_hl = icons.general(collapsed and "fold_closed" or "fold_open")
-		end
-
-		table.insert(rows, root_row)
+	local count = #issue_groups
+	for index, group in ipairs(issue_groups) do
+		table.insert(rows, group_to_row(group, 0, index == count, label_width))
 	end
 	return rows
 end
@@ -177,12 +213,11 @@ local function render_issue_table(opts, issue_groups)
 			show_indicator = should_show_indicator(issue_groups),
 			leaf_prefix = "",
 			is_expanded = function(row)
-				local issue = row._issue
-				local issue_key = issue and tostring(issue.key or "") or ""
-				if issue_key == "" then
+				local key = row._item and tostring(row._item.key or "") or ""
+				if key == "" then
 					return true
 				end
-				return state.collapsed_issue_keys[issue_key] ~= true
+				return state.collapsed_issue_keys[key] ~= true
 			end,
 		},
 		cell_hl = cell_hl,
@@ -220,7 +255,7 @@ local function compact_rows(issues)
 	local label_width = max_label_width(issues)
 	local rows = {}
 	for _, issue in ipairs(issues) do
-		local row = issue_to_row(issue, false, "compact", label_width)
+		local row = issue_to_row(issue, nil, "compact", label_width)
 		row.children = nil
 		table.insert(rows, row)
 

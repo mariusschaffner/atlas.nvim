@@ -7,6 +7,7 @@ local groups = {
 	AtlasGLIssueClosed = { fg = "#dd2b0e", bold = true },
 	AtlasGLIssueOpenChip = { fg = "#1e1e2e", bg = "#a6e3a1", bold = true },
 	AtlasGLIssueClosedChip = { fg = "#1e1e2e", bg = "#dd2b0e", bold = true },
+	AtlasGLMilestone = { fg = "#f9e2af", bold = true },
 }
 
 function M.setup()

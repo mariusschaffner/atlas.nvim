@@ -124,4 +124,19 @@ function M.label_hl(hex, group_prefix, fallback_hl)
 	return name
 end
 
+--- Same as label_hl but colors only the foreground (no background fill).
+---@param hex string|nil
+---@param group_prefix string e.g. "AtlasGLLabelFg_"
+---@param fallback_hl string
+---@return string
+function M.label_fg_hl(hex, group_prefix, fallback_hl)
+	local clean = tostring(hex or ""):lower():gsub("[^0-9a-f]", "")
+	if #clean ~= 6 then
+		return fallback_hl
+	end
+	local name = group_prefix .. clean
+	vim.api.nvim_set_hl(0, name, { fg = "#" .. clean, bold = true })
+	return name
+end
+
 return M

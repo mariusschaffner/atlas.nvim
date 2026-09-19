@@ -61,8 +61,17 @@ local function milestone(raw)
 	if title == nil then
 		return nil
 	end
-	local web_path = json.safe_str(raw.webPath)
-	return { title = title, web_url = web_path and (service.base_url() .. web_path) or nil }
+	-- REST gives a numeric id + absolute web_url; GraphQL gives a GID string id
+	-- (unusable for REST lookups) + a relative webPath. Only the REST id is
+	-- ever used (to bucket issues by milestone), so a GraphQL-sourced id is
+	-- intentionally left nil rather than stored as a misleading GID string.
+	local id = tonumber(raw.id)
+	local web_url = json.safe_str(raw.web_url)
+	if web_url == nil then
+		local web_path = json.safe_str(raw.webPath)
+		web_url = web_path and (service.base_url() .. web_path) or nil
+	end
+	return { id = id, title = title, web_url = web_url, due_date = json.safe_str(raw.due_date) }
 end
 
 ---@param state string|nil
@@ -129,6 +138,7 @@ function M.to_issue(raw)
 		assignee = issue_assignees[1],
 		reporter = M.to_user(raw.author),
 		labels = labels(raw.labels),
+		milestone = milestone(raw.milestone),
 		story_points = tonumber(json.nilify(raw.weight)),
 		duedate = json.safe_str(raw.due_date),
 		parent = nil,

@@ -42,6 +42,7 @@ local ICONS = {
 		fold_open = { icon = "", hl_group = "AtlasTextMuted" },
 		fold_closed = { icon = "", hl_group = "AtlasTextMuted" },
 		custom_action = { icon = "", hl_group = "AtlasTextMuted" },
+		milestone = { icon = "⚑", hl_group = "AtlasTextWarning" },
 	},
 
 	pulls = {

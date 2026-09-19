@@ -22,6 +22,8 @@
 ---@field type IssueType|nil
 ---@field assignee IssueUser|nil
 ---@field reporter IssueUser|nil
+---@field labels IssueLabel[]|nil
+---@field milestone IssueMilestone|nil
 ---@field story_points number|nil
 ---@field duedate string|nil
 ---@field parent IssueRef|nil
@@ -51,16 +53,23 @@
 --------------------------------------------------------------------------------
 
 ---@class IssueMilestone
+---@field id integer|nil
 ---@field title string
 ---@field web_url string|nil
+---@field due_date string|nil
+---@field description string|nil
+---@field state string|nil "active"|"closed"
 
 --------------------------------------------------------------------------------
 -- Group
 --------------------------------------------------------------------------------
 
 ---@class IssuesGroup
----@field issue Issue
----@field children Issue[]
+---@field kind "issue"|"milestone"
+---@field key string Unique key for collapse-state + selection: issue.key, or "milestone:<id>".
+---@field issue Issue|nil Present when kind == "issue".
+---@field milestone IssueMilestone|nil Present when kind == "milestone".
+---@field children (Issue|IssuesGroup)[] Issue[] when kind == "issue" (flat); IssuesGroup[] when kind == "milestone".
 
 --------------------------------------------------------------------------------
 -- Type

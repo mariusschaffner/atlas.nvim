@@ -98,6 +98,35 @@ local function relationships_enabled(view)
 	return view.layout ~= "compact" and issues_config().with_relationships ~= false
 end
 
+---@param view IssuesViewConfig
+---@return boolean
+local function milestones_enabled(view)
+	return view.layout ~= "compact" and view.project ~= nil and tostring(view.project) ~= ""
+end
+
+---@param provider IssuesProvider
+---@param view IssuesViewConfig
+---@param scope AtlasRequestScope
+local function fetch_milestones(provider, view, scope)
+	local fetch = provider.capabilities.core.fetch_milestones
+	if not fetch or not milestones_enabled(view) then
+		state.set_milestones({})
+		render_if_active()
+		return
+	end
+	scope.run(function(done)
+		return fetch(tostring(view.project), done)
+	end, function(milestones, err)
+		if err then
+			notify.warn("Failed to fetch milestones: " .. tostring(err))
+			state.set_milestones({})
+		else
+			state.set_milestones(milestones or {})
+		end
+		render_if_active()
+	end)
+end
+
 ---@param issues Issue[]
 ---@return IssueRef[]
 local function missing_parent_refs(issues)
@@ -197,6 +226,8 @@ local function load_query(view, force_load, on_done)
 	cancel_active_requests()
 	local load_requests = active_requests
 	fetch_current_user(provider, load_requests)
+	state.milestones = {}
+	fetch_milestones(provider, view, load_requests)
 
 	state.is_loading = true
 	state.error = nil
@@ -462,10 +493,19 @@ end
 
 function M.toggle_current_issue_collapsed()
 	local node = navigation.current_item()
-	if type(node) ~= "table" or node.kind ~= "issue" or type(node._issue) ~= "table" then
+	if type(node) ~= "table" then
 		return
 	end
-	if state.toggle_issue_collapsed(node._issue.key) then
+	local key
+	if node.kind == "issue" and type(node._issue) == "table" then
+		key = node._issue.key
+	elseif node.kind == "milestone" then
+		key = node.key
+	end
+	if key == nil then
+		return
+	end
+	if state.toggle_issue_collapsed(key) then
 		render_if_active()
 	end
 end

@@ -10,6 +10,7 @@ local config = require("atlas.config")
 local detail_ui = require("atlas.issues.providers.gitlab.ui.detail")
 local highlights = require("atlas.issues.providers.gitlab.highlights")
 local issues_api = require("atlas.issues.providers.gitlab.api.issues")
+local milestones_api = require("atlas.issues.providers.gitlab.api.milestones")
 local notes_api = require("atlas.issues.providers.gitlab.api.notes")
 local users_api = require("atlas.issues.providers.gitlab.api.users")
 local notifications_api = require("atlas.providers.gitlab.notifications")
@@ -146,6 +147,9 @@ local M = {
 			fetch_linked_branches = issues_api.fetch_related_branches,
 			fetch_project_branches = issues_api.fetch_project_branches,
 			create_branch = issues_api.create_branch,
+			fetch_milestones = milestones_api.list,
+			fetch_milestone = milestones_api.get,
+			fetch_milestone_issues = milestones_api.list_issues,
 		},
 		comments = {
 			reaction_options = GITLAB_REACTION_OPTIONS,

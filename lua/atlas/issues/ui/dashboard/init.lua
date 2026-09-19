@@ -26,6 +26,20 @@ local function open_detail(issue)
 	})
 end
 
+---@param milestone IssueMilestone
+local function open_milestone_detail(milestone)
+	local state = require("atlas.issues.state")
+	local project_path = state.active_view and state.active_view.project
+	if not project_path or project_path == "" then
+		require("atlas.core.notify").warn("No project scoped for this milestone")
+		return
+	end
+	require("atlas.issues.ui.detail.milestone").open(milestone, {
+		provider = state.provider,
+		project_path = tostring(project_path),
+	})
+end
+
 ---@param item { kind: string, _issue: Issue|nil }|nil
 function M.select(item)
 	local detail = require("atlas.issues.ui.detail")
@@ -35,12 +49,22 @@ function M.select(item)
 end
 
 function M.toggle_detail()
+	local item = require("atlas.ui.navigation").current_item()
+	if type(item) == "table" and item.kind == "milestone" and type(item._milestone) == "table" then
+		local milestone_detail = require("atlas.issues.ui.detail.milestone")
+		if milestone_detail.is_open() then
+			milestone_detail.close()
+			return
+		end
+		open_milestone_detail(item._milestone)
+		return
+	end
+
 	local detail = require("atlas.issues.ui.detail")
 	if detail.is_open() then
 		detail.close()
 		return
 	end
-	local item = require("atlas.ui.navigation").current_item()
 	if type(item) == "table" and item.kind == "issue" and type(item._issue) == "table" then
 		open_detail(item._issue)
 	end

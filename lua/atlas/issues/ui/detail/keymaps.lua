@@ -297,12 +297,21 @@ function M.register(buf, opts)
 			callback = function()
 				local details = state.current_details
 				local milestone = details and details.milestone
-				local url = milestone and milestone.web_url
-				if not url or url == "" then
+				if not milestone or milestone.id == nil then
 					notify.warn("No linked milestone")
 					return
 				end
-				vim.ui.open(url)
+				local issue = state.current_issue
+				---@cast issue GitLabIssue
+				local project_path = issue and issue.project_path
+				if not project_path or project_path == "" then
+					notify.warn("Could not determine project path")
+					return
+				end
+				require("atlas.issues.ui.detail.milestone").open(milestone, {
+					provider = state.provider,
+					project_path = project_path,
+				})
 			end,
 		})
 	)

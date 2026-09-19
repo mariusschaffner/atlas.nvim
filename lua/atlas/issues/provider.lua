@@ -57,6 +57,9 @@
 ---@field fetch_linked_branches (fun(issue: Issue, opts: { force_load: boolean|nil }|nil, on_done: fun(items: IssueLinkedBranch[]|nil, err: string|nil)): { cancel: fun() }|nil)|nil
 ---@field fetch_project_branches (fun(issue: Issue, opts: { force_load: boolean|nil }|nil, on_done: fun(items: IssueProjectBranch[]|nil, err: string|nil)): { cancel: fun() }|nil)|nil
 ---@field create_branch (fun(issue: Issue, branch_name: string, source_ref: string, on_done: fun(branch: IssueLinkedBranch|nil, err: string|nil)): { cancel: fun() }|nil)|nil
+---@field fetch_milestones (fun(project_path: string, on_done: fun(milestones: IssueMilestone[]|nil, err: string|nil)): { cancel: fun() }|nil)|nil
+---@field fetch_milestone (fun(project_path: string, milestone_id: integer, on_done: fun(milestone: IssueMilestone|nil, err: string|nil)): { cancel: fun() }|nil)|nil
+---@field fetch_milestone_issues (fun(project_path: string, milestone_id: integer, on_done: fun(issues: Issue[]|nil, err: string|nil)): { cancel: fun() }|nil)|nil
 ---@field refresh fun()|nil
 
 ---@class IssuesCommentsCapability
