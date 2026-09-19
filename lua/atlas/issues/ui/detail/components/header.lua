@@ -5,13 +5,14 @@ local field_box = require("atlas.ui.components.field_box")
 
 ---@param issue Issue
 ---@param width integer
----@param fields IssuesDetailHeaderField[]|nil
----@param secondary_fields IssuesDetailHeaderField[]|nil Rendered as a separate right-hand column, aligned below itself.
+---@param left_fields IssuesDetailHeaderField[]|nil Author, Assignee.
+---@param middle_fields IssuesDetailHeaderField[]|nil Labels, Milestone.
+---@param right_fields IssuesDetailHeaderField[]|nil Linked MR, Linked Branches.
 ---@param status_badge IssuesTitleStatus|nil Border color for the title field (open/closed); its `.text` is unused now that the border color conveys status.
 ---@return string[], table[]
-function M.render(issue, width, fields, secondary_fields, status_badge)
+function M.render(issue, width, left_fields, middle_fields, right_fields, status_badge)
 	local title_field = {
-		label = issue.key,
+		label = (status_badge and status_badge.label) or issue.key,
 		value = issue.title,
 		border_hl = status_badge and status_badge.hl or nil,
 	}
@@ -30,7 +31,7 @@ function M.render(issue, width, fields, secondary_fields, status_badge)
 		}
 	end
 
-	return field_box.render_columns(fields or {}, secondary_fields or {}, {
+	return field_box.render_columns({ left_fields or {}, middle_fields or {}, right_fields or {} }, {
 		width = width,
 		top_field = title_field,
 	})

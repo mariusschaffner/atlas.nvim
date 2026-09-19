@@ -63,7 +63,9 @@ function M.pr_state_hl(pr_state)
 end
 
 --- Same as pr_state_hl but foreground-only, no chip background fill — used
---- next to the PR title rather than as a standalone pill.
+--- for the title field's border color rather than as a standalone pill.
+--- Merged is red here (same as a closed issue), not the blue used for the
+--- merged chip/icon elsewhere.
 ---@param pr_state string|nil
 ---@return string
 function M.pr_state_fg_hl(pr_state)
@@ -72,7 +74,7 @@ function M.pr_state_fg_hl(pr_state)
 		return "AtlasPROpen"
 	end
 	if lower == "merged" then
-		return "AtlasPRMerged"
+		return "AtlasPRMergedBorder"
 	end
 	if lower == "declined" then
 		return "AtlasPRDeclined"

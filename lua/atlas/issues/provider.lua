@@ -94,9 +94,16 @@
 ---@class IssuesTitleStatus
 ---@field text string
 ---@field hl string
+---@field label string|nil Title field's box label, e.g. "Title - 42"; falls back to issue.key if absent.
+
+---@class IssuesProviderHeaderFields
+---@field author IssuesDetailHeaderField
+---@field assignee IssuesDetailHeaderField
+---@field labels IssuesDetailHeaderField
+---@field milestone IssuesDetailHeaderField|nil
 
 ---@class IssuesProviderDetail
----@field header_fields (fun(issue: Issue, details: IssueDetails|nil, loading: boolean): IssuesDetailHeaderField[])|nil
+---@field header_fields (fun(issue: Issue, details: IssueDetails|nil, loading: boolean): IssuesProviderHeaderFields)|nil
 ---@field title_status (fun(issue: Issue): IssuesTitleStatus)|nil
 ---@field tabs (fun(): IssuesDetailTabDefinition[])|nil
 

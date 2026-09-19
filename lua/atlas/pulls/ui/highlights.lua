@@ -6,6 +6,9 @@ local groups = {
 	AtlasPRMerged = { fg = "#93c5fd" },
 	AtlasPRDeclined = { fg = "#fca5a5" },
 	AtlasPRDraft = { fg = "#fcd34d" },
+	-- Same red as AtlasGLIssueClosed, used for the merged-PR title border
+	-- specifically (not the merged chip/icon elsewhere, which stay blue).
+	AtlasPRMergedBorder = { fg = "#dd2b0e" },
 
 	AtlasPROpenChip = { fg = "#0b1320", bg = "#86efac", bold = true },
 	AtlasPRMergedChip = { fg = "#0b1320", bg = "#93c5fd", bold = true },

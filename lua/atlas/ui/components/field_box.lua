@@ -155,22 +155,21 @@ local function stack(fields, box_width)
 	return lines, spans
 end
 
---- Two independent, full-height column stacks (e.g. Author/Assignee/Labels
---- on the left, Linked MR/Linked Branches on the right) rather than
---- row-major pairing — every box in a column shares that column's width, so
---- they align below each other regardless of what's in the other column.
---- An optional `top_field` renders full-width above both columns (e.g. a
---- title box with no second column).
----@param left_fields AtlasFieldBoxField[]
----@param right_fields AtlasFieldBoxField[]
+--- N independent, full-height column stacks (e.g. Author/Assignee on the
+--- left, Labels/Milestone in the middle, Linked MR/Linked Branches on the
+--- right) rather than row-major pairing — every box in a column shares that
+--- column's width, so they align below each other regardless of what's in
+--- the other columns. An optional `top_field` renders full-width above all
+--- columns (e.g. a title box with no second column). Empty columns are
+--- skipped entirely (no reserved space, no stray gap).
+---@param columns AtlasFieldBoxField[][]
 ---@param opts { width: integer, max_field_width: integer|nil, column_gap: integer|nil, top_field: AtlasFieldBoxField|nil }
 ---@return string[] lines
 ---@return table[] highlights
-function M.render_columns(left_fields, right_fields, opts)
+function M.render_columns(columns, opts)
 	local width = math.max(1, opts.width)
 	local column_gap = opts.column_gap or DEFAULT_COLUMN_GAP
 	local max_field_width = opts.max_field_width or DEFAULT_MAX_FIELD_WIDTH
-	local cap = math.min(max_field_width, math.max(MIN_FIELD_WIDTH, math.floor((width - column_gap) / 2)))
 
 	local lines, spans = {}, {}
 
@@ -185,6 +184,20 @@ function M.render_columns(left_fields, right_fields, opts)
 		shared_utils.append_block(lines, spans, { lines = top_lines, highlights = top_spans })
 	end
 
+	local nonempty = {}
+	for _, col in ipairs(columns) do
+		if #col > 0 then
+			table.insert(nonempty, col)
+		end
+	end
+	local n = #nonempty
+	if n == 0 then
+		return lines, spans
+	end
+
+	local total_gap = column_gap * (n - 1)
+	local cap = math.min(max_field_width, math.max(MIN_FIELD_WIDTH, math.floor((width - total_gap) / n)))
+
 	---@param fields AtlasFieldBoxField[]
 	---@return integer
 	local function column_width(fields)
@@ -195,46 +208,48 @@ function M.render_columns(left_fields, right_fields, opts)
 		return math.min(cap, w)
 	end
 
-	local left_width = #left_fields > 0 and column_width(left_fields) or 0
-	local right_width = #right_fields > 0 and column_width(right_fields) or 0
-
-	local left_lines, left_spans = stack(left_fields, left_width)
-	local right_lines, right_spans = stack(right_fields, right_width)
-
-	if right_width == 0 then
-		shared_utils.append_block(lines, spans, { lines = left_lines, highlights = left_spans })
-		return lines, spans
-	end
-	if left_width == 0 then
-		shared_utils.append_block(lines, spans, { lines = right_lines, highlights = right_spans })
-		return lines, spans
+	local col_widths, col_lines, col_spans, max_rows = {}, {}, {}, 0
+	for i, col in ipairs(nonempty) do
+		local w = column_width(col)
+		col_widths[i] = w
+		local l, s = stack(col, w)
+		col_lines[i] = l
+		col_spans[i] = s
+		max_rows = math.max(max_rows, #l)
 	end
 
 	local gap = string.rep(" ", column_gap)
-	local blank_left = string.rep(" ", left_width)
-	local blank_right = string.rep(" ", right_width)
-	local rows = math.max(#left_lines, #right_lines)
+	local blanks = {}
+	for i = 1, n do
+		blanks[i] = string.rep(" ", col_widths[i])
+	end
 
 	local columns_lines = {}
-	for i = 1, rows do
-		columns_lines[i] = (left_lines[i] or blank_left) .. gap .. (right_lines[i] or blank_right)
+	for row = 1, max_rows do
+		local parts = {}
+		for i = 1, n do
+			table.insert(parts, col_lines[i][row] or blanks[i])
+		end
+		columns_lines[row] = table.concat(parts, gap)
 	end
 
 	local columns_spans = {}
-	for _, span in ipairs(left_spans) do
-		table.insert(columns_spans, span)
-	end
-	for _, span in ipairs(right_spans) do
-		if span.line_hl_group ~= nil then
-			table.insert(columns_spans, span)
-		else
-			local prefix_len = #(left_lines[span.line + 1] or blank_left) + #gap
-			table.insert(columns_spans, {
-				line = span.line,
-				start_col = prefix_len + span.start_col,
-				end_col = prefix_len + span.end_col,
-				hl_group = span.hl_group,
-			})
+	for i = 1, n do
+		for _, span in ipairs(col_spans[i]) do
+			if span.line_hl_group ~= nil then
+				table.insert(columns_spans, span)
+			else
+				local prefix_len = 0
+				for j = 1, i - 1 do
+					prefix_len = prefix_len + #(col_lines[j][span.line + 1] or blanks[j]) + #gap
+				end
+				table.insert(columns_spans, {
+					line = span.line,
+					start_col = prefix_len + span.start_col,
+					end_col = prefix_len + span.end_col,
+					hl_group = span.hl_group,
+				})
+			end
 		end
 	end
 

@@ -138,19 +138,20 @@ local function render_header(pr, tab_items, width)
 		or {}
 
 	-- Fields, two columns: Assignee/Reviewers/Labels on the left,
-	-- Delete-source-branch/Branch/Checks on the right. Title spans both
-	-- columns as the first row, its border color conveying PR status.
+	-- Branch/Checks/Delete-source-branch on the right (toggle last, below
+	-- the boxed fields). Title spans both columns as the first row, its
+	-- border color conveying PR status.
 	local left_fields = {}
 	utils.insert_if(left_fields, provider_fields.assignee)
 	utils.insert_if(left_fields, reviewers_field())
 	utils.insert_if(left_fields, provider_fields.labels)
 
 	local right_fields = {}
-	utils.insert_if(right_fields, provider_fields.delete_source_branch)
 	table.insert(right_fields, header.branch_field(pr.source.branch, pr.destination.branch, state.diffstat))
 	utils.insert_if(right_fields, merge_checks_field())
+	utils.insert_if(right_fields, provider_fields.delete_source_branch)
 
-	local field_lines, field_spans = field_box.render_columns(left_fields, right_fields, {
+	local field_lines, field_spans = field_box.render_columns({ left_fields, right_fields }, {
 		width = width,
 		top_field = header.title_field(pr),
 	})

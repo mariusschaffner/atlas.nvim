@@ -82,7 +82,7 @@ end
 ---@return PullsDetailHeaderField
 function M.title_field(pr)
 	return {
-		label = string.format("#%s", pr.id),
+		label = string.format("Title - %s", pr.id),
 		value = pr.title,
 		border_hl = presentation.pr_state_fg_hl(pr.state),
 	}

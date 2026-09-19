@@ -30,7 +30,12 @@ end
 ---@param issue Issue
 ---@return IssuesTitleStatus
 function M.title_status(issue)
-	return { text = tostring(issue.status or "Open"), hl = state_fg_hl(issue.status_id) }
+	---@cast issue GitLabIssue
+	return {
+		text = tostring(issue.status or "Open"),
+		hl = state_fg_hl(issue.status_id),
+		label = string.format("Title - %s", tostring(issue.iid)),
+	}
 end
 
 ---@param hex string|nil
@@ -67,7 +72,7 @@ end
 ---@param issue Issue
 ---@param details IssueDetails|nil
 ---@param loading boolean
----@return IssuesDetailHeaderField[]
+---@return IssuesProviderHeaderFields
 function M.header_fields(issue, details, loading)
 	local user_icon = icons.general("user")
 
@@ -85,20 +90,16 @@ function M.header_fields(issue, details, loading)
 	local assignee_text = string.format("%s %s", user_icon, assignee_name)
 	local assignee_hl = helper.person_hl(assignee and assignee.display_name or nil)
 
-	local fields = {
-		{
+	return {
+		author = {
 			label = "Author",
 			value = string.format("%s %s", user_icon, reporter_name),
 			hl = helper.person_hl(reporter_name),
 		},
-		{ label = "Assignee", value = assignee_text, hl = assignee_hl, editable = supports("assign") },
-		labels_field(details, loading),
+		assignee = { label = "Assignee", value = assignee_text, hl = assignee_hl, editable = supports("assign") },
+		labels = labels_field(details, loading),
+		milestone = milestone_text ~= "" and { label = "Milestone", value = milestone_text, hl = "AtlasTextMuted" } or nil,
 	}
-	if milestone_text ~= "" then
-		table.insert(fields, { label = "Milestone", value = milestone_text, hl = "AtlasTextMuted" })
-	end
-
-	return fields
 end
 
 ---@return IssuesDetailTabDefinition[]

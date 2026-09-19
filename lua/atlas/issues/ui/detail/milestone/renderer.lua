@@ -45,13 +45,12 @@ local function work_item_stats(work_items)
 	return completed, total, percent
 end
 
---- A compact bracketed gauge (e.g. "[██████░░░░] 67% (2/3)") rendered as its
---- own field box, rather than a bare full-width block bar.
 ---@param completed integer
 ---@param total integer
 ---@param percent integer
----@return IssuesDetailHeaderField
-local function progress_field(completed, total, percent)
+---@return string value
+---@return table[] spans
+local function progress_gauge(completed, total, percent)
 	local filled = math.max(0, math.min(PROGRESS_BAR_WIDTH, math.floor((percent / 100) * PROGRESS_BAR_WIDTH + 0.5)))
 	local filled_str = string.rep("█", filled)
 	local empty_str = string.rep("░", PROGRESS_BAR_WIDTH - filled)
@@ -90,6 +89,27 @@ local function progress_field(completed, total, percent)
 
 	value = value .. string.format(" (%d/%d)", completed, total)
 
+	return value, spans
+end
+
+--- Work item count + a compact bracketed gauge (e.g. "[██████░░░░] 67%
+--- (2/3)"), merged into one "Progress" field box rather than two separate
+--- ones.
+---@return IssuesDetailHeaderField|nil
+local function progress_field()
+	if state.work_items_loading then
+		return { label = "Progress", value = spinner.with_text("Loading..."), hl = "AtlasTextMuted" }
+	end
+	if state.work_items == nil then
+		return nil
+	end
+
+	local completed, total, percent = work_item_stats(state.work_items)
+	if total == 0 then
+		return { label = "Progress", value = "No work items", hl = "AtlasTextMuted" }
+	end
+
+	local value, spans = progress_gauge(completed, total, percent)
 	return { label = "Progress", value = value, hl = spans }
 end
 
@@ -98,11 +118,11 @@ end
 ---@return string[], table[]
 local function render_header(milestone, width)
 	local title_field = {
-		label = "Milestone",
+		label = string.format("Title - %s", tostring(milestone.id)),
 		value = tostring(milestone.title or ""),
 		border_hl = milestone.state == "closed" and "AtlasGLIssueClosed" or "AtlasGLIssueOpen",
 	}
-	local lines, spans = field_box.render_columns({}, {}, { width = width, top_field = title_field })
+	local lines, spans = field_box.render_columns({}, { width = width, top_field = title_field })
 
 	local fields = {}
 	if milestone.start_date and milestone.start_date ~= "" then
@@ -112,16 +132,7 @@ local function render_header(milestone, width)
 		table.insert(fields, { label = "Due date", value = milestone.due_date, hl = "AtlasTextMuted" })
 	end
 
-	local completed, total, percent
-	if state.work_items_loading then
-		table.insert(fields, { label = "Work items", value = spinner.with_text("Loading..."), hl = "AtlasTextMuted" })
-	elseif state.work_items ~= nil then
-		completed, total, percent = work_item_stats(state.work_items)
-		table.insert(fields, { label = "Work items", value = tostring(total), hl = "AtlasTextMuted" })
-		if total > 0 then
-			table.insert(fields, progress_field(completed, total, percent))
-		end
-	end
+	utils.insert_if(fields, progress_field())
 
 	local field_lines, field_spans = field_box.render(fields, { width = width })
 	utils.append_block(lines, spans, { lines = field_lines, highlights = field_spans })
