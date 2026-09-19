@@ -38,6 +38,7 @@ end
 ---  title: string|nil,
 ---  content_lines: string[],
 ---  content_highlights: table[]|nil,
+---  box_width: integer|nil Exact box width, bypassing the ratio-based sizing below.
 ---  box_width_ratio: number|nil,
 ---  min_box_width: integer|nil,
 ---  border_hl: string|nil,
@@ -50,13 +51,18 @@ end
 function M.render(opts)
 	opts = opts or {}
 	local total_width = math.max(1, opts.width or vim.o.columns)
-	local ratio = opts.box_width_ratio or 0.9
-	local min_box_width = opts.min_box_width or 20
 	local border_hl = opts.border_hl or "AtlasBorder"
 	local content_lines = opts.content_lines or { "" }
 
-	local box_width = math.max(min_box_width, math.floor(total_width * ratio))
-	box_width = math.min(box_width, total_width)
+	local box_width
+	if opts.box_width then
+		box_width = math.min(opts.box_width, total_width)
+	else
+		local ratio = opts.box_width_ratio or 0.9
+		local min_box_width = opts.min_box_width or 20
+		box_width = math.max(min_box_width, math.floor(total_width * ratio))
+		box_width = math.min(box_width, total_width)
+	end
 	box_width = math.max(box_width, 3) -- always room for the two border columns
 	local interior_width = box_width - 2
 	local right_width = math.max(0, total_width - box_width - 1) -- -1 for the gap space
