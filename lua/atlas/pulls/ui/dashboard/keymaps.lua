@@ -66,6 +66,7 @@ function M.register(buf, views)
 					width = region.width,
 					height = region.height,
 					seed_text = state.filter_text or "",
+					submit_keys = { "<CR>" },
 					on_save = function(text, done)
 						dashboard.apply_filter_text(text)
 						done(true)

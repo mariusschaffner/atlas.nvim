@@ -102,7 +102,11 @@ function M.parse(text, opts)
 					view.extra_params.reviewer_username = value
 				end
 			elseif canonical == "state" and opts.domain == "issues" then
-				view.state = value:lower()
+				-- The GitLab REST API wants "opened"/"closed", but its web UI
+				-- (and this filter bar's displayed text) says "open" -- accept
+				-- either spelling here, always storing the API's "opened".
+				local lowered = value:lower()
+				view.state = lowered == "open" and "opened" or lowered
 			elseif canonical == "state" and opts.domain == "pulls" then
 				status_filters = status_filters or {}
 				for _, part in ipairs(vim.split(value, ",", { plain = true, trimempty = true })) do
@@ -203,7 +207,10 @@ function M.serialize(view, opts)
 	end
 
 	if opts.domain == "issues" and view.state and view.state ~= "" then
-		table.insert(parts, token("state", view.state))
+		-- Display GitLab's web-UI spelling ("open"), not the REST API's
+		-- ("opened") -- M.parse above accepts both back in.
+		local displayed = view.state == "opened" and "open" or view.state
+		table.insert(parts, token("state", displayed))
 	end
 
 	if opts.domain == "pulls" and opts.status_filters then

@@ -12,6 +12,63 @@ local M = {}
 local keymaps = require("atlas.core.keymaps")
 local notify = require("atlas.core.notify")
 
+local border_ns = vim.api.nvim_create_namespace("AtlasInlineFieldEditBorder")
+
+--- Highlights one span of a border line (e.g. the top/bottom border, or one
+--- side's `│`) orange to mark the field as actively being edited. `start_char`/
+--- `end_char` are 0-indexed *display columns* (matching the region geometry
+--- `field_box`/`filter_bar` report) -- converted to byte offsets here since
+--- box-drawing glyphs are multi-byte but always exactly 1 column wide, and
+--- `nvim_buf_set_extmark` columns are byte offsets, not display columns.
+---@param buf integer
+---@param line_idx integer 0-indexed
+---@param start_char integer
+---@param end_char integer exclusive
+local function highlight_border_span(buf, line_idx, start_char, end_char)
+	local line = vim.api.nvim_buf_get_lines(buf, line_idx, line_idx + 1, false)[1]
+	if line == nil then
+		return
+	end
+	local start_byte = vim.fn.byteidx(line, start_char)
+	local end_byte = vim.fn.byteidx(line, end_char)
+	if start_byte < 0 or end_byte < 0 or end_byte <= start_byte then
+		return
+	end
+	pcall(vim.api.nvim_buf_set_extmark, buf, border_ns, line_idx, start_byte, {
+		end_row = line_idx,
+		end_col = end_byte,
+		hl_group = "AtlasFieldBoxBorderEditing",
+	})
+end
+
+--- Recolors the border immediately surrounding an interior region (assumed
+--- to be a `bordered_box.lua`-rendered box, one border row/col beyond the
+--- interior on every side -- true for every current caller).
+---@param buf integer
+---@param row integer interior row, 0-indexed
+---@param col integer interior col, 0-indexed
+---@param width integer interior width
+---@param height integer interior height
+local function highlight_border(buf, row, col, width, height)
+	local top, bottom = row - 1, row + height
+	local left, right = col - 1, col + width
+	local box_width = width + 2
+
+	highlight_border_span(buf, top, left, left + box_width)
+	highlight_border_span(buf, bottom, left, left + box_width)
+	for r = row, row + height - 1 do
+		highlight_border_span(buf, r, left, left + 1)
+		highlight_border_span(buf, r, right, right + 1)
+	end
+end
+
+---@param buf integer|nil
+local function clear_border_highlight(buf)
+	if buf and vim.api.nvim_buf_is_valid(buf) then
+		vim.api.nvim_buf_clear_namespace(buf, border_ns, 0, -1)
+	end
+end
+
 ---@class AtlasFieldCompletionItem
 ---@field name string Canonical value submitted on save (username or label name).
 ---@field display string|nil Text shown in the completion menu; defaults to `name`.
@@ -31,11 +88,13 @@ local notify = require("atlas.core.notify")
 ---@field multi_value boolean|nil Comma-separated accumulation mode.
 ---@field seed_resolved string[]|nil Canonical names already known valid (the field's current value(s)), so submitting unchanged text -- or adding one value without retyping the rest -- doesn't drop entries that were never re-fetched via completion.
 ---@field completion AtlasFieldCompletionProvider|nil
+---@field submit_keys string[]|nil Overrides the resolved `ui.submit` keys for this field (e.g. the filter box uses `<CR>`).
+---@field close_keys string[]|nil Overrides the resolved `ui.close` keys for this field.
 ---@field on_save fun(text: string, done: fun(ok: boolean, err: string|nil))
 ---@field on_cancel (fun())|nil
 ---@field on_done fun()
 
----@type { win: integer, buf: integer, restore_win: integer|nil, resolved_by_lower: table<string, string>, saving: boolean, augroup: integer, debounce: uv.uv_timer_t|nil, request: AtlasRequestScope|nil }|nil
+---@type { win: integer, buf: integer, anchor_buf: integer, restore_win: integer|nil, resolved_by_lower: table<string, string>, saving: boolean, augroup: integer, debounce: uv.uv_timer_t|nil, request: AtlasRequestScope|nil }|nil
 local active = nil
 
 ---@return boolean
@@ -139,7 +198,10 @@ local function trigger_completion_fetch(opts, query, start_col)
 					})
 				end
 			end
-			if vim.api.nvim_get_current_win() == active.win then
+			-- The fetch is async, so by the time it resolves the user may
+			-- have already left Insert mode (e.g. pressed <Esc>) without
+			-- closing the field -- complete() errors outside Insert mode.
+			if vim.api.nvim_get_current_win() == active.win and vim.fn.mode() == "i" then
 				vim.fn.complete(start_col + 1, complete_items)
 			end
 		end
@@ -198,8 +260,8 @@ function M.start(opts)
 		return
 	end
 
-	local submit_keys = keymaps.resolve("ui.submit") or {}
-	local close_keys = keymaps.resolve("ui.close") or {}
+	local submit_keys = opts.submit_keys or keymaps.resolve("ui.submit") or {}
+	local close_keys = opts.close_keys or keymaps.resolve("ui.close") or {}
 
 	local buf = vim.api.nvim_create_buf(false, true)
 	vim.api.nvim_set_option_value("buftype", "nofile", { buf = buf })
@@ -239,9 +301,13 @@ function M.start(opts)
 		end
 	end
 
+	local anchor_buf = vim.api.nvim_win_get_buf(opts.anchor_win)
+	highlight_border(anchor_buf, opts.row, opts.col, opts.width, opts.height or 1)
+
 	active = {
 		win = win,
 		buf = buf,
+		anchor_buf = anchor_buf,
 		restore_win = restore_win,
 		resolved_by_lower = resolved_by_lower,
 		saving = false,
@@ -266,6 +332,7 @@ function M.start(opts)
 		cancel_request()
 		pcall(vim.api.nvim_del_augroup_by_id, augroup)
 		unbind()
+		clear_border_highlight(anchor_buf)
 		active = nil
 		if vim.api.nvim_win_is_valid(win) then
 			pcall(vim.api.nvim_win_close, win, true)
@@ -352,6 +419,7 @@ function M.start(opts)
 				stop_debounce()
 				cancel_request()
 				pcall(vim.api.nvim_del_augroup_by_id, augroup)
+				clear_border_highlight(anchor_buf)
 				active = nil
 			end
 		end,
