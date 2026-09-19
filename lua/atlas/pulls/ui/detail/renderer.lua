@@ -97,11 +97,12 @@ local function merge_checks_field()
 	if state.merge_checks == nil then
 		return nil
 	end
+	local prefix = "Checks: "
 	if state.merge_checks == "loading" then
-		return { label = "Checks", value = spinner.with_text("Loading..."), hl = "AtlasTextMuted" }
+		return { value = prefix .. spinner.with_text("Loading..."), hl = "AtlasTextMuted", kind = "text" }
 	end
 	if type(state.merge_checks) == "string" then
-		return { label = "Checks", value = state.merge_checks, hl = "AtlasLogError" }
+		return { value = prefix .. state.merge_checks, hl = "AtlasLogError", kind = "text" }
 	end
 	if #state.merge_checks == 0 then
 		return nil
@@ -112,7 +113,7 @@ local function merge_checks_field()
 		return (MERGE_CHECK_PRIORITY[a.state] or math.huge) < (MERGE_CHECK_PRIORITY[b.state] or math.huge)
 	end)
 
-	local parts, spans, cursor = {}, {}, 0
+	local parts, spans, cursor = {}, {}, #prefix
 	for i, check in ipairs(checks) do
 		local pair = MERGE_CHECK_STATE[check.state] or MERGE_CHECK_STATE.muted
 		local token = string.format("%s %s", pair.icon, check.label)
@@ -120,7 +121,7 @@ local function merge_checks_field()
 		table.insert(spans, { start_col = cursor, end_col = cursor + #pair.icon, hl_group = pair.hl })
 		cursor = cursor + #token + (i < #checks and 2 or 0)
 	end
-	return { label = "Checks", value = table.concat(parts, ", "), hl = spans }
+	return { value = prefix .. table.concat(parts, ", "), hl = spans, kind = "text" }
 end
 
 ---@param pr PullRequest
@@ -137,26 +138,29 @@ local function render_header(pr, tab_items, width)
 			and provider_detail.header_fields(pr, details, state.details_loading)
 		or {}
 
-	-- Fields, two columns: Assignee/Reviewers/Labels on the left,
-	-- Branch/Checks/Delete-source-branch on the right (toggle last, below
-	-- the boxed fields). Title spans both columns as the first row, its
+	-- Fields, three columns: Assignee/Reviewers on the left, Labels in the
+	-- middle, Source/Target branch + Checks + Delete-source-branch on the
+	-- right (checks and the toggle are plain text, not boxed, and the
+	-- toggle sits last). Title spans all columns as the first row, its
 	-- border color conveying PR status.
 	local left_fields = {}
 	utils.insert_if(left_fields, provider_fields.assignee)
 	utils.insert_if(left_fields, reviewers_field())
-	utils.insert_if(left_fields, provider_fields.labels)
+
+	local middle_fields = {}
+	utils.insert_if(middle_fields, provider_fields.labels)
 
 	local right_fields = {}
-	table.insert(right_fields, header.branch_field(pr.source.branch, pr.destination.branch, state.diffstat))
+	table.insert(right_fields, header.source_branch_field(pr.source.branch, state.diffstat))
+	table.insert(right_fields, header.target_branch_field(pr.destination.branch))
 	utils.insert_if(right_fields, merge_checks_field())
 	utils.insert_if(right_fields, provider_fields.delete_source_branch)
 
-	local field_lines, field_spans = field_box.render_columns({ left_fields, right_fields }, {
+	local field_lines, field_spans = field_box.render_columns({ left_fields, middle_fields, right_fields }, {
 		width = width,
 		top_field = header.title_field(pr),
 	})
 	utils.append_block(lines, spans, { lines = field_lines, highlights = field_spans })
-	table.insert(lines, "")
 
 	-- Chips
 	local chip_lines, chip_spans = chips.render(pr, {

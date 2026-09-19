@@ -89,19 +89,14 @@ function M.title_field(pr)
 end
 
 ---@param src string
----@param dst string
 ---@param diffstat PullsDiffstatEntry[]|"loading"|string|nil
 ---@return PullsDetailHeaderField
-function M.branch_field(src, dst, diffstat)
+function M.source_branch_field(src, diffstat)
 	local branch_icon = icons.pulls("branch")
-	local arrow = " → "
-	local value = string.format("%s %s%s%s", branch_icon, src, arrow, dst)
-
+	local value = string.format("%s %s", branch_icon, src)
 	local src_start = #branch_icon + 1
-	local dst_start = src_start + #src + #arrow
 	local spans = {
 		{ start_col = src_start, end_col = src_start + #src, hl_group = highlights.dynamic_for(src) or "AtlasTextMuted" },
-		{ start_col = dst_start, end_col = dst_start + #dst, hl_group = highlights.dynamic_for(dst) or "AtlasTextMuted" },
 	}
 
 	if type(diffstat) == "table" then
@@ -122,7 +117,20 @@ function M.branch_field(src, dst, diffstat)
 		end
 	end
 
-	return { label = "Branch", value = value, hl = spans }
+	return { label = "Source Branch", value = value, hl = spans }
+end
+
+---@param dst string
+---@return PullsDetailHeaderField
+function M.target_branch_field(dst)
+	local branch_icon = icons.pulls("branch")
+	local value = string.format("%s %s", branch_icon, dst)
+	local dst_start = #branch_icon + 1
+	return {
+		label = "Target Branch",
+		value = value,
+		hl = { { start_col = dst_start, end_col = dst_start + #dst, hl_group = highlights.dynamic_for(dst) or "AtlasTextMuted" } },
+	}
 end
 
 ---@param repo PullsRepo

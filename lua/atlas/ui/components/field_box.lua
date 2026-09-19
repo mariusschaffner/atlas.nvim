@@ -7,6 +7,8 @@
 -- on a title box) which takes precedence over the editable convention. A
 -- field with `kind = "toggle"` renders as a compact checkbox line instead
 -- of a bordered box, for on/off settings that don't need their own frame.
+-- `kind = "text"` renders as a plain, unboxed value line (no label shown),
+-- for read-only info that doesn't need its own frame either.
 local M = {}
 
 local bordered_box = require("atlas.ui.components.bordered_box")
@@ -24,7 +26,7 @@ local DEFAULT_COLUMN_GAP = 4
 ---@field hl string|table[]|nil
 ---@field editable boolean|nil
 ---@field border_hl string|nil Explicit border color override, takes precedence over `editable`.
----@field kind "toggle"|nil
+---@field kind "toggle"|"text"|nil
 ---@field enabled boolean|nil Toggle state, only used when kind == "toggle".
 ---@field right_content { lines: string[], highlights: table[]|nil }|nil Only meaningful on a full-width `top_field`.
 
@@ -59,6 +61,9 @@ local function box_width_for(field, cap)
 	if field.kind == "toggle" then
 		return math.max(MIN_FIELD_WIDTH, math.min(cap, ui_utils.text_width(field.label) + 2))
 	end
+	if field.kind == "text" then
+		return math.max(MIN_FIELD_WIDTH, math.min(cap, ui_utils.text_width(field.value or "")))
+	end
 	return math.max(MIN_FIELD_WIDTH, math.min(cap, natural_width(field)))
 end
 
@@ -77,12 +82,29 @@ end
 
 ---@param field AtlasFieldBoxField
 ---@param box_width integer
+---@return string[] lines
+---@return table[] highlights
+local function render_text(field, box_width)
+	local value = field.value or ""
+	local line = ui_utils.pad_right(value, box_width)
+	local spans = {}
+	for _, span in ipairs(value_hl_spans(value, field.hl)) do
+		table.insert(spans, { line = 0, start_col = span.start_col, end_col = span.end_col, hl_group = span.hl_group })
+	end
+	return { line }, spans
+end
+
+---@param field AtlasFieldBoxField
+---@param box_width integer
 ---@param total_width integer|nil Available width for right_content; defaults to box_width (no reserved space).
 ---@return string[] lines
 ---@return table[] highlights
 local function render_one(field, box_width, total_width)
 	if field.kind == "toggle" then
 		return render_toggle(field, box_width)
+	end
+	if field.kind == "text" then
+		return render_text(field, box_width)
 	end
 
 	local value = field.value or ""
