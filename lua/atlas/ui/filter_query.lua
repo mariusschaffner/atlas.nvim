@@ -52,16 +52,26 @@ local KEY_ALIASES = {
 	group = "group",
 	scope = "scope",
 	state = "state",
+	view = "view",
 }
+
+local PULLS_STATUS_VALUES = { OPEN = true, MERGED = true, DECLINED = true }
+
+---@class AtlasFilterQueryParseResult
+---@field view "issues"|"pulls"|nil
+---@field query table
+---@field status_filters table<string, boolean>|nil
 
 ---@param text string|nil
 ---@param opts { domain: "pulls"|"issues" }
----@return table
+---@return AtlasFilterQueryParseResult
 function M.parse(text, opts)
 	opts = opts or {}
 	local view = {}
 	local free_words = {}
 	local labels = {}
+	local view_token = nil
+	local status_filters = nil
 
 	for _, raw_token in ipairs(tokenize(text or "")) do
 		local key, value = raw_token:match("^([%a_]+):(.+)$")
@@ -93,6 +103,19 @@ function M.parse(text, opts)
 				end
 			elseif canonical == "state" and opts.domain == "issues" then
 				view.state = value:lower()
+			elseif canonical == "state" and opts.domain == "pulls" then
+				status_filters = status_filters or {}
+				for _, part in ipairs(vim.split(value, ",", { plain = true, trimempty = true })) do
+					local status = part:upper()
+					if PULLS_STATUS_VALUES[status] then
+						status_filters[status] = true
+					end
+				end
+			elseif canonical == "view" then
+				local candidate = value:lower()
+				if candidate == "issues" or candidate == "pulls" then
+					view_token = candidate
+				end
 			elseif canonical == "scope" then
 				view.scope = value:lower()
 			elseif canonical == "milestone" then
@@ -114,7 +137,7 @@ function M.parse(text, opts)
 		view.search = table.concat(free_words, " ")
 	end
 
-	return view
+	return { view = view_token, query = view, status_filters = status_filters }
 end
 
 ---@param key string
@@ -128,13 +151,19 @@ local function token(key, value)
 	return string.format("%s:%s", key, value)
 end
 
+local PULLS_STATUS_ORDER = { "OPEN", "MERGED", "DECLINED" }
+
 ---@param view table|nil
----@param opts { domain: "pulls"|"issues" }
+---@param opts { domain: "pulls"|"issues", status_filters?: table<string, boolean> }
 ---@return string
 function M.serialize(view, opts)
 	opts = opts or {}
 	view = view or {}
 	local parts = {}
+
+	if opts.domain == "issues" or opts.domain == "pulls" then
+		table.insert(parts, token("view", opts.domain))
+	end
 
 	if view.scope == "assigned_to_me" then
 		table.insert(parts, token("assignee", "me"))
@@ -175,6 +204,18 @@ function M.serialize(view, opts)
 
 	if opts.domain == "issues" and view.state and view.state ~= "" then
 		table.insert(parts, token("state", view.state))
+	end
+
+	if opts.domain == "pulls" and opts.status_filters then
+		local statuses = {}
+		for _, status in ipairs(PULLS_STATUS_ORDER) do
+			if opts.status_filters[status] then
+				table.insert(statuses, status:lower())
+			end
+		end
+		if #statuses > 0 then
+			table.insert(parts, token("state", table.concat(statuses, ",")))
+		end
 	end
 
 	if view.labels and view.labels ~= "" then

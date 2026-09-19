@@ -1,7 +1,7 @@
 local M = {}
 
 local dashboard_host = require("atlas.ui.dashboard")
-local dashboard_tabs = require("atlas.ui.dashboard_tabs")
+local filter_bar = require("atlas.ui.filter_bar")
 local ui_state = require("atlas.ui.state")
 local ns = vim.api.nvim_create_namespace("atlas.ui")
 
@@ -24,8 +24,8 @@ local function apply_spans(buf, spans)
 	end
 end
 
---- Renders the tab bar plus a domain-specific body into the dashboard buffer.
----@param render_body fun(width: integer, height: integer, tab_lines: integer): string[], table[], table<integer, table>
+--- Renders the filter bar plus a domain-specific body into the dashboard buffer.
+---@param render_body fun(width: integer, height: integer, bar_lines: integer): string[], table[], table<integer, table>
 function M.render(render_body)
 	local win = dashboard_host.win()
 	local buf = dashboard_host.buf()
@@ -36,14 +36,14 @@ function M.render(render_body)
 	local width = vim.api.nvim_win_get_width(win)
 	local height = vim.api.nvim_win_get_height(win)
 
-	local tab_lines, tab_spans = dashboard_tabs.render(dashboard_host.domain(), width)
-	local body_lines, body_spans, body_line_map = render_body(width, height, #tab_lines)
+	local bar_lines, bar_spans = filter_bar.render(dashboard_host.domain(), width)
+	local body_lines, body_spans, body_line_map = render_body(width, height, #bar_lines)
 
-	local lines = vim.list_extend({}, tab_lines)
+	local lines = vim.list_extend({}, bar_lines)
 	vim.list_extend(lines, body_lines)
 
-	local spans = vim.list_extend({}, tab_spans)
-	local offset = #tab_lines
+	local spans = vim.list_extend({}, bar_spans)
+	local offset = #bar_lines
 	for _, span in ipairs(body_spans) do
 		local shifted = vim.tbl_extend("force", {}, span)
 		shifted.line = span.line + offset

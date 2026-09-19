@@ -332,6 +332,11 @@ function M.domain()
 	return state.domain
 end
 
+---@param target AtlasDomain
+local function open_domain(target)
+	require("atlas").open(target, state.provider_ids[target])
+end
+
 ---@param step 1|-1
 local function switch_domain(step)
 	if state.domain == nil then
@@ -345,7 +350,7 @@ local function switch_domain(step)
 		end
 	end
 	local target = DOMAIN_ORDER[(idx - 1 + step) % #DOMAIN_ORDER + 1]
-	require("atlas").open(target, state.provider_ids[target])
+	open_domain(target)
 end
 
 function M.next_domain()
@@ -354,6 +359,32 @@ end
 
 function M.prev_domain()
 	switch_domain(-1)
+end
+
+--- Applies filter-bar text from the `/` prompt. If it names the other
+--- domain via a `view:` token, switches the dashboard there first (same
+--- mechanism as next_domain/prev_domain) then applies the rest of the
+--- filter to that domain's controller; otherwise applies it to the
+--- current domain in place.
+---@param text string
+function M.apply_filter_text(text)
+	if state.domain == nil then
+		return
+	end
+	local filter_query = require("atlas.ui.filter_query")
+	local parsed = filter_query.parse(text, { domain = state.domain })
+	local target = (parsed.view == "issues" or parsed.view == "pulls") and parsed.view or state.domain
+
+	if target ~= state.domain then
+		open_domain(target)
+		if state.domain ~= target then
+			-- open() bailed (e.g. target provider not configured); don't
+			-- touch a domain that never actually became active.
+			return
+		end
+	end
+
+	require("atlas." .. target .. ".ui.dashboard.controller").apply_filter_text(text)
 end
 
 ---@param domain AtlasDomain|nil

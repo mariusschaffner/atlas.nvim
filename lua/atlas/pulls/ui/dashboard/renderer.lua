@@ -1,7 +1,6 @@
 local M = {}
 
 local icons = require("atlas.ui.shared.icons")
-local navbar = require("atlas.ui.components.navbar")
 local presentation = require("atlas.pulls.ui.presentation")
 local providers = require("atlas.pulls.ui.dashboard.providers")
 local state = require("atlas.pulls.state")
@@ -282,47 +281,6 @@ local function append_centered_loading(lines, text, width, height)
 	table.insert(lines, centered)
 end
 
----@param lines string[]
----@param spans table[]
----@param width integer
-local function render_filter_row(lines, spans, width)
-	local active_index = nil
-	for i, v in ipairs(state.views) do
-		if v == state.active_view then
-			active_index = i
-			break
-		end
-	end
-	local badge = active_index and string.format("[%d]", active_index) or "[*]"
-	local search_icon = icons.general("search")
-
-	local nav_items = {
-		{ label = badge, hl_group = "AtlasFilterActive" },
-		{ label = string.format("%s %s", search_icon, state.filter_text or ""), hl_group = "AtlasTextMuted" },
-	}
-
-	local status_items = {}
-	for _, status in ipairs({ "OPEN", "MERGED" }) do
-		table.insert(status_items, {
-			label = status:sub(1, 1):upper() .. status:sub(2):lower(),
-			hl_group = state.status_filters[status] and "AtlasFilterActive" or "AtlasTextMuted",
-		})
-	end
-
-	local filter_line = #lines
-	utils.append_block(
-		lines,
-		spans,
-		navbar.render({
-			width = width,
-			items = nav_items,
-			actions = status_items,
-			plain_items = true,
-		})
-	)
-	table.insert(spans, { line = filter_line, line_hl_group = "AtlasFilterBarBackground" })
-end
-
 ---@param opts { width: integer, height: integer }
 ---@return string[], table[], table<integer, table>
 function M.render(opts)
@@ -330,10 +288,6 @@ function M.render(opts)
 	local pulls = state.pulls
 	local display = providers.get(state.provider and state.provider.id)
 	local loading = string.format("%s Loading...", state.reload_spinner_frame)
-
-	table.insert(lines, "")
-	render_filter_row(lines, spans, opts.width)
-	table.insert(lines, "")
 
 	if state.error then
 		local text = "Error: " .. tostring(state.error):gsub("[\r\n]+", " | ")

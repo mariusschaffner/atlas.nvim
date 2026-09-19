@@ -365,7 +365,8 @@ end
 
 ---@param text string
 function M.apply_filter_text(text)
-	local view = require("atlas.ui.filter_query").parse(text, { domain = "issues" })
+	local parsed = require("atlas.ui.filter_query").parse(text, { domain = "issues" })
+	local view = parsed.query
 	view.name = "Custom"
 	view.state = view.state or "opened"
 	view.project = view.project or (state.active_view and state.active_view.project)

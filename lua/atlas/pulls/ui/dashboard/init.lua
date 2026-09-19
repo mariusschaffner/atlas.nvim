@@ -78,8 +78,14 @@ function M.init(provider, opts)
 	end
 
 	state.views = state.provider_views
-	state.active_view = (opts and opts.initial_view) or state.views[1]
-	state.filter_text = require("atlas.ui.filter_query").serialize(state.active_view, { domain = "pulls" })
+	state.active_view = (opts and opts.initial_view) or { name = "Custom", scope = "all" }
+	-- Explicit reset: the singleton pulls state module persists gpo/gpm
+	-- toggles across close/reopen within a session, so without this a fresh
+	-- "state:open" default would misrepresent what's actually loaded after a
+	-- prior session toggled MERGED/DECLINED on.
+	state.status_filters = { OPEN = true, MERGED = false, DECLINED = false }
+	state.filter_text = require("atlas.ui.filter_query")
+		.serialize(state.active_view, { domain = "pulls", status_filters = state.status_filters })
 
 	statusline.clear_items()
 

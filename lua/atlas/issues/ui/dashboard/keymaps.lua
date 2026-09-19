@@ -59,7 +59,7 @@ function M.register(buf, views)
 					if input == nil then
 						return
 					end
-					controller.apply_filter_text(input)
+					require("atlas.ui.dashboard").apply_filter_text(input)
 				end)
 			end,
 		})

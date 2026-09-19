@@ -324,7 +324,8 @@ end
 ---@param view AtlasPullsViewConfig|nil
 function M.switch_view(view)
 	state.active_view = view
-	state.filter_text = require("atlas.ui.filter_query").serialize(view, { domain = "pulls" })
+	state.filter_text =
+		require("atlas.ui.filter_query").serialize(view, { domain = "pulls", status_filters = state.status_filters })
 	load_view(view, false, function()
 		navigation.focus_first_item()
 	end)
@@ -332,9 +333,34 @@ end
 
 ---@param text string
 function M.apply_filter_text(text)
-	local view = require("atlas.ui.filter_query").parse(text, { domain = "pulls" })
+	local parsed = require("atlas.ui.filter_query").parse(text, { domain = "pulls" })
+	local view = parsed.query
 	view.name = "Custom"
 	view.project = view.project or (state.active_view and state.active_view.project)
+
+	if parsed.status_filters then
+		local any = false
+		for _, enabled in pairs(parsed.status_filters) do
+			if enabled then
+				any = true
+				break
+			end
+		end
+		if any then
+			state.status_filters = {
+				OPEN = parsed.status_filters.OPEN == true,
+				MERGED = parsed.status_filters.MERGED == true,
+				DECLINED = parsed.status_filters.DECLINED == true,
+			}
+			local buf = dashboard_host.buf()
+			if buf ~= nil then
+				require("atlas.pulls.ui.dashboard.keymaps").register(buf, state.views)
+			end
+		else
+			notify.warn("At least one status filter must remain active; keeping current state:")
+		end
+	end
+
 	M.switch_view(view)
 end
 
@@ -353,6 +379,10 @@ function M.toggle_status_filter(status)
 	end
 
 	state.status_filters[status] = not state.status_filters[status]
+	state.filter_text = require("atlas.ui.filter_query").serialize(
+		state.active_view,
+		{ domain = "pulls", status_filters = state.status_filters }
+	)
 
 	local buf = dashboard_host.buf()
 	if buf ~= nil then
