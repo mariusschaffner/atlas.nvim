@@ -181,7 +181,7 @@ function M.register(buf, opts)
 			items,
 			resolver.item("issues.create_branch", {
 				desc = "Create branch from issue",
-				hint_desc = "New Branch",
+				hint_desc = "Branch",
 				callback = function()
 					local issue = state.current_issue
 					if issue == nil then
@@ -260,7 +260,7 @@ function M.register(buf, opts)
 			items,
 			resolver.item("issues.go_to_pull", {
 				desc = "Go to linked pull request",
-				hint_desc = "Go to PR",
+				hint_desc = "Merge",
 				callback = function()
 					local linked = state.linked_merge_requests
 					if type(linked) ~= "table" or #linked == 0 then

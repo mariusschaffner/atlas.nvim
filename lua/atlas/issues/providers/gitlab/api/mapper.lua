@@ -1,6 +1,7 @@
 local M = {}
 
 local json = require("atlas.core.json")
+local service = require("atlas.providers.gitlab.client")
 
 ---@param raw_user any Decoded API value.
 ---@return IssueUser|nil
@@ -60,7 +61,8 @@ local function milestone(raw)
 	if title == nil then
 		return nil
 	end
-	return { title = title, web_url = json.safe_str(raw.webUrl) }
+	local web_path = json.safe_str(raw.webPath)
+	return { title = title, web_url = web_path and (service.base_url() .. web_path) or nil }
 end
 
 ---@param state string|nil
@@ -126,6 +128,7 @@ function M.to_issue(raw)
 		type = to_issue_type(raw.issue_type),
 		assignee = issue_assignees[1],
 		reporter = M.to_user(raw.author),
+		labels = labels(raw.labels),
 		story_points = tonumber(json.nilify(raw.weight)),
 		duedate = json.safe_str(raw.due_date),
 		parent = nil,

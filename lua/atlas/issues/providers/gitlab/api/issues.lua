@@ -33,7 +33,7 @@ query($path: ID!, $iid: String!) {
       description
       assignees(first: 100) { nodes { id username name } }
       labels(first: 100) { nodes { title color } }
-      milestone { title webUrl }
+      milestone { title webPath }
     }
   }
 }

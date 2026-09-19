@@ -287,7 +287,7 @@ function M.register(buf, opts)
 			items,
 			resolver.item("pulls.toggle_remove_source_branch", {
 				desc = "Toggle delete source branch on merge",
-				hint_desc = "Toggle Delete Branch",
+				hint_desc = "Delete Branch",
 				opts = { nowait = true, silent = true },
 				callback = function()
 					local pr = state.current_pr
@@ -363,17 +363,6 @@ function M.register(buf, opts)
 
 	utils.insert_if(
 		general,
-		resolver.item("ui.toggle_panel", {
-			desc = "Toggle detail panel",
-			hint = false,
-			callback = function()
-				require("atlas.pulls.ui.detail").close()
-			end,
-		})
-	)
-
-	utils.insert_if(
-		general,
 		resolver.item("ui.close", {
 			desc = "Close detail panel",
 			hint = false,
@@ -408,7 +397,6 @@ function M.remove(buf)
 	utils.insert_if(general, resolver.remove_item("ui.next_panel_tab"))
 	utils.insert_if(general, resolver.remove_item("ui.previous_panel_tab"))
 	utils.insert_if(general, resolver.remove_item("ui.help"))
-	utils.insert_if(general, resolver.remove_item("ui.toggle_panel"))
 	utils.insert_if(general, resolver.remove_item("ui.close"))
 	help.remove("General", general, { buffer = buf })
 end
