@@ -77,7 +77,6 @@
 
 ---@class IssuesActionResult
 ---@field issue_key string|nil
----@field removed boolean|nil
 
 ---@class IssuesUICapability
 ---@field setup fun()|nil

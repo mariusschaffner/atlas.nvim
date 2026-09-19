@@ -437,7 +437,7 @@ function M.apply_action_result(result)
 			break
 		end
 	end
-	if issue and not result.removed then
+	if issue then
 		refresh_issue(issue)
 	else
 		M.refresh_current_view()

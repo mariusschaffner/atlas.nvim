@@ -60,12 +60,7 @@ local function complete_action(issue, on_update, result)
 		return
 	end
 
-	local detail = require("atlas.issues.ui.detail")
-	if result.removed then
-		detail.close()
-	else
-		detail.refresh()
-	end
+	require("atlas.issues.ui.detail").refresh()
 end
 
 ---@param buf integer
