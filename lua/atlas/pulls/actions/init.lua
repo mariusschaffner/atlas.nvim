@@ -1,6 +1,5 @@
 local M = {}
 
-local git_checkout = require("atlas.core.git.checkout")
 local md_editor = require("atlas.ui.popups.editor")
 local picker = require("atlas.ui.picker")
 local review = require("atlas.pulls.actions.review")
@@ -20,7 +19,6 @@ local notify = utils.notify
 ---| "copy_url"
 ---| "open_in_browser"
 ---| "open_diff"
----| "checkout"
 ---| "merge"
 ---| "decline"
 ---| "edit_title"
@@ -380,48 +378,6 @@ M.open_diff = {
 				return
 			end
 			done({ changed_pr = false, message = "Opened diff" }, nil)
-		end)
-	end,
-}
-
-M.checkout = {
-	id = "checkout",
-	label = "Checkout PR branch",
-	is_available = has_pr,
-	run = function(context, done)
-		local pr = assert(context.pr)
-
-		---@param selected PullRequest
-		local function checkout(selected)
-			notify(context, "loading", string.format("Checking out PR #%s", tostring(selected.id or "")))
-			git_checkout.checkout_pr(selected, function(_, err)
-				vim.schedule(function()
-					if err then
-						notify(context, "error", string.format("Checkout failed: %s", tostring(err)))
-						done(nil, tostring(err))
-						return
-					end
-					notify(context, "success", string.format("Checked out PR #%s", tostring(selected.id or "")))
-					done({ changed_pr = false, message = "Checked out PR" }, nil)
-				end)
-			end)
-		end
-
-		if pr.source.commit_hash ~= "" and pr.destination.commit_hash ~= "" then
-			checkout(pr)
-			return
-		end
-
-		notify(context, "loading", "Loading pull request revisions...")
-		context.provider.capabilities.core.fetch_by_refs({ pr }, { force_load = false }, function(pulls, err)
-			local fresh = pulls and pulls[1] or nil
-			if fresh == nil then
-				local message = tostring(err or "Unable to load pull request revisions")
-				notify(context, "error", message)
-				done(nil, message)
-				return
-			end
-			checkout(fresh)
 		end)
 	end,
 }

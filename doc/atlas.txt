@@ -494,7 +494,6 @@ Defaults live under `keymaps` in `setup()`. Each entry accepts:
         open_pipeline          = "gp",
         pipeline_retry         = "t",
         pipeline_cancel        = "x",
-        checkout               = "gc",
         external_help          = "gA", -- Atlas help in external diff viewers
         toggle_repo_panel      = "o",
         toggle_repo_issue_state = "t",

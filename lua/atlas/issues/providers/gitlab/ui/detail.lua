@@ -2,7 +2,6 @@
 local M = {}
 
 local icons = require("atlas.ui.shared.icons")
-local utils = require("atlas.ui.shared.utils")
 local helper = require("atlas.issues.ui.presentation")
 local spinner = require("atlas.ui.components.spinner")
 local highlights = require("atlas.ui.shared.highlights")
@@ -52,15 +51,6 @@ function M.header_fields(issue, details, _loading)
 	}
 	if milestone_text ~= "" then
 		table.insert(fields, { label = "Milestone", value = milestone_text, hl = "AtlasTextMuted" })
-	end
-
-	local created_at = issue.created_at or ""
-	if created_at ~= "" then
-		table.insert(fields, {
-			label = "Opened",
-			value = utils.relative_time_text(created_at) or created_at,
-			hl = "AtlasTextMuted",
-		})
 	end
 
 	return fields

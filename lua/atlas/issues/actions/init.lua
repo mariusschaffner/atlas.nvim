@@ -5,7 +5,8 @@ local templates = require("atlas.issues.templates")
 local utils = require("atlas.issues.actions.utils")
 
 ---@alias AtlasIssueActionId
----| "transition"
+---| "close_issue"
+---| "reopen_issue"
 ---| "assign"
 ---| "create_issue"
 ---| "search"
@@ -98,6 +99,7 @@ M.copy_issue_url = utils.copy_issue_url
 M.manage_templates = {
 	id = "manage_templates",
 	label = "Manage Issue Templates",
+	hidden = true,
 	run = function(_, done)
 		templates.manage(function(err)
 			done(nil, err)

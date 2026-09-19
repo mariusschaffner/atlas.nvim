@@ -183,9 +183,9 @@ function M.serialize(view, opts)
 	if view.milestone and view.milestone ~= "" then
 		table.insert(parts, token("milestone", view.milestone))
 	end
-	if view.project and view.project ~= "" then
-		table.insert(parts, token("project", view.project))
-	end
+	-- `project` is intentionally never serialized into the visible/editable
+	-- filter text: it's always the current repo, so showing it is just noise.
+	-- Parsing it back in via M.parse still works for anyone who types it.
 	if view.group and view.group ~= "" then
 		table.insert(parts, token("group", view.group))
 	end

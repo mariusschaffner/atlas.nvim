@@ -52,6 +52,7 @@
 
 ---@class IssueMilestone
 ---@field title string
+---@field web_url string|nil
 
 --------------------------------------------------------------------------------
 -- Group

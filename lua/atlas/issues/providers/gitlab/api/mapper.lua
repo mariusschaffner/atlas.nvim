@@ -60,7 +60,7 @@ local function milestone(raw)
 	if title == nil then
 		return nil
 	end
-	return { title = title }
+	return { title = title, web_url = json.safe_str(raw.webUrl) }
 end
 
 ---@param state string|nil

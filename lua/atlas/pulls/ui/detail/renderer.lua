@@ -132,7 +132,7 @@ local function render_header(pr, tab_items, width)
 	utils.append_block(lines, spans, { lines = title_lines, highlights = title_spans })
 	table.insert(lines, "")
 
-	-- Fields, two columns (Repo/Updated/Assignees/Branch/Reviewers/Checks)
+	-- Fields, two columns (Repo/Assignees/Branch/Reviewers/Checks)
 	local trailing_fields = {}
 	local reviewers = reviewers_field()
 	if reviewers then

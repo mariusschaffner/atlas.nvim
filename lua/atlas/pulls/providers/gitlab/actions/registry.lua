@@ -409,18 +409,19 @@ register({
 register({
 	id = "search",
 	label = "Search projects",
+	hidden = true,
 	run = search,
 })
 
 register({
 	id = "toggle_subscription",
 	label = "Toggle subscription",
+	hidden = true,
 	is_available = toggle_subscription_available,
 	run = toggle_subscription,
 })
 
 register(actions.open_diff)
-register(actions.checkout)
 
 register(actions.copy_id)
 register(actions.copy_url)

@@ -28,11 +28,11 @@ local function register(action)
 end
 
 ---@param ctx AtlasIssueActionContext
+---@param target "close"|"reopen"
 ---@param done fun(result: IssuesActionResult|nil, err: string|nil)
-local function transition(ctx, done)
+local function set_issue_state(ctx, target, done)
 	local issue = assert(ctx.issue)
 	local key = tostring(issue.key or "")
-	local target = issue.status_id == "closed" and "reopen" or "close"
 	local label = target == "close" and "Closing" or "Reopening"
 	notify.loading(string.format("%s %s...", label, key))
 	issues_api.set_state(key, target, function(ok, err)
@@ -45,6 +45,34 @@ local function transition(ctx, done)
 		notify.success(string.format("%s %s", msg, key), { timeout = 1200 })
 		done({ issue_key = key }, nil)
 	end)
+end
+
+---@param ctx AtlasIssueActionContext
+---@return boolean, string|nil
+local function close_issue_available(ctx)
+	if not has_issue(ctx) then
+		return false, "No issue selected"
+	end
+	local issue = assert(ctx.issue)
+	---@cast issue GitLabIssue
+	if issue.status_id == "closed" then
+		return false, "Issue is already closed"
+	end
+	return true, nil
+end
+
+---@param ctx AtlasIssueActionContext
+---@return boolean, string|nil
+local function reopen_issue_available(ctx)
+	if not has_issue(ctx) then
+		return false, "No issue selected"
+	end
+	local issue = assert(ctx.issue)
+	---@cast issue GitLabIssue
+	if issue.status_id ~= "closed" then
+		return false, "Issue is not closed"
+	end
+	return true, nil
 end
 
 ---@param key string
@@ -416,15 +444,25 @@ local function toggle_subscription(ctx, done)
 end
 
 register({
-	id = "transition",
-	label = "Toggle Open/Closed",
-	is_available = has_issue,
-	run = transition,
+	id = "close_issue",
+	label = "Close Issue",
+	is_available = close_issue_available,
+	run = function(ctx, done)
+		set_issue_state(ctx, "close", done)
+	end,
+})
+register({
+	id = "reopen_issue",
+	label = "Reopen Issue",
+	is_available = reopen_issue_available,
+	run = function(ctx, done)
+		set_issue_state(ctx, "reopen", done)
+	end,
 })
 register({ id = "assign", label = "Edit Assignees", is_available = has_issue, run = assign })
 register({ id = "labels", label = "Edit Labels", is_available = has_issue, run = labels })
-register({ id = "search", label = "Search Issues", run = search })
-register({ id = "create_issue", label = "Create Issue", run = create_issue })
+register({ id = "search", label = "Search Issues", hidden = true, run = search })
+register({ id = "create_issue", label = "Create Issue", hidden = true, run = create_issue })
 register(actions.manage_templates)
 register(actions.browse_issue)
 register(actions.copy_issue_key)
@@ -432,6 +470,7 @@ register(actions.copy_issue_url)
 register({
 	id = "toggle_subscription",
 	label = "Toggle subscription",
+	hidden = true,
 	is_available = toggle_subscription_available,
 	run = toggle_subscription,
 })

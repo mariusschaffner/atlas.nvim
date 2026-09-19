@@ -16,8 +16,8 @@ local function columns()
 			can_grow = false,
 		},
 		{
-			key = "reporter",
-			name = string.format("%s Reporter", icons.general("user")),
+			key = "labels",
+			name = string.format("%s Labels", icons.general("tag")),
 			max_width = 22,
 			can_grow = false,
 		},
@@ -44,16 +44,23 @@ local function person_value(user, fallback)
 end
 
 ---@param issue Issue
+---@return string
+local function labels_value(issue)
+	local names = {}
+	for _, label in ipairs(issue.labels or {}) do
+		table.insert(names, tostring(label.name or ""))
+	end
+	local joined = #names > 0 and table.concat(names, ", ") or "None"
+	return string.format("%s %s", icons.general("tag"), utils.truncate(joined, 20))
+end
+
+---@param issue Issue
 ---@param col table
 ---@param ctx { text: string, padded: string, width: integer }
 ---@return table[]|nil
 local function person_highlight(issue, col, ctx)
 	if col.key == "assignee" then
 		local name = issue.assignee and issue.assignee.display_name or nil
-		return { { start_col = 0, end_col = #ctx.padded, hl_group = helper.person_hl(name) } }
-	end
-	if col.key == "reporter" then
-		local name = issue.reporter and issue.reporter.display_name or nil
 		return { { start_col = 0, end_col = #ctx.padded, hl_group = helper.person_hl(name) } }
 	end
 end
@@ -96,7 +103,7 @@ local function gitlab()
 				or (padded_label .. " " .. (issue.title or "")),
 			_key_label = label,
 			assignee = person_value(issue.assignee, "Unassigned"),
-			reporter = person_value(issue.reporter, "Unknown"),
+			labels = labels_value(issue),
 			status = status_value(issue),
 		}
 	end
@@ -132,10 +139,11 @@ local function gitlab()
 				table.insert(spans, { start_col = start_col - 1, end_col = end_col, hl_group = "AtlasTextMuted" })
 				local title_start = end_col + 2
 				if title_start <= #ctx.text then
+					local title_hl = issue.assignee == nil and "AtlasTextMuted" or "Normal"
 					table.insert(spans, {
 						start_col = title_start - 1,
 						end_col = #ctx.text,
-						hl_group = "Normal",
+						hl_group = title_hl,
 					})
 				end
 			end

@@ -93,7 +93,6 @@ local M = {}
 ---@field open_pipeline? AtlasKeymapValue
 ---@field pipeline_retry? AtlasKeymapValue
 ---@field pipeline_cancel? AtlasKeymapValue
----@field checkout? AtlasKeymapValue
 ---@field external_help? AtlasKeymapValue
 ---@field toggle_repo_panel? AtlasKeymapValue
 ---@field toggle_repo_issue_state? AtlasKeymapValue
@@ -118,6 +117,7 @@ local M = {}
 ---@field toggle_description_mode? AtlasKeymapValue
 ---@field create_branch? AtlasKeymapValue
 ---@field go_to_pull? AtlasKeymapValue
+---@field go_to_milestone? AtlasKeymapValue
 ---@field filters? AtlasIssuesFilterKeymaps
 
 ---@class AtlasKeymapsConfig
@@ -168,7 +168,6 @@ local M = {}
 ---| "pulls.open_pipeline"
 ---| "pulls.pipeline_retry"
 ---| "pulls.pipeline_cancel"
----| "pulls.checkout"
 ---| "pulls.external_help"
 ---| "pulls.toggle_repo_panel"
 ---| "pulls.toggle_repo_issue_state"
@@ -216,6 +215,7 @@ local M = {}
 ---| "issues.toggle_description_mode"
 ---| "issues.create_branch"
 ---| "issues.go_to_pull"
+---| "issues.go_to_milestone"
 ---| "issues.filters.open"
 ---| "issues.filters.closed"
 
@@ -350,7 +350,6 @@ function M.validate()
 		{ "ui.comments.reply", "pulls.review.diff.add_comment", "issues.create_issue", "pulls.create_pr" },
 		{ "pulls.edit_title", "pulls.review.explorer.toggle_grouping" },
 		{ "pulls.toggle_repo_issue_state", "pulls.review.diff.toggle_layout", "pulls.pipeline_retry" },
-		{ "pulls.checkout", "pulls.review.diff.toggle_compact" },
 		{ "pulls.open_diff", "pulls.review.focus_item" },
 		-- pipeline_cancel (pipelines tab) and review.diff.toggle_resolved
 		-- (review/conversation tabs, or the standalone diff viewer) are

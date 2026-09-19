@@ -488,7 +488,6 @@ keymaps = {
   },
   pulls = {
     open_diff = "gd",
-    checkout = "gc",
     external_help = "gA", -- Atlas help in external diff viewers
     toggle_repo_panel = "o",
     toggle_repo_issue_state = "t",

@@ -337,6 +337,7 @@ function M.apply_filter_text(text)
 	local view = require("atlas.ui.filter_query").parse(text, { domain = "issues" })
 	view.name = "Custom"
 	view.state = view.state or "opened"
+	view.project = view.project or (state.active_view and state.active_view.project)
 	M.switch_view(view)
 end
 
@@ -347,6 +348,11 @@ function M.set_status_filter(status)
 	end
 	state.status_filters.OPEN = status == "OPEN"
 	state.status_filters.CLOSED = status == "CLOSED"
+
+	local buf = dashboard_host.buf()
+	if buf ~= nil then
+		require("atlas.issues.ui.dashboard.keymaps").register(buf, state.views)
+	end
 
 	local view = vim.tbl_extend("force", {}, state.active_view or {})
 	view.state = status == "OPEN" and "opened" or "closed"

@@ -73,6 +73,7 @@ function M.register(buf, views)
 			resolver.item(s.action_id, {
 				desc = string.format("Toggle %s filter", s.status:lower()),
 				hint_desc = "Toggle " .. s.status:sub(1, 1):upper() .. s.status:sub(2):lower(),
+				hint = not state.status_filters[s.status],
 				index = s.index,
 				callback = function()
 					local controller = require("atlas.pulls.ui.dashboard.controller")

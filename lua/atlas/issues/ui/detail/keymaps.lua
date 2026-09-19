@@ -139,7 +139,7 @@ function M.register(buf, opts)
 			items,
 			resolver.item("issues.change_assignee", {
 				desc = "Change assignee",
-				hint_desc = "Change Assignee",
+				hint_desc = "Assignee",
 				callback = function()
 					local issue = state.current_issue
 					if issue == nil then
@@ -159,7 +159,7 @@ function M.register(buf, opts)
 			items,
 			resolver.item("issues.change_label", {
 				desc = "Change labels",
-				hint_desc = "Change Label",
+				hint_desc = "Label",
 				callback = function()
 					local issue = state.current_issue
 					if issue == nil then
@@ -289,6 +289,24 @@ function M.register(buf, opts)
 		)
 	end
 
+	utils.insert_if(
+		items,
+		resolver.item("issues.go_to_milestone", {
+			desc = "Go to linked milestone",
+			hint_desc = "Milestone",
+			callback = function()
+				local details = state.current_details
+				local milestone = details and details.milestone
+				local url = milestone and milestone.web_url
+				if not url or url == "" then
+					notify.warn("No linked milestone")
+					return
+				end
+				vim.ui.open(url)
+			end,
+		})
+	)
+
 	M.remove(buf)
 	local general = items
 
@@ -330,17 +348,6 @@ function M.register(buf, opts)
 
 	utils.insert_if(
 		general,
-		resolver.item("ui.toggle_panel", {
-			desc = "Toggle detail panel",
-			hint = false,
-			callback = function()
-				require("atlas.issues.ui.detail").close()
-			end,
-		})
-	)
-
-	utils.insert_if(
-		general,
 		resolver.item("ui.close", {
 			desc = "Close detail panel",
 			hint = false,
@@ -366,10 +373,10 @@ function M.remove(buf)
 	utils.insert_if(general, resolver.remove_item("issues.change_label"))
 	utils.insert_if(general, resolver.remove_item("issues.create_branch"))
 	utils.insert_if(general, resolver.remove_item("issues.go_to_pull"))
+	utils.insert_if(general, resolver.remove_item("issues.go_to_milestone"))
 	utils.insert_if(general, resolver.remove_item("ui.next_panel_tab"))
 	utils.insert_if(general, resolver.remove_item("ui.previous_panel_tab"))
 	utils.insert_if(general, resolver.remove_item("ui.help"))
-	utils.insert_if(general, resolver.remove_item("ui.toggle_panel"))
 	utils.insert_if(general, resolver.remove_item("ui.close"))
 	help.remove("General", general, { buffer = buf })
 end

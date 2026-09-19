@@ -334,6 +334,7 @@ end
 function M.apply_filter_text(text)
 	local view = require("atlas.ui.filter_query").parse(text, { domain = "pulls" })
 	view.name = "Custom"
+	view.project = view.project or (state.active_view and state.active_view.project)
 	M.switch_view(view)
 end
 
@@ -352,6 +353,12 @@ function M.toggle_status_filter(status)
 	end
 
 	state.status_filters[status] = not state.status_filters[status]
+
+	local buf = dashboard_host.buf()
+	if buf ~= nil then
+		require("atlas.pulls.ui.dashboard.keymaps").register(buf, state.views)
+	end
+
 	M.refresh_current_view()
 end
 

@@ -176,18 +176,12 @@ function M.render_fields(pr, width, extra_fields, trailing_fields, diffstat)
 	local repo_name = pr.repo_full_name
 	local src = pr.source.branch
 	local dst = pr.destination.branch
-	local updated_text = utils.relative_time_text(pr.updated_on)
 
 	local fields = {
 		{
 			label = "Repo",
 			value = string.format("%s %s", icons.pulls("repo"), repo_name),
 			hl = highlights.dynamic_for(repo_name) or "AtlasTextMuted",
-		},
-		{
-			label = "Updated",
-			value = updated_text,
-			hl = "AtlasTextMuted",
 		},
 	}
 

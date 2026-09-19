@@ -76,6 +76,7 @@ function M.register(buf, views)
 			resolver.item(s.action_id, {
 				desc = string.format("Show %s issues", s.status:lower()),
 				hint_desc = "Toggle " .. s.status:sub(1, 1):upper() .. s.status:sub(2):lower(),
+				hint = not state.status_filters[s.status],
 				index = s.index,
 				opts = { nowait = true, silent = true },
 				callback = function()
