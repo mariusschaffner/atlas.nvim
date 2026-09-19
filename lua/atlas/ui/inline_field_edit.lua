@@ -89,7 +89,7 @@ end
 ---@field seed_resolved string[]|nil Canonical names already known valid (the field's current value(s)), so submitting unchanged text -- or adding one value without retyping the rest -- doesn't drop entries that were never re-fetched via completion.
 ---@field completion AtlasFieldCompletionProvider|nil
 ---@field submit_keys string[]|nil Overrides the resolved `ui.submit` keys for this field (e.g. the filter box uses `<CR>`).
----@field close_keys string[]|nil Overrides the resolved `ui.close` keys for this field.
+---@field close_keys string[]|nil Overrides the resolved `ui.field_edit.close` keys for this field.
 ---@field on_save fun(text: string, done: fun(ok: boolean, err: string|nil))
 ---@field on_cancel (fun())|nil
 ---@field on_done fun()
@@ -261,7 +261,7 @@ function M.start(opts)
 	end
 
 	local submit_keys = opts.submit_keys or keymaps.resolve("ui.submit") or {}
-	local close_keys = opts.close_keys or keymaps.resolve("ui.close") or {}
+	local close_keys = opts.close_keys or keymaps.resolve("ui.field_edit.close") or {}
 
 	local buf = vim.api.nvim_create_buf(false, true)
 	vim.api.nvim_set_option_value("buftype", "nofile", { buf = buf })

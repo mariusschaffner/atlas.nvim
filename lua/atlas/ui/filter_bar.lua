@@ -8,8 +8,6 @@
 local M = {}
 
 local bordered_box = require("atlas.ui.components.bordered_box")
-local icons = require("atlas.ui.shared.icons")
-local ui_utils = require("atlas.ui.utils")
 
 local STATE_MODULES = {
 	issues = "atlas.issues.state",
@@ -24,19 +22,17 @@ local STATE_MODULES = {
 function M.render(domain, width)
 	local mod = domain and STATE_MODULES[domain]
 	local filter_text = (mod and require(mod).filter_text) or ""
-	local search_icon = icons.general("search")
-	local content = string.format("%s %s", search_icon, filter_text)
 
 	local lines, highlights = bordered_box.render({
 		width = width,
 		box_width = width,
 		title = "Filter",
-		content_lines = { content },
-		content_highlights = { { line = 0, start_col = 0, end_col = #content, hl_group = "AtlasTextMuted" } },
+		content_lines = { filter_text },
+		content_highlights = { { line = 0, start_col = 0, end_col = #filter_text, hl_group = "AtlasTextMuted" } },
 		border_hl = "AtlasFilterBarBorder",
 	})
 
-	local text_col = 1 + ui_utils.text_width(search_icon) + 1
+	local text_col = 1
 	local region = { row = 1, col = text_col, width = math.max(1, width - 2 - text_col), height = 1 }
 	return lines, highlights, region
 end

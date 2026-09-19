@@ -184,6 +184,9 @@ M.options = {
 				edit = "e",
 				react = "gr",
 			},
+			field_edit = {
+				close = "<Esc>",
+			},
 			toggle_panel = "p",
 			toggle_fold = "za",
 			toggle_all_folds = "zA",

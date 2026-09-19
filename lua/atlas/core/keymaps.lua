@@ -11,6 +11,7 @@ local M = {}
 ---@field close? AtlasKeymapValue
 ---@field delete? AtlasKeymapValue
 ---@field comments? AtlasUICommentKeymaps
+---@field field_edit? AtlasUIFieldEditKeymaps
 ---@field inspect? AtlasKeymapValue
 ---@field toggle_panel? AtlasKeymapValue
 ---@field toggle_fold? AtlasKeymapValue
@@ -33,6 +34,9 @@ local M = {}
 ---@field reply? AtlasKeymapValue
 ---@field edit? AtlasKeymapValue
 ---@field react? AtlasKeymapValue
+
+---@class AtlasUIFieldEditKeymaps
+---@field close? AtlasKeymapValue Discards an in-progress inline field edit (assignee/labels/reviewers/title/filter box/...).
 
 ---@class AtlasUINotificationKeymaps
 ---@field open? AtlasKeymapValue
@@ -140,6 +144,7 @@ local M = {}
 ---| "ui.comments.reply"
 ---| "ui.comments.edit"
 ---| "ui.comments.react"
+---| "ui.field_edit.close"
 ---| "ui.inspect"
 ---| "ui.toggle_panel"
 ---| "ui.toggle_fold"
