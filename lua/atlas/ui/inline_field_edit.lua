@@ -86,6 +86,7 @@ end
 ---@field height integer|nil Interior height, default 1.
 ---@field seed_text string
 ---@field multi_value boolean|nil Comma-separated accumulation mode.
+---@field word_segment boolean|nil Completes against the whitespace-delimited word under the cursor (e.g. the filter bar's `key:value` tokens) instead of the whole line. Ignored when `multi_value` is set.
 ---@field seed_resolved string[]|nil Canonical names already known valid (the field's current value(s)), so submitting unchanged text -- or adding one value without retyping the rest -- doesn't drop entries that were never re-fetched via completion.
 ---@field completion AtlasFieldCompletionProvider|nil
 ---@field submit_keys string[]|nil Overrides the resolved `ui.submit` keys for this field (e.g. the filter box uses `<CR>`).
@@ -139,6 +140,22 @@ local function current_multi_value_segment(text)
 	local segment = text:sub(start_col + 1)
 	local leading = segment:match("^%s*") or ""
 	return vim.trim(segment), start_col + #leading
+end
+
+---@param text string
+---@return string query, integer start_col 0-indexed byte col where a completion replacement should start.
+local function current_word_segment(text)
+	local last_space = nil
+	for i = #text, 1, -1 do
+		if text:sub(i, i):match("%s") then
+			last_space = i
+			break
+		end
+	end
+	local start_col = last_space or 0
+	local segment = text:sub(start_col + 1)
+	local leading = segment:match("^%s*") or ""
+	return segment:sub(#leading + 1), start_col + #leading
 end
 
 local function stop_debounce()
@@ -226,6 +243,8 @@ local function trigger_completion(opts)
 	local query, start_col
 	if opts.multi_value then
 		query, start_col = current_multi_value_segment(before)
+	elseif opts.word_segment then
+		query, start_col = current_word_segment(before)
 	else
 		query, start_col = vim.trim(before), 0
 	end

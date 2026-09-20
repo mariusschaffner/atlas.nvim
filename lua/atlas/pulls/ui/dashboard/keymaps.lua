@@ -67,6 +67,8 @@ function M.register(buf, views)
 					height = region.height,
 					seed_text = state.filter_text or "",
 					submit_keys = { "<CR>" },
+					word_segment = true,
+					completion = require("atlas.ui.filter_completion").for_domain("pulls"),
 					on_save = function(text, done)
 						dashboard.apply_filter_text(text)
 						done(true)

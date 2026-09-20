@@ -116,6 +116,9 @@ local M = {}
 ---@field change_assignee? AtlasKeymapValue
 ---@field change_reporter? AtlasKeymapValue
 ---@field change_label? AtlasKeymapValue
+---@field change_milestone? AtlasKeymapValue
+---@field change_milestone_start_date? AtlasKeymapValue
+---@field change_milestone_due_date? AtlasKeymapValue
 ---@field edit_issue? AtlasKeymapValue
 ---@field create_issue? AtlasKeymapValue
 ---@field toggle_description_mode? AtlasKeymapValue
@@ -215,6 +218,9 @@ local M = {}
 ---| "issues.change_assignee"
 ---| "issues.change_reporter"
 ---| "issues.change_label"
+---| "issues.change_milestone"
+---| "issues.change_milestone_start_date"
+---| "issues.change_milestone_due_date"
 ---| "issues.edit_issue"
 ---| "issues.create_issue"
 ---| "issues.toggle_description_mode"

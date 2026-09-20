@@ -46,6 +46,30 @@ function M.register(buf)
 
 	utils.insert_if(
 		items,
+		resolver.item("issues.change_milestone_start_date", {
+			desc = "Edit start date",
+			hint_desc = "Start",
+			opts = { nowait = true, silent = true },
+			callback = function()
+				require("atlas.issues.ui.detail.milestone").edit_start_date()
+			end,
+		})
+	)
+
+	utils.insert_if(
+		items,
+		resolver.item("issues.change_milestone_due_date", {
+			desc = "Edit due date",
+			hint_desc = "Due",
+			opts = { nowait = true, silent = true },
+			callback = function()
+				require("atlas.issues.ui.detail.milestone").edit_due_date()
+			end,
+		})
+	)
+
+	utils.insert_if(
+		items,
 		resolver.item("ui.help", {
 			desc = "Toggle help",
 			hint = false,
@@ -80,6 +104,8 @@ function M.remove(buf)
 	utils.insert_if(items, resolver.remove_item("ui.next_panel_tab"))
 	utils.insert_if(items, resolver.remove_item("ui.previous_panel_tab"))
 	utils.insert_if(items, resolver.remove_item("ui.comments.edit"))
+	utils.insert_if(items, resolver.remove_item("issues.change_milestone_start_date"))
+	utils.insert_if(items, resolver.remove_item("issues.change_milestone_due_date"))
 	utils.insert_if(items, resolver.remove_item("ui.help"))
 	utils.insert_if(items, resolver.remove_item("ui.close"))
 	help.remove("General", items, { buffer = buf })

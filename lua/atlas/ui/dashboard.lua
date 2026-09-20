@@ -91,6 +91,7 @@ local function capture_options()
 		"winbar",
 		"statusline",
 		"winhighlight",
+		"colorcolumn",
 	}) do
 		state.options[name] = vim.api.nvim_get_option_value(name, { win = win, scope = "local" })
 	end
@@ -128,6 +129,7 @@ local function configure_window()
 		cursorbind = false,
 		diff = false,
 		winbar = "",
+		colorcolumn = "",
 		winhighlight = "Normal:Normal,NormalFloat:Normal,FloatBorder:FloatBorder,CursorLine:CursorLine",
 	}) do
 		set_option(win, name, value)

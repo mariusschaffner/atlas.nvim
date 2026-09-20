@@ -153,6 +153,8 @@ local M = {
 			fetch_milestone_issues = milestones_api.list_issues,
 			fetch_milestone_merge_requests = milestones_api.list_merge_requests,
 			update_milestone_description = milestones_api.update_description,
+			update_milestone_start_date = milestones_api.update_start_date,
+			update_milestone_due_date = milestones_api.update_due_date,
 		},
 		comments = {
 			reaction_options = GITLAB_REACTION_OPTIONS,

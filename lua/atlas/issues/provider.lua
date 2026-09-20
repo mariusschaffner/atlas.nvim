@@ -62,6 +62,8 @@
 ---@field fetch_milestone_issues (fun(project_path: string, milestone_id: integer, on_done: fun(issues: Issue[]|nil, err: string|nil)): { cancel: fun() }|nil)|nil
 ---@field fetch_milestone_merge_requests (fun(project_path: string, milestone_id: integer, on_done: fun(items: MilestoneWorkItem[]|nil, err: string|nil)): { cancel: fun() }|nil)|nil
 ---@field update_milestone_description (fun(project_path: string, milestone_id: integer, description: string, on_done: fun(ok: boolean, err: string|nil)): { cancel: fun() }|nil)|nil
+---@field update_milestone_start_date (fun(project_path: string, milestone_id: integer, value: string, on_done: fun(ok: boolean, err: string|nil)): { cancel: fun() }|nil)|nil
+---@field update_milestone_due_date (fun(project_path: string, milestone_id: integer, value: string, on_done: fun(ok: boolean, err: string|nil)): { cancel: fun() }|nil)|nil
 ---@field refresh fun()|nil
 
 ---@class IssuesCommentsCapability

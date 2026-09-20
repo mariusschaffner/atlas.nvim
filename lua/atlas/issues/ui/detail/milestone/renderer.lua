@@ -115,31 +115,51 @@ end
 
 ---@param milestone IssueMilestone
 ---@param width integer
----@return string[], table[]
+---@return string[], table[], table<string, AtlasFieldBoxRegion>
 local function render_header(milestone, width)
 	local title_field = {
-		label = string.format("Title - %s", tostring(milestone.id)),
+		label = string.format("Title - #%s", tostring(milestone.id)),
 		value = tostring(milestone.title or ""),
 		border_hl = milestone.state == "closed" and "AtlasGLIssueClosed" or "AtlasGLIssueOpen",
 	}
 	local lines, spans = field_box.render_columns({}, { width = width, top_field = title_field })
 
+	local core = state.provider and state.provider.capabilities.core
+	local can_edit_start = core and core.update_milestone_start_date ~= nil
+	local can_edit_due = core and core.update_milestone_due_date ~= nil
+
 	-- One row, three columns: Start date, Due date, Progress side by side.
-	local start_date_col = {}
-	if milestone.start_date and milestone.start_date ~= "" then
-		table.insert(start_date_col, { label = "Start date", value = milestone.start_date, hl = "AtlasTextMuted" })
-	end
-	local due_date_col = {}
-	if milestone.due_date and milestone.due_date ~= "" then
-		table.insert(due_date_col, { label = "Due date", value = milestone.due_date, hl = "AtlasTextMuted" })
-	end
+	local start_date_col = {
+		{
+			id = "start_date",
+			label = "Start date",
+			value = (milestone.start_date and milestone.start_date ~= "") and milestone.start_date or "None",
+			hl = "AtlasTextMuted",
+			editable = can_edit_start,
+		},
+	}
+	local due_date_col = {
+		{
+			id = "due_date",
+			label = "Due date",
+			value = (milestone.due_date and milestone.due_date ~= "") and milestone.due_date or "None",
+			hl = "AtlasTextMuted",
+			editable = can_edit_due,
+		},
+	}
 	local progress_col = {}
 	utils.insert_if(progress_col, progress_field())
 
-	local field_lines, field_spans =
+	local field_lines, field_spans, field_regions =
 		field_box.render_columns({ start_date_col, due_date_col, progress_col }, { width = width })
+	local base = #lines
 	utils.append_block(lines, spans, { lines = field_lines, highlights = field_spans })
 	table.insert(lines, "")
+
+	local regions = {}
+	for id, region in pairs(field_regions or {}) do
+		regions[id] = { row = base + region.row, col = region.col, width = region.width, height = region.height }
+	end
 
 	local tab_lines, tab_spans = tabs.render(TABS, state.current_tab, width, {
 		active_hl = "AtlasFilterActive",
@@ -149,7 +169,7 @@ local function render_header(milestone, width)
 	})
 	utils.append_block(lines, spans, { lines = tab_lines, highlights = tab_spans })
 
-	return lines, spans
+	return lines, spans, regions
 end
 
 ---@return string[], table[]
@@ -214,13 +234,14 @@ function M.render()
 	local has_header = utils.window.valid(header_win) and utils.buffer.valid(header_buf)
 
 	if has_header then
-		local header_lines, header_spans = {}, {}
+		local header_lines, header_spans, header_regions = {}, {}, {}
 		if milestone ~= nil then
-			header_lines, header_spans = render_header(milestone, vim.api.nvim_win_get_width(header_win))
+			header_lines, header_spans, header_regions = render_header(milestone, vim.api.nvim_win_get_width(header_win))
 		end
 		set_lines(header_buf, header_lines)
 		utils.apply_spans(header_buf, header_ns, header_spans)
 		detail_ui.resize_header(#header_lines)
+		state.header_regions = header_regions or {}
 	end
 
 	local lines, spans

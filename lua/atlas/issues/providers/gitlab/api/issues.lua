@@ -394,6 +394,14 @@ function M.set_assignee_ids(key, ids, on_done)
 	return update_issue(key, payload, "Set assignees", { ids = ids }, on_done)
 end
 
+---@param key string
+---@param milestone_id integer|nil nil/0 clears the milestone.
+---@param on_done fun(ok: boolean, err: string|nil)
+---@return { cancel: fun() }|nil
+function M.set_milestone_id(key, milestone_id, on_done)
+	return update_issue(key, { milestone_id = milestone_id or 0 }, "Set milestone", { milestone_id = milestone_id }, on_done)
+end
+
 ---@param opts { project_path: string, title: string, description: string|nil, assignee_ids: integer[]|nil, labels: string[]|nil, milestone_id: integer|nil, due_date: string|nil, confidential: boolean|nil }
 ---@param on_done fun(result: { key: string|nil, iid: integer|nil, url: string|nil }|nil, err: string|nil)
 ---@return { cancel: fun() }|nil

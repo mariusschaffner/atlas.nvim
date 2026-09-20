@@ -9,10 +9,12 @@ local request_scope = require("atlas.core.requests")
 local issues_api = require("atlas.issues.providers.gitlab.api.issues")
 local users_api = require("atlas.issues.providers.gitlab.api.users")
 local labels_api = require("atlas.issues.providers.gitlab.api.labels")
+local milestones_api = require("atlas.issues.providers.gitlab.api.milestones")
 local service = require("atlas.providers.gitlab.client")
 local inline_field_edit = require("atlas.ui.inline_field_edit")
 local users_completion = require("atlas.providers.gitlab.completion.users")
 local labels_completion = require("atlas.providers.gitlab.completion.labels")
+local milestones_completion = require("atlas.providers.gitlab.completion.milestones")
 local detail_state = require("atlas.issues.ui.detail.state")
 
 ---@param ctx AtlasIssueActionContext
@@ -319,6 +321,92 @@ local function labels(ctx, done)
 	end)
 end
 
+---@param ctx AtlasIssueActionContext
+---@param done fun(result: IssuesActionResult|nil, err: string|nil)
+local function milestone(ctx, done)
+	local issue = assert(ctx.issue)
+	---@cast issue GitLabIssue
+	local key = tostring(issue.key or "")
+	local path = issue.project_path
+	if path == "" then
+		local err = "Could not determine project path"
+		notify.error(err)
+		done(nil, err)
+		return
+	end
+
+	local header_win = detail_state.header_win
+	local region = detail_state.header_regions and detail_state.header_regions.milestone
+	if header_win == nil or not vim.api.nvim_win_is_valid(header_win) or region == nil then
+		local message = "Milestone field is not visible"
+		notify.warn(message)
+		done(nil, message)
+		return
+	end
+
+	local current = detail_state.current_details and detail_state.current_details.milestone
+	local current_title = current and tostring(current.title or "") or ""
+	local current_id = current and tonumber(current.id) or nil
+
+	local by_title = {}
+	if current_title ~= "" and current_id then
+		by_title[current_title:lower()] = current_id
+	end
+
+	local completion = milestones_completion.for_project(milestones_api.list, path, function(milestones)
+		for _, item in ipairs(milestones) do
+			local title = tostring(item.title or "")
+			local id = tonumber(item.id)
+			if title ~= "" and id then
+				by_title[title:lower()] = id
+			end
+		end
+	end)
+
+	inline_field_edit.start({
+		anchor_win = header_win,
+		row = region.row,
+		col = region.col,
+		width = region.width,
+		height = region.height,
+		seed_text = current_title,
+		seed_resolved = current_title ~= "" and { current_title } or {},
+		completion = completion,
+		on_save = function(text, save_done)
+			local trimmed = vim.trim(text)
+			if trimmed == current_title then
+				save_done(true)
+				done(nil, nil)
+				return
+			end
+
+			local milestone_id = nil
+			if trimmed ~= "" then
+				milestone_id = by_title[trimmed:lower()]
+				if milestone_id == nil then
+					save_done(false, "Unknown milestone: " .. trimmed)
+					return
+				end
+			end
+
+			notify.loading(string.format("Updating milestone on %s...", key))
+			issues_api.set_milestone_id(key, milestone_id, function(ok, set_err)
+				if not ok then
+					save_done(false, set_err or "Failed")
+					return
+				end
+				notify.success(milestone_id and "Milestone updated" or "Milestone cleared", { timeout = 1200 })
+				save_done(true)
+				done({ issue_key = key }, nil)
+			end)
+		end,
+		on_cancel = function()
+			done(nil, nil)
+		end,
+		on_done = function() end,
+	})
+end
+
 ---@param _ AtlasIssueActionContext
 ---@param done fun(result: IssuesActionResult|nil, err: string|nil)
 local function search(_, done)
@@ -494,8 +582,9 @@ register({
 		set_issue_state(ctx, "reopen", done)
 	end,
 })
-register({ id = "assign", label = "Edit Assignees", is_available = has_issue, run = assign })
-register({ id = "labels", label = "Edit Labels", is_available = has_issue, run = labels })
+register({ id = "assign", label = "Edit Assignees", hidden = true, is_available = has_issue, run = assign })
+register({ id = "labels", label = "Edit Labels", hidden = true, is_available = has_issue, run = labels })
+register({ id = "milestone", label = "Edit Milestone", hidden = true, is_available = has_issue, run = milestone })
 register({ id = "search", label = "Search Issues", hidden = true, run = search })
 register({ id = "create_issue", label = "Create Issue", hidden = true, run = create_issue })
 register(actions.manage_templates)

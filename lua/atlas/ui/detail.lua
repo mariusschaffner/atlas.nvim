@@ -35,6 +35,7 @@ local function configure(win)
 		cursorbind = false,
 		diff = false,
 		winbar = "",
+		colorcolumn = "",
 		winhighlight = "Normal:Normal,NormalFloat:Normal,FloatBorder:FloatBorder,CursorLine:CursorLine",
 	}) do
 		vim.api.nvim_set_option_value(name, value, { win = win, scope = "local" })
@@ -65,6 +66,7 @@ local function configure_header(win)
 		cursorbind = false,
 		diff = false,
 		winbar = "",
+		colorcolumn = "",
 		winhighlight = "Normal:Normal,NormalFloat:Normal,FloatBorder:FloatBorder,CursorLine:CursorLine,StatusLine:Normal,StatusLineNC:Normal",
 		statusline = " ",
 	}) do

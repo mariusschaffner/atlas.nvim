@@ -218,6 +218,96 @@ function M.edit_description()
 	})
 end
 
+---@param field "start_date"|"due_date"
+---@param label string
+local function edit_date_field(field, label)
+	local milestone = state.current_milestone
+	local buf = state.buf
+	if milestone == nil or milestone.id == nil or buf == nil or not vim.api.nvim_buf_is_valid(buf) then
+		return
+	end
+	local core = state.provider and state.provider.capabilities.core
+	local update = core
+		and (field == "start_date" and core.update_milestone_start_date or core.update_milestone_due_date)
+	if not update then
+		notify.warn("Provider does not support editing milestone dates")
+		return
+	end
+
+	local header_win = state.header_win
+	local region = state.header_regions and state.header_regions[field]
+	if header_win == nil or not vim.api.nvim_win_is_valid(header_win) or region == nil then
+		notify.warn(label .. " field is not visible")
+		return
+	end
+
+	local inline_field_edit = require("atlas.ui.inline_field_edit")
+	if inline_field_edit.is_active() then
+		return
+	end
+
+	local current = tostring(milestone[field] or "")
+	local milestone_id = milestone.id
+	local project_path = state.project_path
+	local keymaps = require("atlas.issues.ui.detail.milestone.keymaps")
+
+	keymaps.remove(buf)
+	inline_field_edit.start({
+		anchor_win = header_win,
+		row = region.row,
+		col = region.col,
+		width = region.width,
+		height = region.height,
+		seed_text = current,
+		seed_resolved = current ~= "" and { current } or {},
+		on_save = function(text, done)
+			local updated = vim.trim(text)
+			if updated == current then
+				done(true)
+				return
+			end
+			notify.loading("Updating " .. label:lower() .. "...")
+			update(project_path, milestone_id, updated, function(ok, err)
+				if not same_milestone(milestone_id) then
+					done(true)
+					return
+				end
+				if not ok then
+					notify.error(label .. " update failed: " .. tostring(err or "Unknown error"))
+					done(false, err)
+					return
+				end
+				if state.current_milestone then
+					state.current_milestone[field] = updated ~= "" and updated or nil
+				end
+				notify.success(label .. " updated", { timeout = 1200 })
+				done(true)
+			end)
+		end,
+		on_cancel = function()
+			notify.info(label .. " unchanged", { timeout = 1200 })
+		end,
+		on_done = function()
+			if buf and vim.api.nvim_buf_is_valid(buf) then
+				keymaps.register(buf)
+			end
+			render_if_open()
+		end,
+	})
+end
+
+--- Edit the milestone start date inline. No-op when the provider doesn't
+--- support it, or while already editing.
+function M.edit_start_date()
+	edit_date_field("start_date", "Start date")
+end
+
+--- Edit the milestone due date inline. No-op when the provider doesn't
+--- support it, or while already editing.
+function M.edit_due_date()
+	edit_date_field("due_date", "Due date")
+end
+
 ---@param step 1|-1
 local function change_tab(step)
 	local items = renderer.tabs

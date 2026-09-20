@@ -162,4 +162,44 @@ function M.update_description(project_path, milestone_id, description, on_done)
 	})
 end
 
+---@param project_path string
+---@param milestone_id integer
+---@param field "start_date"|"due_date"
+---@param label string
+---@param value string
+---@param on_done fun(ok: boolean, err: string|nil)
+---@return { cancel: fun() }|nil
+local function update_date(project_path, milestone_id, field, label, value, on_done)
+	if project_path == "" then
+		on_done(false, "Missing project path")
+		return nil
+	end
+	local endpoint = string.format("/projects/%s/milestones/%d", service.url_encode(project_path), milestone_id)
+	return service.request("PUT", endpoint, { [field] = value }, function(_, err)
+		on_done(err == nil, err)
+	end, {
+		action = "Update milestone " .. label,
+		project = project_path,
+		milestone_id = milestone_id,
+	})
+end
+
+---@param project_path string
+---@param milestone_id integer
+---@param value string Empty string clears the start date.
+---@param on_done fun(ok: boolean, err: string|nil)
+---@return { cancel: fun() }|nil
+function M.update_start_date(project_path, milestone_id, value, on_done)
+	return update_date(project_path, milestone_id, "start_date", "start date", value, on_done)
+end
+
+---@param project_path string
+---@param milestone_id integer
+---@param value string Empty string clears the due date.
+---@param on_done fun(ok: boolean, err: string|nil)
+---@return { cancel: fun() }|nil
+function M.update_due_date(project_path, milestone_id, value, on_done)
+	return update_date(project_path, milestone_id, "due_date", "due date", value, on_done)
+end
+
 return M

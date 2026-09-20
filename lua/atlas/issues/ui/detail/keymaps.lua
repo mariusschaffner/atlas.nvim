@@ -174,6 +174,26 @@ function M.register(buf, opts)
 		)
 	end
 
+	if supports("milestone") then
+		utils.insert_if(
+			items,
+			resolver.item("issues.change_milestone", {
+				desc = "Change milestone",
+				hint_desc = "Milestone",
+				callback = function()
+					local issue = state.current_issue
+					if issue == nil then
+						return
+					end
+					local on_update = state.on_update
+					actions.run("milestone", context(issue), function(result)
+						complete_action(issue, on_update, result)
+					end)
+				end,
+			})
+		)
+	end
+
 	local core = provider.capabilities.core
 
 	if core.create_branch and core.fetch_project_branches then
@@ -298,6 +318,17 @@ function M.register(buf, opts)
 				local details = state.current_details
 				local milestone = details and details.milestone
 				if not milestone or milestone.id == nil then
+					if supports("milestone") then
+						local issue = state.current_issue
+						if issue == nil then
+							return
+						end
+						local on_update = state.on_update
+						actions.run("milestone", context(issue), function(result)
+							complete_action(issue, on_update, result)
+						end)
+						return
+					end
 					notify.warn("No linked milestone")
 					return
 				end
@@ -380,6 +411,7 @@ function M.remove(buf)
 	utils.insert_if(general, resolver.remove_item("ui.open_actions"))
 	utils.insert_if(general, resolver.remove_item("issues.change_assignee"))
 	utils.insert_if(general, resolver.remove_item("issues.change_label"))
+	utils.insert_if(general, resolver.remove_item("issues.change_milestone"))
 	utils.insert_if(general, resolver.remove_item("issues.create_branch"))
 	utils.insert_if(general, resolver.remove_item("issues.go_to_pull"))
 	utils.insert_if(general, resolver.remove_item("issues.go_to_milestone"))

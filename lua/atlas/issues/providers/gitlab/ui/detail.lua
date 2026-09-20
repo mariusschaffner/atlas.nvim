@@ -34,7 +34,7 @@ function M.title_status(issue)
 	return {
 		text = tostring(issue.status or "Open"),
 		hl = state_fg_hl(issue.status_id),
-		label = string.format("Title - %s", tostring(issue.iid)),
+		label = string.format("Title - #%s", tostring(issue.iid)),
 	}
 end
 
@@ -116,7 +116,13 @@ function M.header_fields(issue, details, loading)
 			editable = supports("assign"),
 		},
 		labels = labels_field(details, loading),
-		milestone = milestone_text ~= "" and { label = "Milestone", value = milestone_text, hl = "AtlasTextMuted" } or nil,
+		milestone = {
+			id = "milestone",
+			label = "Milestone",
+			value = milestone_text ~= "" and milestone_text or "None",
+			hl = "AtlasTextMuted",
+			editable = supports("milestone"),
+		},
 	}
 end
 

@@ -8,6 +8,8 @@ local utils = require("atlas.issues.actions.utils")
 ---| "close_issue"
 ---| "reopen_issue"
 ---| "assign"
+---| "labels"
+---| "milestone"
 ---| "create_issue"
 ---| "search"
 ---| "browse_issue"
