@@ -4,11 +4,11 @@ local utils = require("atlas.ui.shared.utils")
 local state = require("atlas.pulls.ui.detail.state")
 local header = require("atlas.pulls.ui.components.header")
 local field_box = require("atlas.ui.components.field_box")
+local chips = require("atlas.pulls.ui.components.chips")
 local detail_tabs = require("atlas.pulls.ui.components.tabs")
 local icons = require("atlas.ui.shared.icons")
 local spinner = require("atlas.ui.components.spinner")
 local presentation = require("atlas.pulls.ui.presentation")
-local pipeline_utils = require("atlas.pulls.pipelines")
 local detail_ui = require("atlas.ui.detail")
 local inline_edit = require("atlas.ui.inline_edit")
 
@@ -57,6 +57,14 @@ local MERGE_CHECK_STATE = {
 	muted = { icon = icons.pulls_status("inprogress"), hl = "AtlasTextMuted" },
 }
 
+local MERGE_CHECK_PRIORITY = {
+	failed = 1,
+	warning = 2,
+	inprogress = 3,
+	successful = 4,
+	muted = 5,
+}
+
 ---@return PullsDetailHeaderField|nil
 local function reviewers_field()
 	if state.reviewers == nil then
@@ -102,205 +110,46 @@ local function reviewers_field()
 	return { id = "reviewers", label = "Reviewers", value = table.concat(parts, ", "), hl = spans, editable = editable }
 end
 
---- The delete-source-branch toggle as its own boxed field (a checkbox-style
---- value line), alongside Source/Target rather than folded into a
---- checks-listing box.
+--- Merge checks + the delete-source-branch toggle, grouped into one
+--- "Merge Readiness" box with one row per item, rather than separate
+--- one-line text fields.
 ---@param delete_source_branch_field PullsDetailHeaderField|nil
 ---@return PullsDetailHeaderField|nil
-local function after_merge_field(delete_source_branch_field)
-	if delete_source_branch_field == nil then
-		return nil
-	end
-	local checked = delete_source_branch_field.enabled == true
-	local mark = checked and "[x]" or "[ ]"
-	return {
-		label = "After merge",
-		value = string.format("%s %s", mark, delete_source_branch_field.label),
-		hl = checked and "AtlasTextPositive" or "AtlasTextMuted",
-	}
-end
+local function merge_readiness_field(delete_source_branch_field)
+	local rows = {}
 
----@param key string
----@return PullsMergeCheck|nil
-local function find_check(key)
-	if type(state.merge_checks) ~= "table" then
-		return nil
-	end
-	for _, check in ipairs(state.merge_checks) do
-		if check.key == key then
-			return check
-		end
-	end
-	return nil
-end
-
----@return string|nil value
----@return table[]|nil spans Relative to `value`.
-local function diffstat_segment()
-	if type(state.diffstat) ~= "table" then
-		return nil, nil
-	end
-	local additions, deletions = 0, 0
-	for _, entry in ipairs(state.diffstat) do
-		additions = additions + (tonumber(entry.lines_added) or 0)
-		deletions = deletions + (tonumber(entry.lines_removed) or 0)
-	end
-	if additions + deletions == 0 then
-		return nil, nil
-	end
-	local plus = string.format("+%d", additions)
-	local minus = string.format("-%d", deletions)
-	return plus .. " " .. minus,
-		{
-			{ start_col = 0, end_col = #plus, hl_group = "AtlasTextPositive" },
-			{ start_col = #plus + 1, end_col = #plus + 1 + #minus, hl_group = "AtlasLogError" },
-		}
-end
-
----@return string|nil value
----@return string|table[]|nil hl
-local function closing_issues_segment()
-	local value = state.closing_issues
-	if value == nil then
-		return nil, nil
-	end
-	if value == "loading" then
-		return spinner.with_text("Loading..."), "AtlasTextMuted"
-	end
-	if type(value) == "string" then
-		return value, "AtlasLogError"
-	end
-	if #value == 0 then
-		return "none", "AtlasTextMuted"
-	end
-
-	local parts, hl_spans, cursor = {}, {}, 0
-	for i, issue in ipairs(value) do
-		local token = "#" .. tostring(issue.iid)
-		table.insert(parts, token)
-		table.insert(hl_spans, { start_col = cursor, end_col = cursor + #token, hl_group = "AtlasTextPositive" })
-		cursor = cursor + #token + (i < #value and 2 or 0)
-	end
-	return table.concat(parts, ", "), hl_spans
-end
-
---- "Author jane · Milestone v2 · +12 -3 · Closes #4, #5" -- unboxed, sized to
---- its own content.
----@param pr PullRequest
----@param details PullRequestDetails|nil
----@return string|nil line
----@return table[] spans
-local function render_info_line_1(pr, details)
-	local author_name = presentation.user_handle(pr.author)
-
-	local milestone_value
-	if details and details.milestone then
-		milestone_value = details.milestone.title
-	elseif details ~= nil then
-		milestone_value = "none"
-	elseif state.details_loading then
-		milestone_value = spinner.with_text("Loading...")
-	end
-
-	local diffstat_value, diffstat_hl = diffstat_segment()
-	local closing_value, closing_hl = closing_issues_segment()
-
-	return utils.render_info_line({
-		{ label = "Author", value = author_name, hl = presentation.author_hl(author_name) },
-		{ label = "Milestone", value = milestone_value, hl = "AtlasTextMuted" },
-		{ label = "", value = diffstat_value, hl = diffstat_hl },
-		{ label = "Closes", value = closing_value, hl = closing_hl },
-	})
-end
-
---- "✓ Pipeline · ✓ Approved 1/1 · ✓ 0 open threads · ✓ No conflicts · Ready
---- to merge" -- each segment is its own icon-prefixed status (only the icon
---- is colored, matching the icon-only coloring convention already used for
---- Reviewers' decision icons), not a "label value" pair.
----@param pr PullRequest
----@return string|nil line
----@return table[] spans
-local function render_info_line_2(pr)
-	---@param icon string
-	---@param hl string
-	---@return string|table[]
-	local function icon_span(icon, hl)
-		return { { start_col = 0, end_col = #icon, hl_group = hl } }
-	end
-
-	local segments = {}
-
-	if type(state.pipelines) == "table" and #state.pipelines > 0 then
-		local status = pipeline_utils.aggregate_state(state.pipelines):lower()
-		local pair = MERGE_CHECK_STATE[status] or MERGE_CHECK_STATE.muted
-		table.insert(segments, {
-			label = "",
-			value = string.format("%s Pipeline", pair.icon),
-			hl = icon_span(pair.icon, pair.hl),
-		})
-	elseif state.pipelines == "loading" then
-		table.insert(segments, { label = "", value = spinner.with_text("Pipeline"), hl = "AtlasTextMuted" })
-	end
-
-	if type(state.reviewers) == "table" then
-		local total, approved = 0, 0
-		for _, reviewer in ipairs(state.reviewers) do
-			if reviewer.role == "reviewer" then
-				total = total + 1
-				if reviewer.decision == "approved" then
-					approved = approved + 1
-				end
-			end
-		end
-		if total > 0 then
-			local pair = approved >= total and MERGE_CHECK_STATE.successful or MERGE_CHECK_STATE.muted
-			table.insert(segments, {
-				label = "",
-				value = string.format("%s Approved %d/%d", pair.icon, approved, total),
-				hl = icon_span(pair.icon, pair.hl),
+	if state.merge_checks == "loading" then
+		table.insert(rows, { text = spinner.with_text("Loading..."), hl = "AtlasTextMuted" })
+	elseif type(state.merge_checks) == "string" then
+		table.insert(rows, { text = state.merge_checks, hl = "AtlasLogError" })
+	elseif type(state.merge_checks) == "table" and #state.merge_checks > 0 then
+		local checks = vim.list_slice(state.merge_checks --[[@as PullsMergeCheck[] ]])
+		table.sort(checks, function(a, b)
+			return (MERGE_CHECK_PRIORITY[a.state] or math.huge) < (MERGE_CHECK_PRIORITY[b.state] or math.huge)
+		end)
+		for _, check in ipairs(checks) do
+			local pair = MERGE_CHECK_STATE[check.state] or MERGE_CHECK_STATE.muted
+			table.insert(rows, {
+				text = string.format("%s %s", pair.icon, check.label),
+				hl = { { start_col = 0, end_col = #pair.icon, hl_group = pair.hl } },
 			})
 		end
 	end
 
-	local details = state.current_details
-	if details and details.open_threads ~= nil then
-		local n = details.open_threads
-		local pair = n == 0 and MERGE_CHECK_STATE.successful or MERGE_CHECK_STATE.warning
-		table.insert(segments, {
-			label = "",
-			value = string.format("%s %d open thread%s", pair.icon, n, n == 1 and "" or "s"),
-			hl = icon_span(pair.icon, pair.hl),
+	if delete_source_branch_field then
+		local checked = delete_source_branch_field.enabled == true
+		local mark = checked and "◉" or "○"
+		table.insert(rows, {
+			text = string.format("%s %s", mark, delete_source_branch_field.label),
+			hl = checked and "AtlasTextPositive" or "AtlasTextMuted",
 		})
 	end
 
-	local conflict_check = find_check("conflicts")
-	if conflict_check then
-		local pair = MERGE_CHECK_STATE[conflict_check.state] or MERGE_CHECK_STATE.muted
-		local text = conflict_check.state == "successful" and "No conflicts" or conflict_check.label
-		table.insert(segments, {
-			label = "",
-			value = string.format("%s %s", pair.icon, text),
-			hl = icon_span(pair.icon, pair.hl),
-		})
+	if #rows == 0 then
+		return nil
 	end
 
-	if type(state.merge_checks) == "table" then
-		local blocking = 0
-		for _, check in ipairs(state.merge_checks) do
-			if check.state == "failed" or check.state == "warning" then
-				blocking = blocking + 1
-			end
-		end
-		local ready = blocking == 0 and pr.state == "open"
-		local pair = ready and MERGE_CHECK_STATE.successful or MERGE_CHECK_STATE.failed
-		table.insert(segments, {
-			label = "",
-			value = string.format("%s %s", pair.icon, ready and "Ready to merge" or "Not ready to merge"),
-			hl = icon_span(pair.icon, pair.hl),
-		})
-	end
-
-	return utils.render_info_line(segments)
+	return { label = "Merge Readiness", rows = rows }
 end
 
 ---@param pr PullRequest
@@ -319,50 +168,43 @@ local function render_header(pr, tab_items, width)
 			and provider_detail.header_fields(pr, details, state.details_loading)
 		or {}
 
-	-- Row 1 (title spans above it): Assignees, Reviewers, Labels -- one box
-	-- each, side by side, spanning the full width.
-	local assignee_col, reviewers_col, labels_col = {}, {}, {}
-	utils.insert_if(assignee_col, provider_fields.assignee)
-	utils.insert_if(reviewers_col, reviewers_field())
-	utils.insert_if(labels_col, provider_fields.labels)
+	-- Fields, four columns: Assignee/Reviewers on the left, Labels next,
+	-- Source/Target branch after that, and a "Merge Readiness" box (checks
+	-- + the delete-source-branch toggle as rows) on the far right. Title
+	-- spans all columns as the first row, its border color conveying PR
+	-- status.
+	local left_fields = {}
+	utils.insert_if(left_fields, provider_fields.assignee)
+	utils.insert_if(left_fields, reviewers_field())
 
-	local row1_lines, row1_spans, row1_regions = field_box.render_columns({ assignee_col, reviewers_col, labels_col }, {
-		width = width,
-		top_field = header.title_field(pr),
-	})
-	utils.append_block(lines, spans, { lines = row1_lines, highlights = row1_spans })
+	local middle_fields = {}
+	utils.insert_if(middle_fields, provider_fields.labels)
 
-	-- Row 2: Source, Target, After merge -- one box each, side by side.
-	local source_col = { header.source_branch_field(pr.source.branch) }
-	local target_col = { header.target_branch_field(pr.destination.branch) }
-	local after_merge_col = {}
-	utils.insert_if(after_merge_col, after_merge_field(provider_fields.delete_source_branch))
+	local branch_fields = {}
+	table.insert(branch_fields, header.source_branch_field(pr.source.branch, state.diffstat))
+	table.insert(branch_fields, header.target_branch_field(pr.destination.branch))
 
-	local row2_offset = #row1_lines
-	local row2_lines, row2_spans, row2_regions =
-		field_box.render_columns({ source_col, target_col, after_merge_col }, { width = width })
-	utils.append_block(lines, spans, { lines = row2_lines, highlights = row2_spans })
+	local readiness_fields = {}
+	utils.insert_if(readiness_fields, merge_readiness_field(provider_fields.delete_source_branch))
 
-	local field_regions = {}
-	for id, region in pairs(row1_regions or {}) do
-		field_regions[id] = region
-	end
-	for id, region in pairs(row2_regions or {}) do
-		field_regions[id] =
-			{ row = region.row + row2_offset, col = region.col, width = region.width, height = region.height }
-	end
-
-	local info1_line, info1_spans = render_info_line_1(pr, details)
-	if info1_line then
-		utils.append_block(lines, spans, { lines = { info1_line }, highlights = info1_spans })
-	end
-
-	local info2_line, info2_spans = render_info_line_2(pr)
-	if info2_line then
-		utils.append_block(lines, spans, { lines = { info2_line }, highlights = info2_spans })
-	end
-
+	local field_lines, field_spans, field_regions =
+		field_box.render_columns({ left_fields, middle_fields, branch_fields, readiness_fields }, {
+			width = width,
+			top_field = header.title_field(pr),
+		})
+	utils.append_block(lines, spans, { lines = field_lines, highlights = field_spans })
 	table.insert(lines, "")
+
+	-- Chips
+	local chip_lines, chip_spans = chips.render(pr, {
+		width = width,
+		pipelines = state.pipelines,
+		loading = state.details_loading or state.pipelines == "loading",
+	})
+	if #chip_lines > 0 then
+		utils.append_block(lines, spans, { lines = chip_lines, highlights = chip_spans })
+		table.insert(lines, "")
+	end
 
 	-- Tab bar
 	if #tab_items > 1 then
@@ -371,7 +213,7 @@ local function render_header(pr, tab_items, width)
 		utils.append_block(lines, spans, { lines = tab_lines, highlights = tab_spans })
 	end
 
-	return lines, spans, field_regions
+	return lines, spans, field_regions or {}
 end
 
 ---@param tab_items PullsDetailTab[]

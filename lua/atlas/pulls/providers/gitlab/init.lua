@@ -247,7 +247,6 @@ return {
 			fetch_default_reviewers = pullrequests_api.fetch_default_reviewers,
 			fetch_merge_checks = checks_api.fetch,
 			fetch_diffstat = changes_api.fetch_diffstat,
-			fetch_closing_issues = pullrequests_api.fetch_closing_issues,
 			fetch_commits = changes_api.fetch_commits,
 			fetch_diff = changes_api.fetch_diff,
 		},

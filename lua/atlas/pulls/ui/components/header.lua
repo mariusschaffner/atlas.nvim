@@ -91,15 +91,53 @@ function M.title_field(pr)
 	}
 end
 
+---@param diffstat PullsDiffstatEntry[]|"loading"|string|nil
+---@param base_len integer Length of the label text before the suffix, so spans land at the right absolute offset.
+---@return string suffix
+---@return table[] spans Absolute {start_col, end_col, hl_group} within `base .. suffix`.
+local function diffstat_suffix(diffstat, base_len)
+	if type(diffstat) ~= "table" then
+		return "", {}
+	end
+	local additions, deletions = 0, 0
+	for _, entry in ipairs(diffstat) do
+		additions = additions + (tonumber(entry.lines_added) or 0)
+		deletions = deletions + (tonumber(entry.lines_removed) or 0)
+	end
+	if additions + deletions == 0 then
+		return "", {}
+	end
+
+	local plus = string.format("+%d", additions)
+	local minus = string.format("-%d", deletions)
+	local suffix = string.format(" (%s, %s)", plus, minus)
+
+	local plus_start = base_len + 2 -- " ("
+	local plus_end = plus_start + #plus
+	local minus_start = plus_end + 2 -- ", "
+	local minus_end = minus_start + #minus
+
+	return suffix,
+		{
+			{ start_col = plus_start, end_col = plus_end, hl_group = "AtlasTextPositive" },
+			{ start_col = minus_start, end_col = minus_end, hl_group = "AtlasLogError" },
+		}
+end
+
 ---@param src string
+---@param diffstat PullsDiffstatEntry[]|"loading"|string|nil
 ---@return PullsDetailHeaderField
-function M.source_branch_field(src)
+function M.source_branch_field(src, diffstat)
 	local branch_icon = icons.pulls("branch")
 	local value = string.format("%s %s", branch_icon, src)
 	local src_start = #branch_icon + 1
 
+	local base = "Source Branch"
+	local suffix, suffix_spans = diffstat_suffix(diffstat, #base)
+
 	return {
-		label = "Source",
+		label = base .. suffix,
+		label_hl = suffix_spans,
 		value = value,
 		hl = { { start_col = src_start, end_col = src_start + #src, hl_group = highlights.dynamic_for(src) or "AtlasTextMuted" } },
 	}
@@ -112,7 +150,7 @@ function M.target_branch_field(dst)
 	local value = string.format("%s %s", branch_icon, dst)
 	local dst_start = #branch_icon + 1
 	return {
-		label = "Target",
+		label = "Target Branch",
 		value = value,
 		hl = { { start_col = dst_start, end_col = dst_start + #dst, hl_group = highlights.dynamic_for(dst) or "AtlasTextMuted" } },
 	}

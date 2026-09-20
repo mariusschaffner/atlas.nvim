@@ -5,9 +5,9 @@ local field_box = require("atlas.ui.components.field_box")
 
 ---@param issue Issue
 ---@param width integer
----@param left_fields IssuesDetailHeaderField[]|nil Assignee.
----@param middle_fields IssuesDetailHeaderField[]|nil Labels.
----@param right_fields IssuesDetailHeaderField[]|nil Milestone.
+---@param left_fields IssuesDetailHeaderField[]|nil Author, Assignee.
+---@param middle_fields IssuesDetailHeaderField[]|nil Labels, Milestone.
+---@param right_fields IssuesDetailHeaderField[]|nil Linked MR, Linked Branches.
 ---@param status_badge IssuesTitleStatus|nil Border color for the title field (open/closed); its `.text` is unused now that the border color conveys status.
 ---@return string[] lines
 ---@return table[] highlights

@@ -166,21 +166,12 @@ function M.to_pull_request_details(raw)
 	if type(value) ~= "table" then
 		return nil
 	end
-	local milestone = json.nilify(value.milestone)
-	local milestone_title = milestone and json.safe_str(milestone.title) or nil
-
-	local resolvable = tonumber(value.resolvable_discussions_count)
-	local resolved = tonumber(value.resolved_discussions_count)
-	local open_threads = (resolvable and resolved) and math.max(0, resolvable - resolved) or nil
-
 	---@type GitLabPullRequestDetails
 	return {
 		description = json.safe_str(value.description) or "",
 		is_subscribed = json.nilify(value.subscribed),
 		assignees = normalize_authors(json.safe_table(json.safe_table(value.assignees).nodes or value.assignees)),
 		labels = normalize_labels(json.safe_table(json.safe_table(value.labels).nodes or value.labels)),
-		milestone = milestone_title and milestone_title ~= "" and { title = milestone_title } or nil,
-		open_threads = open_threads,
 	}
 end
 

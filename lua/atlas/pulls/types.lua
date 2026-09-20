@@ -54,20 +54,11 @@
 ---@field reviewers PullsReviewer[]|nil
 ---@field remove_source_branch boolean|nil Whether the source branch will be deleted when this MR is merged.
 
----@class PullsMilestone
----@field title string
-
----@class PullsClosingIssue
----@field iid string
----@field title string
-
 ---@class PullRequestDetails
 ---@field description string
 ---@field is_subscribed boolean|nil
 ---@field assignees PullsAuthor[]|nil
 ---@field labels PullsLabel[]|nil
----@field milestone PullsMilestone|nil
----@field open_threads integer|nil Unresolved discussion thread count.
 
 --------------------------------------------------------------------------------
 -- User (current authenticated user)

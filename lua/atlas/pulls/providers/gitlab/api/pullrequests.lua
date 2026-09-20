@@ -14,9 +14,6 @@ query($path:ID!,$iid:String!){
       subscribed
       assignees(first:100){nodes{id name username}}
       labels(first:100){nodes{name:title color text_color:textColor}}
-      milestone{title}
-      resolvable_discussions_count:resolvableDiscussionsCount
-      resolved_discussions_count:resolvedDiscussionsCount
     }
   }
 }
@@ -265,37 +262,6 @@ end
 ---@return string project_path, integer|nil iid
 local function project_iid(pr)
 	return pr.repo_full_name, tonumber(pr.id)
-end
-
----@param pr PullRequest
----@param _opts { force_refresh?: boolean }|nil
----@param on_done fun(issues: PullsClosingIssue[]|nil, err: string|nil)
----@return { cancel: fun() }|nil
-function M.fetch_closing_issues(pr, _opts, on_done)
-	local path, iid = project_iid(pr)
-	if path == "" or iid == nil then
-		on_done(nil, "Invalid MR identifier")
-		return nil
-	end
-	local endpoint = string.format("/projects/%s/merge_requests/%d/closes_issues", service.url_encode(path), iid)
-	return service.request("GET", endpoint, nil, function(result, err)
-		if err then
-			on_done(nil, err)
-			return
-		end
-		local out = {}
-		for _, raw in ipairs(json.safe_table(result)) do
-			local issue_iid = json.safe_str(raw.iid)
-			if issue_iid and issue_iid ~= "" then
-				table.insert(out, { iid = issue_iid, title = json.safe_str(raw.title) or "" })
-			end
-		end
-		on_done(out, nil)
-	end, {
-		action = "Fetch MR closing issues",
-		project_path = path,
-		iid = iid,
-	})
 end
 
 ---@param pr PullRequest

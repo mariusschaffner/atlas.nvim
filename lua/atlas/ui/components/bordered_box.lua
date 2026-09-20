@@ -1,4 +1,4 @@
--- Generic box-drawn border component (┌─ Title ─┐ / │ content │ / └───┘),
+-- Generic box-drawn border component (╭─ Title ─╮ / │ content │ / ╰───╯),
 -- rendered as literal buffer text. Pure/domain-unaware, like navbar.lua —
 -- callers own all domain-specific content so this stays reusable for any
 -- future bordered content block (e.g. an issue/PR fields box).
@@ -11,7 +11,7 @@ local text_width = ui_utils.text_width
 local pad_right = ui_utils.pad_right
 local truncate = shared_utils.truncate
 
-local TL, TR, BL, BR, H, V = "┌", "┐", "└", "┘", "─", "│"
+local TL, TR, BL, BR, H, V = "╭", "╮", "╰", "╯", "─", "│"
 
 ---@param interior_width integer
 ---@param title string|nil

@@ -80,28 +80,6 @@ local function linked_branches_field()
 	return { label = "Linked Branches", value = table.concat(parts, ", "), hl = spans }
 end
 
---- Single unboxed, foreground-colored line summarizing Author / linked MR /
---- linked branch -- sized to its own content (not padded/spanned across the
---- header width) rather than boxed like Assignee/Labels/Milestone.
----@param provider_fields IssuesProviderHeaderFields
----@return string|nil line
----@return table[] spans
-local function render_info_line(provider_fields)
-	local author = provider_fields.author
-	local mr = linked_mr_field()
-	local branch = linked_branches_field()
-
-	return utils.render_info_line({
-		{ label = "Author", value = author and author.value, hl = author and author.hl },
-		{ label = "MR", value = mr and (mr.value == "None" and "none" or mr.value), hl = mr and mr.hl },
-		{
-			label = "Branch",
-			value = branch and (branch.value == "None" and "none" or branch.value),
-			hl = branch and branch.hl,
-		},
-	})
-end
-
 ---@param issue Issue
 ---@param tab_items IssuesDetailTabDefinition[]
 ---@param width integer
@@ -118,22 +96,22 @@ local function render_header(issue, tab_items, width)
 		or {}
 	local status_badge = provider_detail and provider_detail.title_status and provider_detail.title_status(issue) or nil
 
-	-- One box each, side by side, spanning the full width: Assignee, Labels,
-	-- Milestone. Author/linked-MR/linked-branch move to a plain info line
-	-- below instead of sharing these boxes.
-	local assignee_col, labels_col, milestone_col = {}, {}, {}
-	utils.insert_if(assignee_col, provider_fields.assignee)
-	utils.insert_if(labels_col, provider_fields.labels)
-	utils.insert_if(milestone_col, provider_fields.milestone)
+	-- Three columns: Author/Assignee, Labels/Milestone, Linked MR/Linked Branches.
+	local left_fields = {}
+	utils.insert_if(left_fields, provider_fields.author)
+	utils.insert_if(left_fields, provider_fields.assignee)
+
+	local middle_fields = {}
+	utils.insert_if(middle_fields, provider_fields.labels)
+	utils.insert_if(middle_fields, provider_fields.milestone)
+
+	local right_fields = {}
+	utils.insert_if(right_fields, linked_mr_field())
+	utils.insert_if(right_fields, linked_branches_field())
 
 	local header_lines, header_spans, header_regions =
-		header.render(issue, width, assignee_col, labels_col, milestone_col, status_badge)
+		header.render(issue, width, left_fields, middle_fields, right_fields, status_badge)
 	utils.append_block(lines, spans, { lines = header_lines, highlights = header_spans })
-
-	local info_line, info_spans = render_info_line(provider_fields)
-	if info_line then
-		utils.append_block(lines, spans, { lines = { info_line }, highlights = info_spans })
-	end
 	table.insert(lines, "")
 
 	if #tab_items > 1 then
