@@ -286,6 +286,13 @@ function M.start(opts)
 	vim.api.nvim_set_option_value("buftype", "nofile", { buf = buf })
 	vim.api.nvim_set_option_value("bufhidden", "wipe", { buf = buf })
 	vim.api.nvim_set_option_value("swapfile", false, { buf = buf })
+	if opts.completion then
+		-- Neither "noinsert" nor "noselect": cycling with <Tab>/<S-Tab> below
+		-- should fill the highlighted candidate into the buffer immediately,
+		-- regardless of the user's global 'completeopt' (commonly tuned for
+		-- an LSP completion plugin, which would otherwise suppress that).
+		vim.api.nvim_set_option_value("completeopt", "menu,menuone", { buf = buf })
+	end
 	vim.api.nvim_buf_set_lines(buf, 0, -1, false, { opts.seed_text or "" })
 
 	local restore_win = vim.api.nvim_get_current_win()
@@ -343,6 +350,10 @@ function M.start(opts)
 		end
 		for _, key in ipairs(close_keys) do
 			pcall(vim.keymap.del, "n", key, { buffer = buf })
+		end
+		if opts.completion then
+			pcall(vim.keymap.del, "i", "<Tab>", { buffer = buf })
+			pcall(vim.keymap.del, "i", "<S-Tab>", { buffer = buf })
 		end
 	end
 
@@ -427,6 +438,18 @@ function M.start(opts)
 		-- Fire once immediately so completion candidates are available before
 		-- the user's first keystroke (e.g. re-opening a field to change one value).
 		trigger_completion(opts)
+
+		-- <Tab>/<S-Tab> cycle the completion menu (like a fuzzy-completion
+		-- plugin's accept-on-select) instead of only <C-n>/<C-p> or the
+		-- arrow keys; falls through to a literal tab when the menu isn't up.
+		-- Expression-mapping return values are sent as raw keys, not parsed
+		-- for `<...>` notation, so termcodes have to be resolved here.
+		vim.keymap.set("i", "<Tab>", function()
+			return vim.fn.pumvisible() == 1 and vim.keycode("<C-n>") or vim.keycode("<Tab>")
+		end, { buffer = buf, nowait = true, silent = true, expr = true })
+		vim.keymap.set("i", "<S-Tab>", function()
+			return vim.fn.pumvisible() == 1 and vim.keycode("<C-p>") or vim.keycode("<S-Tab>")
+		end, { buffer = buf, nowait = true, silent = true, expr = true })
 	end
 
 	vim.api.nvim_create_autocmd("BufWipeout", {

@@ -179,7 +179,7 @@ M.options = {
 			close = "q",
 			delete = "gD",
 			comments = {
-				add = "a",
+				add = "gA",
 				reply = "gc",
 				edit = "gE",
 				react = "gr",
@@ -204,7 +204,7 @@ M.options = {
 			open_in_browser = "gx",
 			copy_id = "y",
 			copy_url = "Y",
-			show_details = "K",
+			show_details = "gK",
 			filter = "/",
 		},
 		picker = {
@@ -251,7 +251,7 @@ M.options = {
 					next_hunk = "]h",
 					previous_hunk = "[h",
 					toggle_review_panel = "gR",
-					toggle_detail_panel = "gD",
+					toggle_detail_panel = "gP",
 					toggle_comments = "gH",
 					next_comment = "]c",
 					previous_comment = "[c",
@@ -259,7 +259,7 @@ M.options = {
 					submit_comment = "C",
 					add_suggestion = "s",
 					submit_suggestion = "S",
-					toggle_resolved = "x",
+					toggle_resolved = "gX",
 				},
 			},
 			filters = {

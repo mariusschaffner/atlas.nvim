@@ -88,6 +88,7 @@ function M.setup(buf, refresh)
 		items,
 		resolver.item("pulls.review.diff.toggle_resolved", {
 			desc = "Toggle resolved",
+			hint_desc = "Resolve",
 			opts = { nowait = true, silent = true },
 			callback = function()
 				local pr = detail.current_pr
@@ -102,6 +103,7 @@ function M.setup(buf, refresh)
 		items,
 		resolver.item("ui.show_details", {
 			desc = "Show details",
+			hint_desc = "Details",
 			opts = { nowait = true, silent = true },
 			callback = function()
 				tab.show_details(cursor_entry(), buf)

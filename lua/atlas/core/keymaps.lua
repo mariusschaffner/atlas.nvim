@@ -358,14 +358,17 @@ function M.validate()
 		{ "pulls.review.find_file", "pulls.review.explorer.find_file" },
 		{ "ui.next_panel_tab", "pulls.review.explorer.next_file" },
 		{ "ui.previous_panel_tab", "pulls.review.explorer.previous_file" },
-		{ "ui.comments.reply", "pulls.review.diff.add_comment", "issues.create_issue", "pulls.create_pr" },
-		{ "pulls.edit_title", "pulls.review.explorer.toggle_grouping" },
-		{ "pulls.toggle_repo_issue_state", "pulls.review.diff.toggle_layout", "pulls.pipeline_retry" },
+		{ "pulls.review.diff.add_comment", "issues.create_issue", "pulls.create_pr" },
+		{ "pulls.toggle_repo_issue_state", "pulls.review.diff.toggle_layout" },
 		{ "pulls.open_diff", "pulls.review.focus_item" },
 		-- pipeline_cancel (pipelines tab) and review.diff.toggle_resolved
 		-- (review/conversation tabs, or the standalone diff viewer) are
 		-- never active for the same tab/buffer at once.
 		{ "pulls.pipeline_cancel", "pulls.review.diff.toggle_resolved" },
+		-- pipeline_retry (pipelines tab) and review.diff.toggle_review_panel
+		-- (review/conversation tabs, or the standalone diff viewer) are never
+		-- active for the same tab/buffer at once.
+		{ "pulls.pipeline_retry", "pulls.review.diff.toggle_review_panel" },
 		-- edit_assignees (pull detail view) and review.approve (standalone
 		-- diff viewer, a separate buffer) never apply to the same buffer,
 		-- so sharing "ga" is safe.
@@ -376,6 +379,18 @@ function M.validate()
 			"issues.change_reporter",
 			"pulls.edit_reviewers",
 		},
+		-- comments.reply (review/conversation tabs) and review.diff.toggle_compact
+		-- (the standalone native diff viewer, a separate buffer) never apply
+		-- to the same buffer, so sharing "gc" is safe.
+		{ "ui.comments.reply", "pulls.review.diff.toggle_compact" },
+		-- comments.add (review/conversation tabs) and external_help (codediff/
+		-- diffview external viewers, separate buffers) never apply to the
+		-- same buffer, so sharing "gA" is safe.
+		{ "ui.comments.add", "pulls.external_help" },
+		-- change_milestone_start_date (milestone detail buffer) and
+		-- transition_issue (declared, not yet wired to any keymap) can't
+		-- collide in practice.
+		{ "issues.change_milestone_start_date", "issues.transition_issue" },
 	}
 
 	local function conflict_allowed(actions)
