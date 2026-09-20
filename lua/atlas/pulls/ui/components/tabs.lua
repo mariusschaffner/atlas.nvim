@@ -18,12 +18,14 @@ end
 
 ---@param items PullsDetailTab[]|PullsRepoDetailTab[]
 ---@param active_tab string
+---@param active_hint string|nil
 ---@return { [1]: string, [2]: string }[]
-function M.title_chunks(items, active_tab)
+function M.title_chunks(items, active_tab, active_hint)
 	return tabs.title_chunks(items, active_tab, {
 		active_hl = "AtlasDetailTabActive",
 		inactive_hl = "AtlasTextMuted",
-		gap = " ",
+		gap = " - ",
+		active_hint = active_hint,
 	})
 end
 

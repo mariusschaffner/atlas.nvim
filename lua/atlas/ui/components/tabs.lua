@@ -101,7 +101,7 @@ end
 --- native title chunks are meant to read as plain tab labels.
 ---@param items { key: string, label: string, icon: AtlasIconStyle|nil }[]
 ---@param active_tab string
----@param opts? { inactive_hl?: string, active_hl?: string, gap?: string }
+---@param opts? { inactive_hl?: string, active_hl?: string, gap?: string, active_hint?: string }
 ---@return { [1]: string, [2]: string }[]
 function M.title_chunks(items, active_tab, opts)
 	opts = opts or {}
@@ -109,10 +109,12 @@ function M.title_chunks(items, active_tab, opts)
 	local active_hl = opts.active_hl or ""
 	local gap = opts.gap or " "
 
-	local chunks = { { " ", "" } }
+	local chunks = { { "  ", "" } }
 	for i, tab in ipairs(items) do
-		local hl = tab.key == active_tab and active_hl or inactive_hl
-		table.insert(chunks, { tab.label, hl })
+		local is_active = tab.key == active_tab
+		local hl = is_active and active_hl or inactive_hl
+		local label = (is_active and opts.active_hint) and (opts.active_hint .. tab.label) or tab.label
+		table.insert(chunks, { label, hl })
 		if i < #items then
 			table.insert(chunks, { gap, "" })
 		end

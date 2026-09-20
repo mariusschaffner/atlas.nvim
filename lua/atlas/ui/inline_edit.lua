@@ -8,6 +8,7 @@ local M = {}
 local keymaps = require("atlas.core.keymaps")
 local notify = require("atlas.core.notify")
 local utils = require("atlas.ui.shared.utils")
+local detail_ui = require("atlas.ui.detail")
 
 ---@type table<integer, { saving: boolean }>
 local active = {}
@@ -33,7 +34,7 @@ function M.start(opts)
 	end
 
 	local submit_keys = keymaps.resolve("ui.submit") or {}
-	local close_keys = keymaps.resolve("ui.close") or {}
+	local close_keys = keymaps.resolve("ui.field_edit.close") or {}
 
 	local lines = vim.split(utils.normalize_newlines(opts.text), "\n", { plain = true })
 	if #lines == 0 then
@@ -46,6 +47,16 @@ function M.start(opts)
 	vim.api.nvim_set_option_value("modified", false, { buf = buf })
 
 	active[buf] = { saving = false }
+
+	-- Same affordance as every other editable field box: editing starts
+	-- already in Insert mode, and the box's border switches to the "actively
+	-- editing" color while it's open.
+	detail_ui.set_content_border("AtlasFieldBoxBorderEditing")
+	local win = vim.fn.bufwinid(buf)
+	if win ~= -1 then
+		pcall(vim.api.nvim_win_set_cursor, win, { 1, 0 })
+	end
+	vim.cmd("startinsert")
 
 	vim.api.nvim_create_autocmd("BufWipeout", {
 		buffer = buf,
@@ -71,6 +82,10 @@ function M.start(opts)
 		if vim.api.nvim_buf_is_valid(buf) then
 			vim.api.nvim_set_option_value("modifiable", false, { buf = buf })
 		end
+		-- Reset to the default border; the caller's post-edit refresh (always
+		-- triggered from on_save/on_cancel) restores the editable color if
+		-- the description tab is still showing.
+		detail_ui.set_content_border(nil)
 		opts.on_done()
 	end
 
