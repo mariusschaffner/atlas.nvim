@@ -227,6 +227,10 @@ function M.register(buf, opts)
 					if issue == nil then
 						return
 					end
+					if type(state.linked_branches) == "table" and #state.linked_branches > 0 then
+						notify.warn("A branch is already linked to this issue")
+						return
+					end
 
 					local function create_from(source_ref)
 						vim.ui.input({ prompt = "Branch name: ", default = default_branch_name(issue) }, function(input)

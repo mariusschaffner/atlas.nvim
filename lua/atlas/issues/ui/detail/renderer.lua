@@ -31,14 +31,18 @@ local function linked_mr_field()
 	if value == nil then
 		return nil
 	end
+	local core = state.provider and state.provider.capabilities.core
+	local editable = core and core.fetch_linked_merge_requests ~= nil
+	local label = utils.field_hint_label("issues.go_to_pull", "Linked MR", editable)
+
 	if value == "loading" then
-		return { label = "Linked MR", value = spinner.with_text("Loading..."), hl = "AtlasTextMuted" }
+		return { label = label, value = spinner.with_text("Loading..."), hl = "AtlasTextMuted", editable = editable }
 	end
 	if type(value) == "string" then
-		return { label = "Linked MR", value = value, hl = "AtlasLogError" }
+		return { label = label, value = value, hl = "AtlasLogError", editable = editable }
 	end
 	if #value == 0 then
-		return { label = "Linked MR", value = "None", hl = "AtlasTextMuted" }
+		return { label = label, value = "None", hl = "AtlasTextMuted", editable = editable }
 	end
 
 	local parts, spans, cursor = {}, {}, 0
@@ -50,7 +54,7 @@ local function linked_mr_field()
 		table.insert(spans, { start_col = cursor, end_col = cursor + #token, hl_group = hl })
 		cursor = cursor + #token + (i < #value and 2 or 0)
 	end
-	return { label = "Linked MR", value = table.concat(parts, ", "), hl = spans }
+	return { label = label, value = table.concat(parts, ", "), hl = spans, editable = editable }
 end
 
 ---@return IssuesDetailHeaderField|nil
@@ -59,6 +63,9 @@ local function linked_branches_field()
 	if value == nil then
 		return nil
 	end
+	local core = state.provider and state.provider.capabilities.core
+	local can_create = core and core.create_branch ~= nil and core.fetch_project_branches ~= nil
+
 	if value == "loading" then
 		return { label = "Linked Branches", value = spinner.with_text("Loading..."), hl = "AtlasTextMuted" }
 	end
@@ -66,7 +73,11 @@ local function linked_branches_field()
 		return { label = "Linked Branches", value = value, hl = "AtlasLogError" }
 	end
 	if #value == 0 then
-		return { label = "Linked Branches", value = "None", hl = "AtlasTextMuted" }
+		-- "gb" only creates a branch when none is linked yet (see
+		-- issues.create_branch's guard in ui/detail/keymaps.lua), so the hint
+		-- only makes sense to show here, not once a branch already exists.
+		local label = utils.field_hint_label("issues.create_branch", "Linked Branches", can_create)
+		return { label = label, value = "None", hl = "AtlasTextMuted", editable = can_create }
 	end
 
 	local parts, spans, cursor = {}, {}, 0
