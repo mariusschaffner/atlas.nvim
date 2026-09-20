@@ -32,17 +32,19 @@ local function linked_mr_field()
 		return nil
 	end
 	local core = state.provider and state.provider.capabilities.core
-	local editable = core and core.fetch_linked_merge_requests ~= nil
-	local label = utils.field_hint_label("issues.go_to_pull", "Linked MR", editable)
+	local has_hint = core and core.fetch_linked_merge_requests ~= nil
+	-- Navigable (via "gp"), not editable: no highlighted border, just the
+	-- hint prefix in the title.
+	local label = utils.field_hint_label("issues.go_to_pull", "Linked MR", has_hint)
 
 	if value == "loading" then
-		return { label = label, value = spinner.with_text("Loading..."), hl = "AtlasTextMuted", editable = editable }
+		return { label = label, value = spinner.with_text("Loading..."), hl = "AtlasTextMuted" }
 	end
 	if type(value) == "string" then
-		return { label = label, value = value, hl = "AtlasLogError", editable = editable }
+		return { label = label, value = value, hl = "AtlasLogError" }
 	end
 	if #value == 0 then
-		return { label = label, value = "None", hl = "AtlasTextMuted", editable = editable }
+		return { label = label, value = "None", hl = "AtlasTextMuted" }
 	end
 
 	local parts, spans, cursor = {}, {}, 0
@@ -54,7 +56,7 @@ local function linked_mr_field()
 		table.insert(spans, { start_col = cursor, end_col = cursor + #token, hl_group = hl })
 		cursor = cursor + #token + (i < #value and 2 or 0)
 	end
-	return { label = label, value = table.concat(parts, ", "), hl = spans, editable = editable }
+	return { label = label, value = table.concat(parts, ", "), hl = spans }
 end
 
 ---@return IssuesDetailHeaderField|nil
@@ -74,8 +76,9 @@ local function linked_branches_field()
 	end
 	if #value == 0 then
 		-- "gb" only creates a branch when none is linked yet (see
-		-- issues.create_branch's guard in ui/detail/keymaps.lua), so the hint
-		-- only makes sense to show here, not once a branch already exists.
+		-- issues.create_branch's guard in ui/detail/keymaps.lua): editable
+		-- (highlighted border) here, but greyed out below once a branch
+		-- already exists and the binding becomes a no-op.
 		local label = utils.field_hint_label("issues.create_branch", "Linked Branches", can_create)
 		return { label = label, value = "None", hl = "AtlasTextMuted", editable = can_create }
 	end
