@@ -80,8 +80,14 @@ function M.render(domain, width)
 		title_right_highlights = right_highlights,
 	})
 
+	-- Full interior width (box_width - 2 for the left/right border columns);
+	-- text_col is where the interior starts, not something to subtract from
+	-- its width again. Getting this one column short used to be near-
+	-- invisible against a plain dash-filled border, but it now clips the
+	-- inline-edit border highlight (and the edit overlay itself) short of
+	-- the right border, right where title_right lives.
 	local text_col = 1
-	local region = { row = 1, col = text_col, width = math.max(1, width - 2 - text_col), height = 1 }
+	local region = { row = 1, col = text_col, width = math.max(1, width - 2), height = 1 }
 	return lines, highlights, region
 end
 
