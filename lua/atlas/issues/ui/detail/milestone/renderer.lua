@@ -184,6 +184,15 @@ local function description_editable()
 	return state.current_tab == "description" and core ~= nil and core.update_milestone_description ~= nil
 end
 
+--- The content box's current border color -- reused for both the actual
+--- border (`detail_ui.set_content_border`) and the title's non-label
+--- characters, so the "-" separators/leading dash match the border instead
+--- of sitting at the default `FloatTitle` color.
+---@return string
+local function content_border_hl()
+	return description_editable() and "AtlasFieldBoxBorderEditable" or "AtlasBorder"
+end
+
 ---@param active_tab string
 ---@return { [1]: string, [2]: string }[]
 function M.title_chunks(active_tab)
@@ -191,6 +200,7 @@ function M.title_chunks(active_tab)
 		active_hl = "AtlasDetailTabActive",
 		inactive_hl = "AtlasTextMuted",
 		gap = " - ",
+		border_hl = content_border_hl(),
 	})
 end
 
@@ -274,7 +284,7 @@ function M.render()
 		-- in-progress raw edit buffer.
 		return
 	end
-	detail_ui.set_content_border(description_editable() and "AtlasFieldBoxBorderEditable" or nil)
+	detail_ui.set_content_border(content_border_hl())
 
 	local lines, spans
 	if milestone == nil then

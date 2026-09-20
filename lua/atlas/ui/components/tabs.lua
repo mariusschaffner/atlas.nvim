@@ -101,26 +101,31 @@ end
 --- native title chunks are meant to read as plain tab labels. The leading
 --- "─ " mirrors `bordered_box.lua`'s own `╭─ Title` pattern (border dash,
 --- then a space) instead of plain padding, so the title starts the same way
---- every other field box's title does.
+--- every other field box's title does; like `bordered_box.lua`, every
+--- non-label character (leading dash, gaps, trailing space) is colored with
+--- `opts.border_hl` -- the box's own current border color -- rather than
+--- left at the default `FloatTitle` highlight, which wouldn't track the
+--- border's editable/editing color changes.
 ---@param items { key: string, label: string, icon: AtlasIconStyle|nil }[]
 ---@param active_tab string
----@param opts? { inactive_hl?: string, active_hl?: string, gap?: string }
+---@param opts? { inactive_hl?: string, active_hl?: string, gap?: string, border_hl?: string }
 ---@return { [1]: string, [2]: string }[]
 function M.title_chunks(items, active_tab, opts)
 	opts = opts or {}
 	local inactive_hl = opts.inactive_hl or "AtlasTextMuted"
 	local active_hl = opts.active_hl or ""
 	local gap = opts.gap or " "
+	local border_hl = opts.border_hl or ""
 
-	local chunks = { { "─ ", "" } }
+	local chunks = { { "─ ", border_hl } }
 	for i, tab in ipairs(items) do
 		local hl = tab.key == active_tab and active_hl or inactive_hl
 		table.insert(chunks, { tab.label, hl })
 		if i < #items then
-			table.insert(chunks, { gap, "" })
+			table.insert(chunks, { gap, border_hl })
 		end
 	end
-	table.insert(chunks, { " ", "" })
+	table.insert(chunks, { " ", border_hl })
 
 	return chunks
 end

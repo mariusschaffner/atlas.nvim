@@ -139,6 +139,15 @@ local function description_editable()
 	return state.current_tab == "overview" and core ~= nil and core.update_description ~= nil
 end
 
+--- The content box's current border color -- reused for both the actual
+--- border (`detail_ui.set_content_border`) and the title's non-label
+--- characters, so the "-" separators/leading dash match the border instead
+--- of sitting at the default `FloatTitle` color.
+---@return string
+local function content_border_hl()
+	return description_editable() and "AtlasFieldBoxBorderEditable" or "AtlasBorder"
+end
+
 ---@param tab_items IssuesDetailTabDefinition[]
 ---@param active_tab string
 ---@return { [1]: string, [2]: string }[]
@@ -150,6 +159,7 @@ function M.title_chunks(tab_items, active_tab)
 		active_hl = "AtlasDetailTabActive",
 		inactive_hl = "AtlasTextMuted",
 		gap = " - ",
+		border_hl = content_border_hl(),
 	})
 end
 
@@ -189,7 +199,7 @@ function M.render(tab_items, get_tab_module)
 		-- update, ...) stomp it back to the merely-editable color mid-edit.
 		return
 	end
-	detail_ui.set_content_border(description_editable() and "AtlasFieldBoxBorderEditable" or nil)
+	detail_ui.set_content_border(content_border_hl())
 
 	local width = vim.api.nvim_win_get_width(win)
 	local lines = {}
