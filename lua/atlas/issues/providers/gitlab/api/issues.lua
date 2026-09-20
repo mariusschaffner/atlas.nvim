@@ -314,6 +314,14 @@ function M.update_description(issue, description, on_done)
 	)
 end
 
+---@param issue Issue
+---@param title string
+---@param on_done fun(ok: boolean, err: string|nil)
+---@return { cancel: fun() }|nil
+function M.update_title(issue, title, on_done)
+	return update_issue(tostring(issue.key or ""), { title = title }, "Update issue title", nil, on_done)
+end
+
 ---@param key string
 ---@param state_event "close"|"reopen"
 ---@param on_done fun(ok: boolean, err: string|nil)

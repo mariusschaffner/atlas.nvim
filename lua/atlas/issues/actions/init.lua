@@ -7,6 +7,7 @@ local utils = require("atlas.issues.actions.utils")
 ---@alias AtlasIssueActionId
 ---| "close_issue"
 ---| "reopen_issue"
+---| "edit_title"
 ---| "assign"
 ---| "labels"
 ---| "milestone"

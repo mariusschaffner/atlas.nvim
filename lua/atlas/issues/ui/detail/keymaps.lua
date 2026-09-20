@@ -134,6 +134,26 @@ function M.register(buf, opts)
 		return false
 	end
 
+	if supports("edit_title") then
+		utils.insert_if(
+			items,
+			resolver.item("issues.edit_issue", {
+				desc = "Edit issue title",
+				hint = false,
+				callback = function()
+					local issue = state.current_issue
+					if issue == nil then
+						return
+					end
+					local on_update = state.on_update
+					actions.run("edit_title", context(issue), function(result)
+						complete_action(issue, on_update, result)
+					end)
+				end,
+			})
+		)
+	end
+
 	if supports("assign") then
 		utils.insert_if(
 			items,
@@ -409,6 +429,7 @@ function M.remove(buf)
 	utils.insert_if(general, resolver.remove_item("ui.next_item"))
 	utils.insert_if(general, resolver.remove_item("ui.previous_item"))
 	utils.insert_if(general, resolver.remove_item("ui.open_actions"))
+	utils.insert_if(general, resolver.remove_item("issues.edit_issue"))
 	utils.insert_if(general, resolver.remove_item("issues.change_assignee"))
 	utils.insert_if(general, resolver.remove_item("issues.change_label"))
 	utils.insert_if(general, resolver.remove_item("issues.change_milestone"))

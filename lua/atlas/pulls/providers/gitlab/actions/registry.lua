@@ -7,9 +7,11 @@ local core_notify = require("atlas.core.notify")
 local core_utils = require("atlas.core.utils")
 local pullrequests_api = require("atlas.pulls.providers.gitlab.api.pullrequests")
 local users_api = require("atlas.pulls.providers.gitlab.api.users")
+local labels_api = require("atlas.pulls.providers.gitlab.api.labels")
 local service = require("atlas.providers.gitlab.client")
 local inline_field_edit = require("atlas.ui.inline_field_edit")
 local users_completion = require("atlas.providers.gitlab.completion.users")
+local labels_completion = require("atlas.providers.gitlab.completion.labels")
 local detail_state = require("atlas.pulls.ui.detail.state")
 
 ---@param ctx AtlasPullActionContext
@@ -272,6 +274,109 @@ end
 
 ---@param ctx AtlasPullActionContext
 ---@param done fun(result: PullsActionResult|nil, err: string|nil)
+local function edit_labels(ctx, done)
+	local pr = ctx.pr
+	local path = pr.repo_full_name
+	if path == "" then
+		done(nil, "Could not determine project path")
+		return
+	end
+
+	local header_win = detail_state.header_win
+	local region = detail_state.header_regions and detail_state.header_regions.labels
+	if header_win == nil or not vim.api.nvim_win_is_valid(header_win) or region == nil then
+		local message = "Labels field is not visible"
+		notify(ctx, "warn", message)
+		done(nil, message)
+		return
+	end
+
+	---@param labels PullsLabel[]
+	local function open_editor(labels)
+		local original_set, seed_names = {}, {}
+		for _, label in ipairs(labels) do
+			local name = tostring(label.name or "")
+			if name ~= "" then
+				original_set[name] = true
+				table.insert(seed_names, name)
+			end
+		end
+
+		local completion = labels_completion.for_project(labels_api.list, path)
+
+		inline_field_edit.start({
+			anchor_win = header_win,
+			row = region.row,
+			col = region.col,
+			width = region.width,
+			height = region.height,
+			seed_text = table.concat(seed_names, ", "),
+			multi_value = true,
+			seed_resolved = seed_names,
+			completion = completion,
+			on_save = function(text, save_done)
+				local selected_set = {}
+				for _, segment in ipairs(vim.split(text, ",", { plain = true })) do
+					local trimmed = vim.trim(segment)
+					if trimmed ~= "" then
+						selected_set[trimmed] = true
+					end
+				end
+
+				local adds, removes = {}, {}
+				for name, _ in pairs(selected_set) do
+					if not original_set[name] then
+						table.insert(adds, name)
+					end
+				end
+				for name, _ in pairs(original_set) do
+					if not selected_set[name] then
+						table.insert(removes, name)
+					end
+				end
+				if #adds == 0 and #removes == 0 then
+					save_done(true)
+					done({ changed_pr = false, message = "No changes" }, nil)
+					return
+				end
+
+				notify(ctx, "loading", string.format("Updating labels on %s...", pr_label(pr)))
+				pullrequests_api.update_labels(pr, { add = adds, remove = removes }, function(ok, set_err)
+					if not ok then
+						save_done(false, set_err or "Failed")
+						return
+					end
+					local msg = string.format("+%d / -%d label(s)", #adds, #removes)
+					notify(ctx, "success", msg, 1200)
+					save_done(true)
+					done({ changed_pr = true, message = msg }, nil)
+				end)
+			end,
+			on_cancel = function()
+				done({ changed_pr = false, message = "Cancelled" }, nil)
+			end,
+			on_done = function() end,
+		})
+	end
+
+	if ctx.details then
+		open_editor(ctx.details.labels or {})
+		return
+	end
+	notify(ctx, "loading", "Loading pull request...")
+	pullrequests_api.fetch_pullrequest(pr, { force_load = false }, function(details, err)
+		if err or details == nil then
+			local message = tostring(err or "Failed to load merge request")
+			notify(ctx, "error", message)
+			done(nil, message)
+			return
+		end
+		open_editor(details.labels or {})
+	end)
+end
+
+---@param ctx AtlasPullActionContext
+---@param done fun(result: PullsActionResult|nil, err: string|nil)
 local function search(ctx, done)
 	picker.search({
 		title = "Search projects",
@@ -436,6 +541,13 @@ register({
 	label = "Edit assignees",
 	is_available = edit_assignees_available,
 	run = edit_assignees,
+})
+
+register({
+	id = "edit_labels",
+	label = "Edit labels",
+	is_available = edit_assignees_available,
+	run = edit_labels,
 })
 
 register({

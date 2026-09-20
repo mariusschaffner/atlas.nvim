@@ -51,7 +51,7 @@ function M.register(buf, views)
 		items,
 		resolver.item("ui.filter", {
 			desc = "Edit filter",
-			hint_desc = "Filter",
+			hint = false,
 			index = 10,
 			opts = { nowait = true, silent = true },
 			callback = function()

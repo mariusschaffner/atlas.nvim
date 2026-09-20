@@ -41,26 +41,29 @@ end
 ---@param loading boolean
 ---@return PullsDetailHeaderField
 local function labels_field(details, loading)
+	local editable = supports("edit_labels")
+	local label = utils.field_hint_label("pulls.edit_labels", "Labels", editable)
+
 	if loading then
-		return { label = "Labels", value = spinner.with_text("Loading..."), hl = "AtlasTextMuted" }
+		return { id = "labels", label = label, value = spinner.with_text("Loading..."), hl = "AtlasTextMuted", editable = editable }
 	end
 
 	---@cast details GitLabPullRequestDetails
 	local names, spans, cursor = {}, {}, 0
-	for _, label in ipairs(details and details.labels or {}) do
-		local name = tostring(label.name or "")
+	for _, item in ipairs(details and details.labels or {}) do
+		local name = tostring(item.name or "")
 		if name ~= "" then
-			table.insert(spans, { start_col = cursor, end_col = cursor + #name, hl_group = label_fg_hl(label.color) })
+			table.insert(spans, { start_col = cursor, end_col = cursor + #name, hl_group = label_fg_hl(item.color) })
 			table.insert(names, name)
 			cursor = cursor + #name + 2
 		end
 	end
 
 	if #names == 0 then
-		return { label = "Labels", value = "None", hl = "AtlasTextMuted" }
+		return { id = "labels", label = label, value = "None", hl = "AtlasTextMuted", editable = editable }
 	end
 
-	return { label = "Labels", value = table.concat(names, ", "), hl = spans }
+	return { id = "labels", label = label, value = table.concat(names, ", "), hl = spans, editable = editable }
 end
 
 ---@param pr PullRequest

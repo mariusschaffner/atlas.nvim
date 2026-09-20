@@ -83,6 +83,63 @@ end
 
 ---@param ctx AtlasIssueActionContext
 ---@param done fun(result: IssuesActionResult|nil, err: string|nil)
+local function edit_title(ctx, done)
+	local issue = assert(ctx.issue)
+	local key = tostring(issue.key or "")
+	local core = ctx.provider and ctx.provider.capabilities.core
+	local update = core and core.update_title
+	if not update then
+		notify.warn("Provider does not support editing issue titles")
+		done(nil, "Unsupported")
+		return
+	end
+
+	local header_win = detail_state.header_win
+	local region = detail_state.header_regions and detail_state.header_regions.title
+	if header_win == nil or not vim.api.nvim_win_is_valid(header_win) or region == nil then
+		local message = "Title field is not visible"
+		notify.warn(message)
+		done(nil, message)
+		return
+	end
+
+	local current = tostring(issue.title or "")
+
+	inline_field_edit.start({
+		anchor_win = header_win,
+		row = region.row,
+		col = region.col,
+		width = region.width,
+		height = region.height,
+		seed_text = current,
+		on_save = function(text, save_done)
+			local title = vim.trim(text)
+			if title == "" or title == current then
+				save_done(true)
+				done(nil, nil)
+				return
+			end
+			notify.loading(string.format("Updating title on %s...", key))
+			update(issue, title, function(ok, err)
+				if not ok then
+					save_done(false, err or "Failed")
+					return
+				end
+				issue.title = title
+				notify.success("Title updated", { timeout = 1200 })
+				save_done(true)
+				done({ issue_key = key }, nil)
+			end)
+		end,
+		on_cancel = function()
+			done(nil, nil)
+		end,
+		on_done = function() end,
+	})
+end
+
+---@param ctx AtlasIssueActionContext
+---@param done fun(result: IssuesActionResult|nil, err: string|nil)
 local function assign(ctx, done)
 	local issue = assert(ctx.issue)
 	---@cast issue GitLabIssue
@@ -582,6 +639,7 @@ register({
 		set_issue_state(ctx, "reopen", done)
 	end,
 })
+register({ id = "edit_title", label = "Edit Title", hidden = true, is_available = has_issue, run = edit_title })
 register({ id = "assign", label = "Edit Assignees", hidden = true, is_available = has_issue, run = assign })
 register({ id = "labels", label = "Edit Labels", hidden = true, is_available = has_issue, run = labels })
 register({ id = "milestone", label = "Edit Milestone", hidden = true, is_available = has_issue, run = milestone })

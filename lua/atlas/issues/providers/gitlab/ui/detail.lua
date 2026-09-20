@@ -32,10 +32,11 @@ end
 ---@return IssuesTitleStatus
 function M.title_status(issue)
 	---@cast issue GitLabIssue
+	local label = string.format("Title - #%s", tostring(issue.iid))
 	return {
 		text = tostring(issue.status or "Open"),
 		hl = state_fg_hl(issue.status_id),
-		label = string.format("Title - #%s", tostring(issue.iid)),
+		label = utils.field_hint_label("issues.edit_issue", label, supports("edit_title")),
 	}
 end
 
@@ -124,7 +125,11 @@ function M.header_fields(issue, details, loading)
 		labels = labels_field(details, loading),
 		milestone = {
 			id = "milestone",
-			label = utils.field_hint_label("issues.change_milestone", "Milestone", milestone_editable),
+			label = utils.field_hint_label(
+				{ "issues.go_to_milestone", "issues.change_milestone" },
+				"Milestone",
+				milestone_editable
+			),
 			value = milestone_text ~= "" and milestone_text or "None",
 			hl = "AtlasTextMuted",
 			editable = milestone_editable,

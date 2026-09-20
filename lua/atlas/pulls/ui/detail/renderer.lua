@@ -153,7 +153,11 @@ local function merge_readiness_field(delete_source_branch_field)
 	end
 
 	local editable = delete_source_branch_field ~= nil and delete_source_branch_field.editable == true
-	return { label = utils.field_hint_label("pulls.toggle_remove_source_branch", "Merge Readiness", editable), rows = rows }
+	return {
+		label = utils.field_hint_label("pulls.toggle_remove_source_branch", "Merge Readiness", editable),
+		rows = rows,
+		editable = editable,
+	}
 end
 
 ---@param pr PullRequest

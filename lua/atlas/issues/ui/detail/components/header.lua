@@ -14,6 +14,7 @@ local field_box = require("atlas.ui.components.field_box")
 ---@return table<string, AtlasFieldBoxRegion> regions
 function M.render(issue, width, left_fields, middle_fields, right_fields, status_badge)
 	local title_field = {
+		id = "title",
 		label = (status_badge and status_badge.label) or issue.key,
 		value = issue.title,
 		border_hl = status_badge and status_badge.hl or nil,

@@ -144,6 +144,7 @@ local M = {
 			fetch_by_refs = issues_api.fetch_by_refs,
 			fetch_issue = issues_api.fetch_issue,
 			update_description = issues_api.update_description,
+			update_title = issues_api.update_title,
 			fetch_linked_merge_requests = issues_api.fetch_related_merge_requests,
 			fetch_linked_branches = issues_api.fetch_related_branches,
 			fetch_project_branches = issues_api.fetch_project_branches,

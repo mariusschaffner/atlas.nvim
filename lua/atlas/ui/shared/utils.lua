@@ -416,12 +416,13 @@ function M.insert_if(list, value)
 	end
 end
 
---- Prefixes a field box label with its editing keymap, e.g. "[ga] - Assignee",
---- so the binding lives on the field itself instead of the statusline. Falls
---- back to the plain label when the action has no key configured (or when
---- `editable` is false, so the hint isn't shown for a field the user can't
---- currently edit).
----@param action_id string|nil
+--- Prefixes a field box label with its editing keymap(s), e.g.
+--- "[ga] - Assignee" or, for a field reachable via more than one action,
+--- "[gm|gM] - Milestone" -- so the binding lives on the field itself instead
+--- of the statusline. Falls back to the plain label when none of the
+--- actions has a key configured (or when `editable` is false, so the hint
+--- isn't shown for a field the user can't currently edit).
+---@param action_id string|string[]|nil
 ---@param label string
 ---@param editable boolean|nil
 ---@return string
@@ -429,9 +430,17 @@ function M.field_hint_label(action_id, label, editable)
 	if not editable or not action_id then
 		return label
 	end
-	local keys = require("atlas.core.keymaps").resolve(action_id)
-	if keys and keys[1] then
-		return string.format("[%s] - %s", keys[1], label)
+	local resolver = require("atlas.core.keymaps")
+	local action_ids = type(action_id) == "table" and action_id or { action_id }
+	local first_keys = {}
+	for _, id in ipairs(action_ids) do
+		local keys = resolver.resolve(id)
+		if keys and keys[1] then
+			table.insert(first_keys, keys[1])
+		end
+	end
+	if #first_keys > 0 then
+		return string.format("[%s] - %s", table.concat(first_keys, "|"), label)
 	end
 	return label
 end

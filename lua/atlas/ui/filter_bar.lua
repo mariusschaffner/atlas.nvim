@@ -8,6 +8,7 @@
 local M = {}
 
 local bordered_box = require("atlas.ui.components.bordered_box")
+local utils = require("atlas.ui.shared.utils")
 
 local STATE_MODULES = {
 	issues = "atlas.issues.state",
@@ -26,7 +27,7 @@ function M.render(domain, width)
 	local lines, highlights = bordered_box.render({
 		width = width,
 		box_width = width,
-		title = "Filter",
+		title = utils.field_hint_label("ui.filter", "Filter", true),
 		content_lines = { filter_text },
 		content_highlights = { { line = 0, start_col = 0, end_col = #filter_text, hl_group = "AtlasTextMuted" } },
 		border_hl = "AtlasFilterBarBorder",

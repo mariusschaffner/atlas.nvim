@@ -103,6 +103,7 @@ local M = {}
 ---@field edit_title? AtlasKeymapValue
 ---@field edit_reviewers? AtlasKeymapValue
 ---@field edit_assignees? AtlasKeymapValue
+---@field edit_labels? AtlasKeymapValue
 ---@field toggle_remove_source_branch? AtlasKeymapValue
 ---@field review? AtlasPullsReviewKeymaps
 ---@field filters? AtlasPullsFilterKeymaps
@@ -182,6 +183,7 @@ local M = {}
 ---| "pulls.edit_title"
 ---| "pulls.edit_reviewers"
 ---| "pulls.edit_assignees"
+---| "pulls.edit_labels"
 ---| "pulls.toggle_remove_source_branch"
 ---| "pulls.review.approve"
 ---| "pulls.review.request_changes"

@@ -356,6 +356,25 @@ function M.update_description(pr, description, on_done)
 end
 
 ---@param pr PullRequest
+---@param diff { add?: string[], remove?: string[] }
+---@param on_done fun(ok: boolean, err: string|nil)
+---@return { cancel: fun() }|nil
+function M.update_labels(pr, diff, on_done)
+	local payload = {}
+	if diff.add and #diff.add > 0 then
+		payload.add_labels = table.concat(diff.add, ",")
+	end
+	if diff.remove and #diff.remove > 0 then
+		payload.remove_labels = table.concat(diff.remove, ",")
+	end
+	if next(payload) == nil then
+		on_done(true, nil)
+		return nil
+	end
+	return update(pr, payload, on_done)
+end
+
+---@param pr PullRequest
 ---@param value boolean
 ---@param on_done fun(ok: boolean, err: string|nil)
 ---@return { cancel: fun() }|nil
