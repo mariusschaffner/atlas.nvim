@@ -2,8 +2,9 @@ local M = {}
 
 local state = require("atlas.pulls.ui.detail.state")
 
---- Kicks off the 4 parallel, independently-loading pieces of a PR detail
---- view's secondary data (diffstat, pipelines, reviewers, merge checks).
+--- Kicks off the 5 parallel, independently-loading pieces of a PR detail
+--- view's secondary data (diffstat, pipelines, reviewers, merge checks,
+--- closing issues).
 --- Split out of atlas.pulls.ui.detail so that module can stay focused on
 --- panel lifecycle (tabs, spinner, open/select/refresh orchestration).
 ---@param pr PullRequest
@@ -66,6 +67,19 @@ function M.load_pr(pr, force_refresh, same_ref, tab_refresh)
 				return
 			end
 			state.merge_checks = err and err or (checks or {})
+			tab_refresh()
+		end)
+	end
+
+	if core.fetch_closing_issues then
+		state.closing_issues = "loading"
+		state.requests.run(function(done)
+			return core.fetch_closing_issues(pr, { force_refresh = force_refresh }, done)
+		end, function(issues, err)
+			if not same_ref(state.current_pr, pr) then
+				return
+			end
+			state.closing_issues = err and err or (issues or {})
 			tab_refresh()
 		end)
 	end

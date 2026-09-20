@@ -10,6 +10,7 @@ local request_scope = require("atlas.core.requests")
 ---@field pipelines PullsPipeline[]|"loading"|string|nil
 ---@field reviewers PullsReviewer[]|"loading"|string|nil
 ---@field merge_checks PullsMergeCheck[]|"loading"|string|nil
+---@field closing_issues PullsClosingIssue[]|"loading"|string|nil
 ---@field pr_loading boolean
 ---@field details_loading boolean
 ---@field win integer|nil
@@ -31,6 +32,7 @@ local M = {
 	pipelines = nil,
 	reviewers = nil,
 	merge_checks = nil,
+	closing_issues = nil,
 	pr_loading = false,
 	details_loading = false,
 	win = nil,
@@ -54,6 +56,7 @@ function M.reset()
 	M.pipelines = nil
 	M.reviewers = nil
 	M.merge_checks = nil
+	M.closing_issues = nil
 	M.pr_loading = false
 	M.details_loading = false
 	M.win = nil

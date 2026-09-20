@@ -215,6 +215,61 @@ function M.render_chips(chips, opts)
 	return lines, spans
 end
 
+---@class AtlasInfoLineSegment
+---@field label string A leading "<label> " prefix before the value; pass "" to render just the value (e.g. an already icon-prefixed status like "✓ Pipeline").
+---@field value string|nil Segment omitted entirely when nil/empty.
+---@field hl string|table[]|nil Plain hl group, or spans {start_col, end_col, hl_group} relative to `value`.
+
+--- Builds a single unboxed, " · "-joined line from label/value segments (e.g.
+--- "Author jane · Milestone v2 · +12 -3"), skipping any segment with no
+--- value. Used for detail-header summary lines that sit below the boxed
+--- fields (issues/pulls).
+---@param segments AtlasInfoLineSegment[]
+---@return string|nil line
+---@return AtlasUIHighlight[] spans
+function M.render_info_line(segments)
+	local parts, spans = { " " }, {}
+	local cursor = 1
+
+	for _, segment in ipairs(segments) do
+		local value = segment.value
+		if value ~= nil and value ~= "" then
+			if #parts > 1 then
+				local sep = " · "
+				table.insert(parts, sep)
+				cursor = cursor + #sep
+			end
+
+			if segment.label ~= "" then
+				local prefix = segment.label .. " "
+				table.insert(parts, prefix)
+				cursor = cursor + #prefix
+			end
+
+			table.insert(parts, value)
+			local hl = segment.hl
+			if type(hl) == "table" then
+				for _, span in ipairs(hl) do
+					table.insert(spans, {
+						line = 0,
+						start_col = cursor + span.start_col,
+						end_col = cursor + span.end_col,
+						hl_group = span.hl_group,
+					})
+				end
+			elseif hl then
+				table.insert(spans, { line = 0, start_col = cursor, end_col = cursor + #value, hl_group = hl })
+			end
+			cursor = cursor + #value
+		end
+	end
+
+	if #parts <= 1 then
+		return nil, {}
+	end
+	return table.concat(parts), spans
+end
+
 function M.get_version()
 	if _cached_version then
 		return _cached_version

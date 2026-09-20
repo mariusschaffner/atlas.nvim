@@ -80,45 +80,6 @@ local function linked_branches_field()
 	return { label = "Linked Branches", value = table.concat(parts, ", "), hl = spans }
 end
 
----@param label string
----@param value string|nil
----@param hl string|table[]|nil
----@param parts string[]
----@param spans table[]
----@param cursor integer
----@return integer cursor
-local function add_info_segment(label, value, hl, parts, spans, cursor)
-	if value == nil or value == "" then
-		return cursor
-	end
-	if #parts > 1 then
-		local sep = " · "
-		table.insert(parts, sep)
-		cursor = cursor + #sep
-	end
-
-	local prefix = label .. " "
-	table.insert(parts, prefix)
-	cursor = cursor + #prefix
-
-	table.insert(parts, value)
-	if type(hl) == "table" then
-		for _, span in ipairs(hl) do
-			table.insert(spans, {
-				line = 0,
-				start_col = cursor + span.start_col,
-				end_col = cursor + span.end_col,
-				hl_group = span.hl_group,
-			})
-		end
-	elseif hl then
-		table.insert(spans, { line = 0, start_col = cursor, end_col = cursor + #value, hl_group = hl })
-	end
-	cursor = cursor + #value
-
-	return cursor
-end
-
 --- Single unboxed, foreground-colored line summarizing Author / linked MR /
 --- linked branch -- sized to its own content (not padded/spanned across the
 --- header width) rather than boxed like Assignee/Labels/Milestone.
@@ -126,24 +87,19 @@ end
 ---@return string|nil line
 ---@return table[] spans
 local function render_info_line(provider_fields)
-	local parts, spans = { " " }, {}
-	local cursor = 1
-
 	local author = provider_fields.author
-	cursor = add_info_segment("Author", author and author.value, author and author.hl, parts, spans, cursor)
-
 	local mr = linked_mr_field()
-	local mr_value = mr and (mr.value == "None" and "none" or mr.value)
-	cursor = add_info_segment("MR", mr_value, mr and mr.hl, parts, spans, cursor)
-
 	local branch = linked_branches_field()
-	local branch_value = branch and (branch.value == "None" and "none" or branch.value)
-	cursor = add_info_segment("Branch", branch_value, branch and branch.hl, parts, spans, cursor)
 
-	if #parts <= 1 then
-		return nil, {}
-	end
-	return table.concat(parts), spans
+	return utils.render_info_line({
+		{ label = "Author", value = author and author.value, hl = author and author.hl },
+		{ label = "MR", value = mr and (mr.value == "None" and "none" or mr.value), hl = mr and mr.hl },
+		{
+			label = "Branch",
+			value = branch and (branch.value == "None" and "none" or branch.value),
+			hl = branch and branch.hl,
+		},
+	})
 end
 
 ---@param issue Issue
