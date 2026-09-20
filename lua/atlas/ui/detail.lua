@@ -359,9 +359,23 @@ function M.set_content_title(chunks)
 	})
 end
 
+-- Highlight groups `tabs.title_chunks`'s `border_hl` option may have used to
+-- color the title's non-label characters (leading dash, "-" separators,
+-- trailing space) -- recognized by `set_content_border` below so it can
+-- recolor them in place, without needing to know the active tab list.
+local BORDER_HL_GROUPS = {
+	AtlasBorder = true,
+	AtlasFieldBoxBorderEditable = true,
+	AtlasFieldBoxBorderEditing = true,
+}
+
 --- Sets the content float's border highlight (e.g. `AtlasFieldBoxBorderEditable`
 --- while the active tab is ready for inline editing, matching every other
 --- editable field box). Pass `nil`/`""` to reset to the default border color.
+--- Also recolors the title's own border-colored characters (see
+--- `BORDER_HL_GROUPS`) to match, so the title stays in sync with the border
+--- even when nothing re-renders the title itself (e.g. while `inline_edit`
+--- is active and content re-rendering is intentionally paused).
 ---@param hl_group string|nil
 function M.set_content_border(hl_group)
 	if state.layout ~= "split" or not utils.window.valid(state.win) then
@@ -369,6 +383,24 @@ function M.set_content_border(hl_group)
 	end
 	local border_hl = (hl_group == nil or hl_group == "") and "AtlasBorder" or hl_group
 	pcall(vim.api.nvim_set_option_value, "winhighlight", content_winhighlight(border_hl), { win = state.win, scope = "local" })
+
+	local ok, cfg = pcall(vim.api.nvim_win_get_config, state.win)
+	if not ok or type(cfg.title) ~= "table" then
+		return
+	end
+	local changed = false
+	local new_title = {}
+	for _, chunk in ipairs(cfg.title) do
+		local text, hl = chunk[1], chunk[2]
+		if BORDER_HL_GROUPS[hl] and hl ~= border_hl then
+			hl = border_hl
+			changed = true
+		end
+		table.insert(new_title, { text, hl })
+	end
+	if changed then
+		pcall(vim.api.nvim_win_set_config, state.win, { title = new_title, title_pos = "left" })
+	end
 end
 
 ---@param tab integer|nil
