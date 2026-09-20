@@ -79,27 +79,6 @@ function M.register(buf, views)
 		})
 	)
 
-	local STATUS_TOGGLES = {
-		{ status = "OPEN", action_id = "pulls.filters.open", index = 20 },
-		{ status = "MERGED", action_id = "pulls.filters.merged", index = 21 },
-	}
-	for _, sf in ipairs(STATUS_TOGGLES) do
-		local s = sf
-		utils.insert_if(
-			items,
-			resolver.item(s.action_id, {
-				desc = string.format("Toggle %s filter", s.status:lower()),
-				hint_desc = "Toggle " .. s.status:sub(1, 1):upper() .. s.status:sub(2):lower(),
-				hint = not state.status_filters[s.status],
-				index = s.index,
-				callback = function()
-					local controller = require("atlas.pulls.ui.dashboard.controller")
-					controller.toggle_status_filter(s.status)
-				end,
-			})
-		)
-	end
-
 	if state.provider and state.provider.capabilities.core and state.provider.capabilities.core.create_pr then
 		utils.insert_if(
 			items,

@@ -164,12 +164,12 @@ end
 
 ---@param project_path string
 ---@param milestone_id integer
----@param field "start_date"|"due_date"
+---@param field "title"|"start_date"|"due_date"
 ---@param label string
 ---@param value string
 ---@param on_done fun(ok: boolean, err: string|nil)
 ---@return { cancel: fun() }|nil
-local function update_date(project_path, milestone_id, field, label, value, on_done)
+local function update_field(project_path, milestone_id, field, label, value, on_done)
 	if project_path == "" then
 		on_done(false, "Missing project path")
 		return nil
@@ -186,11 +186,20 @@ end
 
 ---@param project_path string
 ---@param milestone_id integer
+---@param value string
+---@param on_done fun(ok: boolean, err: string|nil)
+---@return { cancel: fun() }|nil
+function M.update_title(project_path, milestone_id, value, on_done)
+	return update_field(project_path, milestone_id, "title", "title", value, on_done)
+end
+
+---@param project_path string
+---@param milestone_id integer
 ---@param value string Empty string clears the start date.
 ---@param on_done fun(ok: boolean, err: string|nil)
 ---@return { cancel: fun() }|nil
 function M.update_start_date(project_path, milestone_id, value, on_done)
-	return update_date(project_path, milestone_id, "start_date", "start date", value, on_done)
+	return update_field(project_path, milestone_id, "start_date", "start date", value, on_done)
 end
 
 ---@param project_path string
@@ -199,7 +208,7 @@ end
 ---@param on_done fun(ok: boolean, err: string|nil)
 ---@return { cancel: fun() }|nil
 function M.update_due_date(project_path, milestone_id, value, on_done)
-	return update_date(project_path, milestone_id, "due_date", "due date", value, on_done)
+	return update_field(project_path, milestone_id, "due_date", "due date", value, on_done)
 end
 
 return M

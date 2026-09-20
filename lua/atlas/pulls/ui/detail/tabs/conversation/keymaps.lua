@@ -7,7 +7,6 @@ local detail = require("atlas.pulls.ui.detail.state")
 local review_threads = require("atlas.pulls.ui.components.review_threads")
 local state = require("atlas.pulls.ui.detail.tabs.conversation.state")
 local actions = require("atlas.pulls.ui.detail.tabs.conversation.actions")
-local tab_hints = require("atlas.pulls.ui.detail.tabs.tab_hints")
 
 local COMMENT_ACTIONS = {
 	"ui.comments.add",
@@ -184,7 +183,6 @@ function M.setup(buf, refresh)
 	if toggle_all then
 		table.insert(items, toggle_all)
 	end
-	vim.list_extend(items, tab_hints.items(provider))
 	help.register("Detail", items, { index = 212, buffer = buf })
 end
 
@@ -211,7 +209,6 @@ function M.teardown(buf)
 		end
 	end
 	help.remove("Detail", items, { buffer = buf })
-	tab_hints.remove(buf, "Detail")
 end
 
 return M

@@ -368,34 +368,6 @@ function M.apply_filter_text(text)
 	M.switch_view(view)
 end
 
----@param status string
-function M.toggle_status_filter(status)
-	-- Don't allow deselecting the last active filter
-	local active_count = 0
-	for _, enabled in pairs(state.status_filters) do
-		if enabled then
-			active_count = active_count + 1
-		end
-	end
-	if state.status_filters[status] and active_count <= 1 then
-		notify.warn("At least one status filter must remain active")
-		return
-	end
-
-	state.status_filters[status] = not state.status_filters[status]
-	state.filter_text = require("atlas.ui.filter_query").serialize(
-		state.active_view,
-		{ domain = "pulls", status_filters = state.status_filters }
-	)
-
-	local buf = dashboard_host.buf()
-	if buf ~= nil then
-		require("atlas.pulls.ui.dashboard.keymaps").register(buf, state.views)
-	end
-
-	M.refresh_current_view()
-end
-
 function M.dispose()
 	state.is_loading = false
 	cancel_active_requests()

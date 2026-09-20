@@ -87,14 +87,9 @@ local M = {}
 ---@field explorer? AtlasPullsReviewExplorerKeymaps
 ---@field diff? AtlasPullsReviewDiffKeymaps
 
----@class AtlasPullsFilterKeymaps
----@field open? AtlasKeymapValue
----@field merged? AtlasKeymapValue
-
 ---@class AtlasPullsKeymaps
 ---@field create_pr? AtlasKeymapValue
 ---@field open_diff? AtlasKeymapValue
----@field open_pipeline? AtlasKeymapValue
 ---@field pipeline_retry? AtlasKeymapValue
 ---@field pipeline_cancel? AtlasKeymapValue
 ---@field external_help? AtlasKeymapValue
@@ -106,11 +101,6 @@ local M = {}
 ---@field edit_labels? AtlasKeymapValue
 ---@field toggle_remove_source_branch? AtlasKeymapValue
 ---@field review? AtlasPullsReviewKeymaps
----@field filters? AtlasPullsFilterKeymaps
-
----@class AtlasIssuesFilterKeymaps
----@field open? AtlasKeymapValue
----@field closed? AtlasKeymapValue
 
 ---@class AtlasIssuesKeymaps
 ---@field transition_issue? AtlasKeymapValue
@@ -118,6 +108,7 @@ local M = {}
 ---@field change_reporter? AtlasKeymapValue
 ---@field change_label? AtlasKeymapValue
 ---@field change_milestone? AtlasKeymapValue
+---@field change_milestone_title? AtlasKeymapValue
 ---@field change_milestone_start_date? AtlasKeymapValue
 ---@field change_milestone_due_date? AtlasKeymapValue
 ---@field edit_issue? AtlasKeymapValue
@@ -126,7 +117,6 @@ local M = {}
 ---@field create_branch? AtlasKeymapValue
 ---@field go_to_pull? AtlasKeymapValue
 ---@field go_to_milestone? AtlasKeymapValue
----@field filters? AtlasIssuesFilterKeymaps
 
 ---@class AtlasKeymapsConfig
 ---@field ui? AtlasUIKeymaps
@@ -174,7 +164,6 @@ local M = {}
 ---| "picker.close"
 ---| "pulls.create_pr"
 ---| "pulls.open_diff"
----| "pulls.open_pipeline"
 ---| "pulls.pipeline_retry"
 ---| "pulls.pipeline_cancel"
 ---| "pulls.external_help"
@@ -214,13 +203,12 @@ local M = {}
 ---| "pulls.review.diff.add_suggestion"
 ---| "pulls.review.diff.submit_suggestion"
 ---| "pulls.review.diff.toggle_resolved"
----| "pulls.filters.open"
----| "pulls.filters.merged"
 ---| "issues.transition_issue"
 ---| "issues.change_assignee"
 ---| "issues.change_reporter"
 ---| "issues.change_label"
 ---| "issues.change_milestone"
+---| "issues.change_milestone_title"
 ---| "issues.change_milestone_start_date"
 ---| "issues.change_milestone_due_date"
 ---| "issues.edit_issue"
@@ -229,8 +217,6 @@ local M = {}
 ---| "issues.create_branch"
 ---| "issues.go_to_pull"
 ---| "issues.go_to_milestone"
----| "issues.filters.open"
----| "issues.filters.closed"
 
 ---@param value AtlasKeymapValue
 ---@return string[]|nil
@@ -393,6 +379,10 @@ function M.validate()
 		-- transition_issue (declared, not yet wired to any keymap) can't
 		-- collide in practice.
 		{ "issues.change_milestone_start_date", "issues.transition_issue" },
+		-- change_milestone_title (milestone detail buffer) and edit_issue
+		-- (issue detail buffer) are separate panels that are never open at
+		-- once, so sharing "gt" is safe.
+		{ "issues.change_milestone_title", "issues.edit_issue" },
 	}
 
 	local function conflict_allowed(actions)

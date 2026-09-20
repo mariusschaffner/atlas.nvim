@@ -35,6 +35,18 @@ function M.register(buf)
 
 	utils.insert_if(
 		items,
+		resolver.item("issues.change_milestone_title", {
+			desc = "Edit title",
+			hint = false,
+			opts = { nowait = true, silent = true },
+			callback = function()
+				require("atlas.issues.ui.detail.milestone").edit_title()
+			end,
+		})
+	)
+
+	utils.insert_if(
+		items,
 		resolver.item("ui.comments.edit", {
 			desc = "Edit description",
 			hint = state.current_tab == "description",
@@ -105,6 +117,7 @@ function M.remove(buf)
 	local items = {}
 	utils.insert_if(items, resolver.remove_item("ui.next_panel_tab"))
 	utils.insert_if(items, resolver.remove_item("ui.previous_panel_tab"))
+	utils.insert_if(items, resolver.remove_item("issues.change_milestone_title"))
 	utils.insert_if(items, resolver.remove_item("ui.comments.edit"))
 	utils.insert_if(items, resolver.remove_item("issues.change_milestone_start_date"))
 	utils.insert_if(items, resolver.remove_item("issues.change_milestone_due_date"))

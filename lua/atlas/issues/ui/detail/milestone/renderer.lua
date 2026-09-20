@@ -117,16 +117,27 @@ end
 ---@param width integer
 ---@return string[], table[], table<string, AtlasFieldBoxRegion>
 local function render_header(milestone, width)
-	local title_field = {
-		label = string.format("Title - #%s", tostring(milestone.id)),
-		value = tostring(milestone.title or ""),
-		border_hl = milestone.state == "closed" and "AtlasGLIssueClosed" or "AtlasGLIssueOpen",
-	}
-	local lines, spans = field_box.render_columns({}, { width = width, top_field = title_field })
-
 	local core = state.provider and state.provider.capabilities.core
+	local can_edit_title = core and core.update_milestone_title ~= nil
 	local can_edit_start = core and core.update_milestone_start_date ~= nil
 	local can_edit_due = core and core.update_milestone_due_date ~= nil
+
+	local title_field = {
+		id = "title",
+		label = utils.field_hint_label(
+			"issues.change_milestone_title",
+			string.format("Title - #%s", tostring(milestone.id)),
+			can_edit_title
+		),
+		value = tostring(milestone.title or ""),
+		border_hl = milestone.state == "closed" and "AtlasGLIssueClosed" or "AtlasGLIssueOpen",
+		editable = can_edit_title,
+	}
+	local lines, spans, title_regions = field_box.render_columns({}, { width = width, top_field = title_field })
+	local regions = {}
+	for id, region in pairs(title_regions or {}) do
+		regions[id] = region
+	end
 
 	-- One row, three columns: Start date, Due date, Progress side by side.
 	local start_date_col = {
@@ -156,7 +167,6 @@ local function render_header(milestone, width)
 	utils.append_block(lines, spans, { lines = field_lines, highlights = field_spans })
 	table.insert(lines, "")
 
-	local regions = {}
 	for id, region in pairs(field_regions or {}) do
 		regions[id] = { row = base + region.row, col = region.col, width = region.width, height = region.height }
 	end

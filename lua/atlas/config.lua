@@ -217,7 +217,6 @@ M.options = {
 		pulls = {
 			create_pr = "c",
 			open_diff = "gd",
-			open_pipeline = "gp",
 			pipeline_retry = "gR",
 			pipeline_cancel = "gX",
 			external_help = "gA", -- Atlas help in external diff viewers.
@@ -263,10 +262,6 @@ M.options = {
 					toggle_resolved = "gX",
 				},
 			},
-			filters = {
-				open = "gpo",
-				merged = "gpm",
-			},
 		},
 		issues = {
 			transition_issue = "gs",
@@ -274,18 +269,15 @@ M.options = {
 			change_reporter = "gr",
 			change_label = "gl",
 			change_milestone = "gM",
+			change_milestone_title = "gt",
 			change_milestone_start_date = "gs",
 			change_milestone_due_date = "gd",
-			edit_issue = "ge",
+			edit_issue = "gt",
 			create_issue = "c",
 			toggle_description_mode = "m",
 			create_branch = "gb",
 			go_to_pull = "gp",
 			go_to_milestone = "gm",
-			filters = {
-				open = "gio",
-				closed = "gic",
-			},
 		},
 	},
 }

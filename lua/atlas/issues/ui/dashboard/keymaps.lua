@@ -82,27 +82,6 @@ function M.register(buf, views)
 		})
 	)
 
-	local STATUS_TOGGLES = {
-		{ status = "OPEN", action_id = "issues.filters.open", index = 20 },
-		{ status = "CLOSED", action_id = "issues.filters.closed", index = 21 },
-	}
-	for _, sf in ipairs(STATUS_TOGGLES) do
-		local s = sf
-		utils.insert_if(
-			items,
-			resolver.item(s.action_id, {
-				desc = string.format("Show %s issues", s.status:lower()),
-				hint_desc = "Toggle " .. s.status:sub(1, 1):upper() .. s.status:sub(2):lower(),
-				hint = not state.status_filters[s.status],
-				index = s.index,
-				opts = { nowait = true, silent = true },
-				callback = function()
-					controller.set_status_filter(s.status)
-				end,
-			})
-		)
-	end
-
 	if actions.is_available("create_issue", context(nil)) then
 		utils.insert_if(
 			items,

@@ -218,19 +218,18 @@ function M.edit_description()
 	})
 end
 
----@param field "start_date"|"due_date"
+---@param field "title"|"start_date"|"due_date"
 ---@param label string
-local function edit_date_field(field, label)
+---@param update (fun(project_path: string, milestone_id: integer, value: string, on_done: fun(ok: boolean, err: string|nil)): { cancel: fun() }|nil)|nil
+---@param required boolean|nil Empty text is rejected instead of saved (e.g. a milestone's title can't be cleared).
+local function edit_field(field, label, update, required)
 	local milestone = state.current_milestone
 	local buf = state.buf
 	if milestone == nil or milestone.id == nil or buf == nil or not vim.api.nvim_buf_is_valid(buf) then
 		return
 	end
-	local core = state.provider and state.provider.capabilities.core
-	local update = core
-		and (field == "start_date" and core.update_milestone_start_date or core.update_milestone_due_date)
 	if not update then
-		notify.warn("Provider does not support editing milestone dates")
+		notify.warn("Provider does not support editing milestone " .. label:lower())
 		return
 	end
 
@@ -266,6 +265,12 @@ local function edit_date_field(field, label)
 				done(true)
 				return
 			end
+			if required and updated == "" then
+				local message = label .. " cannot be empty"
+				notify.warn(message)
+				done(false, message)
+				return
+			end
 			notify.loading("Updating " .. label:lower() .. "...")
 			update(project_path, milestone_id, updated, function(ok, err)
 				if not same_milestone(milestone_id) then
@@ -296,16 +301,25 @@ local function edit_date_field(field, label)
 	})
 end
 
+--- Edit the milestone title inline. No-op when the provider doesn't
+--- support it, or while already editing.
+function M.edit_title()
+	local core = state.provider and state.provider.capabilities.core
+	edit_field("title", "Title", core and core.update_milestone_title, true)
+end
+
 --- Edit the milestone start date inline. No-op when the provider doesn't
 --- support it, or while already editing.
 function M.edit_start_date()
-	edit_date_field("start_date", "Start date")
+	local core = state.provider and state.provider.capabilities.core
+	edit_field("start_date", "Start date", core and core.update_milestone_start_date, false)
 end
 
 --- Edit the milestone due date inline. No-op when the provider doesn't
 --- support it, or while already editing.
 function M.edit_due_date()
-	edit_date_field("due_date", "Due date")
+	local core = state.provider and state.provider.capabilities.core
+	edit_field("due_date", "Due date", core and core.update_milestone_due_date, false)
 end
 
 ---@param step 1|-1

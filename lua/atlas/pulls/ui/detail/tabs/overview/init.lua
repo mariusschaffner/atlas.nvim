@@ -7,7 +7,6 @@ local help = require("atlas.ui.popups.help")
 local keymaps = require("atlas.core.keymaps")
 local notify = require("atlas.core.notify")
 local inline_edit = require("atlas.ui.inline_edit")
-local tab_hints = require("atlas.pulls.ui.detail.tabs.tab_hints")
 
 ---@return string|string[]|nil
 local function edit_description_keys()
@@ -169,7 +168,6 @@ function M.activate(buf, refresh)
 	vim.api.nvim_set_option_value("syntax", "markdown", { buf = buf })
 
 	register_edit_keymap(buf, refresh)
-	help.register("Detail", tab_hints.items(detail.provider), { index = 212, buffer = buf })
 end
 
 ---@param buf integer
@@ -185,7 +183,6 @@ function M.deactivate(buf)
 	if keys ~= nil then
 		help.remove("Detail", { { key = #keys == 1 and keys[1] or keys } }, { buffer = buf })
 	end
-	tab_hints.remove(buf, "Detail")
 end
 
 return M
