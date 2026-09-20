@@ -5,14 +5,16 @@ local utils = require("atlas.ui.shared.utils")
 
 local MIN_HEADER_HEIGHT = 3
 local MAX_HEADER_RATIO = 0.55
+local CONTENT_BORDER = "rounded"
 
 local state = {
 	kind = nil,
 	layout = nil, -- "single"|"split"
-	win = nil, -- content window (both layouts)
+	win = nil, -- content window: a floating window in "split" layout, a plain split in "single"
 	buf = nil, -- content buffer (both layouts)
 	header_win = nil, -- sticky header window (split layout only)
 	header_buf = nil, -- sticky header buffer (split layout only)
+	spacer_win = nil, -- hidden split the content float overlays (split layout only)
 	previous_win = nil,
 	cleanup = nil,
 	render = nil,
@@ -36,7 +38,7 @@ local function configure(win)
 		diff = false,
 		winbar = "",
 		colorcolumn = "",
-		winhighlight = "Normal:Normal,NormalFloat:Normal,FloatBorder:FloatBorder,CursorLine:CursorLine",
+		winhighlight = "Normal:Normal,NormalFloat:Normal,FloatBorder:AtlasBorder,CursorLine:CursorLine",
 	}) do
 		vim.api.nvim_set_option_value(name, value, { win = win, scope = "local" })
 	end
@@ -57,8 +59,8 @@ local function configure_header(win)
 		foldmethod = "manual",
 		foldenable = false,
 		-- Never wrap: resize_header() sizes the window from the logical line
-		-- count, so a wrapped line would silently push content (like the tab
-		-- bar, always last) below the visible area.
+		-- count, so a wrapped line would silently push content below the
+		-- visible area.
 		wrap = false,
 		breakindent = true,
 		cursorline = false,
@@ -146,9 +148,42 @@ local function create_single()
 	})
 end
 
--- Full-screen dedicated tab: a small fixed-height header window on top (fields,
--- chips, tab bar, reviewers/checks) that never scrolls, and a content window
--- below it that scrolls independently -- a real sticky header.
+--- Interior width/height the content float should have so that its border
+--- ring lands exactly on `spacer_win`'s edges (i.e. float+border fills the
+--- spacer's rectangle).
+---@param spacer_win integer
+---@return integer width, integer height
+local function content_geometry(spacer_win)
+	local width = math.max(1, vim.api.nvim_win_get_width(spacer_win) - 2)
+	local height = math.max(1, vim.api.nvim_win_get_height(spacer_win) - 2)
+	return width, height
+end
+
+--- Re-syncs the content float's position/size to whatever `state.spacer_win`
+--- currently measures -- called whenever the spacer's geometry could have
+--- changed (header resize, VimResized).
+local function sync_content_float()
+	if state.layout ~= "split" or not utils.window.valid(state.spacer_win) or not utils.window.valid(state.win) then
+		return
+	end
+	local width, height = content_geometry(state.spacer_win)
+	pcall(vim.api.nvim_win_set_config, state.win, {
+		relative = "win",
+		win = state.spacer_win,
+		row = 1,
+		col = 1,
+		width = width,
+		height = height,
+	})
+end
+
+-- Full-screen dedicated tab: a small fixed-height header window on top
+-- (fields, chips, reviewers/checks) that never scrolls, and a bordered
+-- floating content window below it -- a real sticky header, plus a box
+-- whose border stays pinned on screen while only its buffer content scrolls.
+-- The float overlays an invisible "spacer" split so its geometry can be
+-- tracked via Neovim's own split layout engine instead of manual math
+-- against tabline/cmdheight/laststatus.
 local function create_split()
 	vim.cmd("tabnew")
 	local tab = vim.api.nvim_get_current_tabpage()
@@ -163,8 +198,24 @@ local function create_split()
 	vim.api.nvim_win_set_buf(header_win, header_buf)
 	configure_header(header_win)
 
-	local content_win = utils.window.create(header_win, "belowright split", content_buf, configure)
+	local spacer_buf = vim.api.nvim_create_buf(false, true)
+	vim.api.nvim_set_option_value("bufhidden", "wipe", { buf = spacer_buf })
+	local spacer_win = utils.window.create(header_win, "belowright split", spacer_buf, configure)
 	pcall(vim.api.nvim_win_set_height, header_win, MIN_HEADER_HEIGHT)
+
+	local width, height = content_geometry(spacer_win)
+	local content_win = vim.api.nvim_open_win(content_buf, false, {
+		relative = "win",
+		win = spacer_win,
+		row = 1,
+		col = 1,
+		width = width,
+		height = height,
+		border = CONTENT_BORDER,
+		style = "minimal",
+		zindex = 50,
+	})
+	configure(content_win)
 
 	if placeholder_buf ~= header_buf and placeholder_buf ~= content_buf and vim.api.nvim_buf_is_valid(placeholder_buf) then
 		utils.buffer.delete(placeholder_buf)
@@ -177,15 +228,17 @@ local function create_split()
 	state.buf = content_buf
 	state.header_win = header_win
 	state.header_buf = header_buf
+	state.spacer_win = spacer_win
 
-	-- The header is purely informational: never let it hold focus, so tab
-	-- navigation and other content-window keymaps always work regardless of
-	-- where the cursor happened to land.
+	-- The header and its invisible spacer are purely informational: never let
+	-- them hold focus, so tab navigation and other content-window keymaps
+	-- always work regardless of where the cursor happened to land.
 	local focus_guard = vim.api.nvim_create_augroup("AtlasDetailHeaderFocusGuard" .. tostring(tab), { clear = true })
 	vim.api.nvim_create_autocmd("WinEnter", {
 		group = focus_guard,
 		callback = function()
-			if vim.api.nvim_get_current_win() == header_win and utils.window.valid(content_win) then
+			local current = vim.api.nvim_get_current_win()
+			if (current == header_win or current == spacer_win) and utils.window.valid(content_win) then
 				vim.api.nvim_set_current_win(content_win)
 			end
 		end,
@@ -193,7 +246,7 @@ local function create_split()
 
 	local function on_closed()
 		vim.schedule(function()
-			if state.win ~= content_win and state.header_win ~= header_win then
+			if state.win ~= content_win and state.header_win ~= header_win and state.spacer_win ~= spacer_win then
 				return
 			end
 			deactivate()
@@ -205,6 +258,7 @@ local function create_split()
 			state.buf = nil
 			state.header_win = nil
 			state.header_buf = nil
+			state.spacer_win = nil
 			state.layout = nil
 			require("atlas.ui.dashboard").render()
 		end)
@@ -212,6 +266,7 @@ local function create_split()
 
 	vim.api.nvim_create_autocmd("WinClosed", { pattern = tostring(content_win), once = true, callback = on_closed })
 	vim.api.nvim_create_autocmd("WinClosed", { pattern = tostring(header_win), once = true, callback = on_closed })
+	vim.api.nvim_create_autocmd("WinClosed", { pattern = tostring(spacer_win), once = true, callback = on_closed })
 end
 
 ---@param kind "issues"|"pulls"|"repo"|"milestone"
@@ -238,7 +293,7 @@ function M.open(kind, cleanup, render)
 	end
 	if not M.is_open() then
 		deactivate()
-		state.win, state.buf, state.header_win, state.header_buf = nil, nil, nil, nil
+		state.win, state.buf, state.header_win, state.header_buf, state.spacer_win = nil, nil, nil, nil, nil
 		if wanted_layout == "split" then
 			create_split()
 		else
@@ -282,6 +337,20 @@ function M.resize_header(line_count)
 	local max_height = math.max(MIN_HEADER_HEIGHT, math.floor(total * MAX_HEADER_RATIO))
 	local height = math.max(MIN_HEADER_HEIGHT, math.min(line_count, max_height))
 	pcall(vim.api.nvim_win_set_height, state.header_win, height)
+	sync_content_float()
+end
+
+--- Sets the content float's native title to the given `{text, hl_group}[]`
+--- chunks (see `nvim_open_win`'s `title`). Pass `nil`/`{}` to clear it.
+---@param chunks { [1]: string, [2]: string }[]|nil
+function M.set_content_title(chunks)
+	if state.layout ~= "split" or not utils.window.valid(state.win) then
+		return
+	end
+	pcall(vim.api.nvim_win_set_config, state.win, {
+		title = (chunks == nil or #chunks == 0) and "" or chunks,
+		title_pos = "left",
+	})
 end
 
 ---@param tab integer|nil
@@ -296,7 +365,8 @@ function M.close(tab)
 	local header_buf = state.header_buf
 	local layout = state.layout
 	deactivate()
-	state.win, state.buf, state.header_win, state.header_buf, state.layout = nil, nil, nil, nil, nil
+	state.win, state.buf, state.header_win, state.header_buf, state.spacer_win, state.layout =
+		nil, nil, nil, nil, nil, nil
 	if layout == "split" and utils.window.valid(win) then
 		local tabpage = vim.api.nvim_win_get_tabpage(win)
 		pcall(vim.cmd, "tabclose " .. vim.api.nvim_tabpage_get_number(tabpage))
@@ -320,6 +390,8 @@ vim.api.nvim_create_autocmd("VimResized", {
 		end
 		if state.layout ~= "split" then
 			pcall(vim.api.nvim_win_set_width, state.win, math.max(math.floor(vim.o.columns * 0.45), 40))
+		else
+			sync_content_float()
 		end
 		if state.render then
 			state.render()

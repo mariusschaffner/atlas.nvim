@@ -126,19 +126,22 @@ local function render_header(issue, tab_items, width)
 	local header_lines, header_spans, header_regions =
 		header.render(issue, width, left_fields, middle_fields, right_fields, status_badge)
 	utils.append_block(lines, spans, { lines = header_lines, highlights = header_spans })
-	table.insert(lines, "")
-
-	if #tab_items > 1 then
-		local tab_lines, tab_spans = tabs.render(tab_items, state.current_tab, width, {
-			active_hl = "AtlasFilterActive",
-			inactive_hl = "AtlasTextMuted",
-			gap = " ",
-			padding_x = PADDING_X,
-		})
-		utils.append_block(lines, spans, { lines = tab_lines, highlights = tab_spans })
-	end
 
 	return lines, spans, header_regions or {}
+end
+
+---@param tab_items IssuesDetailTabDefinition[]
+---@param active_tab string
+---@return { [1]: string, [2]: string }[]
+function M.title_chunks(tab_items, active_tab)
+	if #tab_items <= 1 then
+		return {}
+	end
+	return tabs.title_chunks(tab_items, active_tab, {
+		active_hl = "AtlasFilterActive",
+		inactive_hl = "AtlasTextMuted",
+		gap = " ",
+	})
 end
 
 ---@param tab_items IssuesDetailTabDefinition[]
@@ -168,6 +171,8 @@ function M.render(tab_items, get_tab_module)
 		state.header_regions = header_regions
 		detail_ui.resize_header(#header_lines)
 	end
+
+	detail_ui.set_content_title(M.title_chunks(tab_items, state.current_tab))
 
 	if inline_edit.is_active(buf) then
 		return

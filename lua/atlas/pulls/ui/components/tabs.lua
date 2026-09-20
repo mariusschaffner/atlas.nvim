@@ -16,4 +16,15 @@ function M.render(items, active_tab, opts)
 	})
 end
 
+---@param items PullsDetailTab[]|PullsRepoDetailTab[]
+---@param active_tab string
+---@return { [1]: string, [2]: string }[]
+function M.title_chunks(items, active_tab)
+	return tabs.title_chunks(items, active_tab, {
+		active_hl = "AtlasFilterActive",
+		inactive_hl = "AtlasTextMuted",
+		gap = " ",
+	})
+end
+
 return M

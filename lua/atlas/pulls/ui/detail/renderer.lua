@@ -214,14 +214,17 @@ local function render_header(pr, tab_items, width)
 		table.insert(lines, "")
 	end
 
-	-- Tab bar
-	if #tab_items > 1 then
-		local tab_lines, tab_spans =
-			detail_tabs.render(tab_items, state.current_tab, { width = width, padding_x = PADDING_X })
-		utils.append_block(lines, spans, { lines = tab_lines, highlights = tab_spans })
-	end
-
 	return lines, spans, field_regions or {}
+end
+
+---@param tab_items PullsDetailTab[]
+---@param active_tab string
+---@return { [1]: string, [2]: string }[]
+function M.title_chunks(tab_items, active_tab)
+	if #tab_items <= 1 then
+		return {}
+	end
+	return detail_tabs.title_chunks(tab_items, active_tab)
 end
 
 ---@param tab_items PullsDetailTab[]
@@ -253,6 +256,8 @@ function M.render(tab_items, get_tab_module)
 		state.header_regions = header_regions
 		detail_ui.resize_header(#header_lines)
 	end
+
+	detail_ui.set_content_title(M.title_chunks(tab_items, state.current_tab))
 
 	if inline_edit.is_active(buf) then
 		return

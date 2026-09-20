@@ -171,15 +171,17 @@ local function render_header(milestone, width)
 		regions[id] = { row = base + region.row, col = region.col, width = region.width, height = region.height }
 	end
 
-	local tab_lines, tab_spans = tabs.render(TABS, state.current_tab, width, {
+	return lines, spans, regions
+end
+
+---@param active_tab string
+---@return { [1]: string, [2]: string }[]
+function M.title_chunks(active_tab)
+	return tabs.title_chunks(TABS, active_tab, {
 		active_hl = "AtlasFilterActive",
 		inactive_hl = "AtlasTextMuted",
 		gap = " ",
-		padding_x = PADDING_X,
 	})
-	utils.append_block(lines, spans, { lines = tab_lines, highlights = tab_spans })
-
-	return lines, spans, regions
 end
 
 ---@return string[], table[]
@@ -253,6 +255,8 @@ function M.render()
 		detail_ui.resize_header(#header_lines)
 		state.header_regions = header_regions or {}
 	end
+
+	detail_ui.set_content_title(M.title_chunks(state.current_tab))
 
 	local lines, spans
 	if milestone == nil then
