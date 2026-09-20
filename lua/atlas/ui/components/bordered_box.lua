@@ -16,26 +16,49 @@ local TL, TR, BL, BR, H, V = "╭", "╮", "╰", "╯", "─", "│"
 ---@param interior_width integer
 ---@param title string|nil
 ---@param title_highlights table[]|nil Spans {start_col, end_col, hl_group} relative to `title` itself.
+---@param title_right string|nil Right-aligned segment near the top-right corner (e.g. a notification/help hint).
+---@param title_right_highlights table[]|nil Spans {start_col, end_col, hl_group} relative to `title_right` itself.
 ---@return string top
 ---@return table[] highlights Spans {start_col, end_col, hl_group} relative to the returned `top` line.
-local function build_top(interior_width, title, title_highlights)
-	if title == nil or title == "" then
+local function build_top(interior_width, title, title_highlights, title_right, title_right_highlights)
+	local has_title = title ~= nil and title ~= ""
+	local has_right = title_right ~= nil and title_right ~= ""
+
+	if not has_title and not has_right then
 		return TL .. string.rep(H, math.max(0, interior_width)) .. TR, {}
 	end
 
-	local label = string.format(" %s ", title)
-	local label_w = text_width(label)
-	local remaining = math.max(0, interior_width - 1 - label_w)
-	local top = TL .. H .. label .. string.rep(H, remaining) .. TR
+	local left_part = has_title and (H .. string.format(" %s ", title)) or H
+	local left_w = text_width(left_part)
 
-	local title_offset = #TL + #H + 1 -- leading space in label
-	local title_len = #title
+	local right_part = has_right and (string.format(" %s ", title_right) .. H) or ""
+	local right_w = text_width(right_part)
+
+	local fill = math.max(0, interior_width - left_w - right_w)
+	local fill_str = string.rep(H, fill)
+	local top = TL .. left_part .. fill_str .. right_part .. TR
+
 	local highlights = {}
-	for _, span in ipairs(title_highlights or {}) do
-		local sc = math.min(span.start_col, title_len)
-		local ec = math.min(span.end_col, title_len)
-		if ec > sc then
-			table.insert(highlights, { start_col = title_offset + sc, end_col = title_offset + ec, hl_group = span.hl_group })
+	if has_title then
+		local title_offset = #TL + #H + 1 -- corner + dash + leading space
+		local title_len = #title
+		for _, span in ipairs(title_highlights or {}) do
+			local sc = math.min(span.start_col, title_len)
+			local ec = math.min(span.end_col, title_len)
+			if ec > sc then
+				table.insert(highlights, { start_col = title_offset + sc, end_col = title_offset + ec, hl_group = span.hl_group })
+			end
+		end
+	end
+	if has_right then
+		local right_offset = #TL + #left_part + #fill_str + 1 -- everything before title_right's own text, +1 for its leading space
+		local right_len = #title_right
+		for _, span in ipairs(title_right_highlights or {}) do
+			local sc = math.min(span.start_col, right_len)
+			local ec = math.min(span.end_col, right_len)
+			if ec > sc then
+				table.insert(highlights, { start_col = right_offset + sc, end_col = right_offset + ec, hl_group = span.hl_group })
+			end
 		end
 	end
 
@@ -52,6 +75,8 @@ end
 ---  width: integer,
 ---  title: string|nil,
 ---  title_highlights: table[]|nil Spans {start_col, end_col, hl_group} relative to `title` itself.
+---  title_right: string|nil Right-aligned segment near the top-right corner (e.g. a notification/help hint).
+---  title_right_highlights: table[]|nil Spans {start_col, end_col, hl_group} relative to `title_right` itself.
 ---  content_lines: string[],
 ---  content_highlights: table[]|nil,
 ---  box_width: integer|nil Exact box width, bypassing the ratio-based sizing below.
@@ -86,7 +111,8 @@ function M.render(opts)
 	local lines = {}
 	local highlights = {}
 
-	local top, top_title_highlights = build_top(interior_width, opts.title, opts.title_highlights)
+	local top, top_title_highlights =
+		build_top(interior_width, opts.title, opts.title_highlights, opts.title_right, opts.title_right_highlights)
 	table.insert(lines, top)
 	table.insert(highlights, { line = 0, start_col = 0, end_col = #top, hl_group = border_hl })
 	for _, span in ipairs(top_title_highlights) do

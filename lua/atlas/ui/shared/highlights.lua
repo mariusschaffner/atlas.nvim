@@ -48,13 +48,13 @@ local groups = {
 	AtlasLogWarn = { fg = "#f9e2af", bold = true },
 	AtlasLogError = { fg = "#f38ba8", bold = true },
 
-	AtlasFooterBackground = { bg = "#202635" },
-	AtlasFooterText = { fg = "#7f849c", bg = "#202635" },
-	AtlasFooterInfo = { fg = "#89b4fa", bg = "#202635", bold = true },
-	AtlasFooterNote = { fg = "#f5bde6", bg = "#202635", bold = true },
-	AtlasFooterWarning = { fg = "#f9e2af", bg = "#202635", bold = true },
-	AtlasFooterError = { fg = "#f38ba8", bg = "#202635", bold = true },
-	AtlasFooterSuccess = { fg = "#a6da95", bg = "#202635", bold = true },
+	AtlasFooterBackground = { bg = "#1f1f28" },
+	AtlasFooterText = { fg = "#7f849c", bg = "#1f1f28" },
+	AtlasFooterInfo = { fg = "#89b4fa", bg = "#1f1f28", bold = true },
+	AtlasFooterNote = { fg = "#f5bde6", bg = "#1f1f28", bold = true },
+	AtlasFooterWarning = { fg = "#f9e2af", bg = "#1f1f28", bold = true },
+	AtlasFooterError = { fg = "#f38ba8", bg = "#1f1f28", bold = true },
+	AtlasFooterSuccess = { fg = "#a6da95", bg = "#1f1f28", bold = true },
 
 	AtlasChipActive = { fg = "#1e1e2e", bg = "#89b4fa", bold = true },
 
