@@ -201,7 +201,6 @@ local function render_header(pr, tab_items, width)
 			top_field = header.title_field(pr, supports_action("edit_title")),
 		})
 	utils.append_block(lines, spans, { lines = field_lines, highlights = field_spans })
-	table.insert(lines, "")
 
 	-- Chips
 	local chip_lines, chip_spans = chips.render(pr, {
@@ -210,11 +209,30 @@ local function render_header(pr, tab_items, width)
 		loading = state.details_loading or state.pipelines == "loading",
 	})
 	if #chip_lines > 0 then
-		utils.append_block(lines, spans, { lines = chip_lines, highlights = chip_spans })
 		table.insert(lines, "")
+		utils.append_block(lines, spans, { lines = chip_lines, highlights = chip_spans })
 	end
 
 	return lines, spans, field_regions or {}
+end
+
+--- Whether the description field (the "overview" tab's content) can be
+--- edited right now -- drives the content box's editable border color, same
+--- signal the overview tab module's `edit_description_keys()` uses to decide
+--- whether "i" does anything.
+---@return boolean
+local function description_editable()
+	if state.current_tab ~= "overview" then
+		return false
+	end
+	local provider = state.provider
+	local capability = provider and provider.capabilities.actions
+	for _, action in ipairs(capability and capability.items or {}) do
+		if action.id == "edit_description" then
+			return true
+		end
+	end
+	return false
 end
 
 ---@param tab_items PullsDetailTab[]
@@ -258,6 +276,7 @@ function M.render(tab_items, get_tab_module)
 	end
 
 	detail_ui.set_content_title(M.title_chunks(tab_items, state.current_tab))
+	detail_ui.set_content_border(description_editable() and "AtlasFieldBoxBorderEditable" or nil)
 
 	if inline_edit.is_active(buf) then
 		return

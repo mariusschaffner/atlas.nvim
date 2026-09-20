@@ -130,6 +130,15 @@ local function render_header(issue, tab_items, width)
 	return lines, spans, header_regions or {}
 end
 
+--- Whether the description field (the "overview" tab's content) can be
+--- edited right now -- drives the content box's editable border color, same
+--- signal `register_edit_keymap` uses to decide whether "i" does anything.
+---@return boolean
+local function description_editable()
+	local core = state.provider and state.provider.capabilities.core
+	return state.current_tab == "overview" and core ~= nil and core.update_description ~= nil
+end
+
 ---@param tab_items IssuesDetailTabDefinition[]
 ---@param active_tab string
 ---@return { [1]: string, [2]: string }[]
@@ -138,7 +147,7 @@ function M.title_chunks(tab_items, active_tab)
 		return {}
 	end
 	return tabs.title_chunks(tab_items, active_tab, {
-		active_hl = "AtlasFilterActive",
+		active_hl = "AtlasDetailTabActive",
 		inactive_hl = "AtlasTextMuted",
 		gap = " ",
 	})
@@ -173,6 +182,7 @@ function M.render(tab_items, get_tab_module)
 	end
 
 	detail_ui.set_content_title(M.title_chunks(tab_items, state.current_tab))
+	detail_ui.set_content_border(description_editable() and "AtlasFieldBoxBorderEditable" or nil)
 
 	if inline_edit.is_active(buf) then
 		return

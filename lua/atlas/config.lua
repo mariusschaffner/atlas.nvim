@@ -184,6 +184,7 @@ M.options = {
 				edit = "gE",
 				react = "gr",
 			},
+			edit_description = "i",
 			field_edit = {
 				close = "<Esc>",
 			},

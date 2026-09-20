@@ -220,7 +220,7 @@ M.edit_description = {
 			-- Description is a tab-body field (the whole "Description" tab IS
 			-- the field, no neighbors sharing its buffer), so it uses the
 			-- whole-buffer inline_edit pattern -- same as the dedicated
-			-- `ui.comments.edit` keymap in the overview tab already does.
+			-- `ui.edit_description` keymap in the overview tab already does.
 			require("atlas.pulls.ui.detail").select_tab("overview")
 			local buf = detail_state.buf
 			if buf == nil or not vim.api.nvim_buf_is_valid(buf) or inline_edit.is_active(buf) then

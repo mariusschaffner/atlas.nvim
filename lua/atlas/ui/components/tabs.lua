@@ -97,6 +97,8 @@ end
 --- `title` (see `nvim_open_win`'s `title`). Every chunk's `hl_group` slot is
 --- always a real string ("" for "no highlight") -- `{text, nil}` silently
 --- truncates to a 1-element array under Neovim's title-chunk validation.
+--- Icons are deliberately omitted here (unlike `M.render`'s text row) --
+--- native title chunks are meant to read as plain tab labels.
 ---@param items { key: string, label: string, icon: AtlasIconStyle|nil }[]
 ---@param active_tab string
 ---@param opts? { inactive_hl?: string, active_hl?: string, gap?: string }
@@ -110,10 +112,6 @@ function M.title_chunks(items, active_tab, opts)
 	local chunks = { { " ", "" } }
 	for i, tab in ipairs(items) do
 		local hl = tab.key == active_tab and active_hl or inactive_hl
-		local icon = tab.icon and tab.icon.icon or ""
-		if icon ~= "" then
-			table.insert(chunks, { icon .. " ", tab.icon.hl_group or hl })
-		end
 		table.insert(chunks, { tab.label, hl })
 		if i < #items then
 			table.insert(chunks, { gap, "" })

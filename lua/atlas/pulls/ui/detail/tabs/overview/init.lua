@@ -22,7 +22,7 @@ local function edit_description_keys()
 	if not supported then
 		return nil
 	end
-	return keymaps.resolve("ui.comments.edit")
+	return keymaps.resolve("ui.edit_description")
 end
 
 local PADDING_X = 1
@@ -83,7 +83,7 @@ local function register_edit_keymap(buf, refresh)
 		{
 			key = #keys == 1 and keys[1] or keys,
 			desc = "Edit PR description",
-			hint_desc = "Edit",
+			hint = false, -- no hint shown; the content box's editable border color is the only affordance
 			opts = { nowait = true, silent = true },
 			callback = function()
 				local pr = detail.current_pr

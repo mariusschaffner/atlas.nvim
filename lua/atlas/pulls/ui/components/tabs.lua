@@ -21,7 +21,7 @@ end
 ---@return { [1]: string, [2]: string }[]
 function M.title_chunks(items, active_tab)
 	return tabs.title_chunks(items, active_tab, {
-		active_hl = "AtlasFilterActive",
+		active_hl = "AtlasDetailTabActive",
 		inactive_hl = "AtlasTextMuted",
 		gap = " ",
 	})

@@ -11,6 +11,7 @@ local M = {}
 ---@field close? AtlasKeymapValue
 ---@field delete? AtlasKeymapValue
 ---@field comments? AtlasUICommentKeymaps
+---@field edit_description? AtlasKeymapValue Edits the current detail panel's description field (issue/PR/milestone overview tab). Separate from `comments.edit` (thread comments) so it can carry its own key/hint.
 ---@field field_edit? AtlasUIFieldEditKeymaps
 ---@field inspect? AtlasKeymapValue
 ---@field toggle_panel? AtlasKeymapValue
@@ -138,6 +139,7 @@ local M = {}
 ---| "ui.comments.reply"
 ---| "ui.comments.edit"
 ---| "ui.comments.react"
+---| "ui.edit_description"
 ---| "ui.field_edit.close"
 ---| "ui.inspect"
 ---| "ui.toggle_panel"

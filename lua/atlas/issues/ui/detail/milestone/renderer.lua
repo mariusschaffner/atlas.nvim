@@ -165,7 +165,6 @@ local function render_header(milestone, width)
 		field_box.render_columns({ start_date_col, due_date_col, progress_col }, { width = width })
 	local base = #lines
 	utils.append_block(lines, spans, { lines = field_lines, highlights = field_spans })
-	table.insert(lines, "")
 
 	for id, region in pairs(field_regions or {}) do
 		regions[id] = { row = base + region.row, col = region.col, width = region.width, height = region.height }
@@ -178,10 +177,20 @@ end
 ---@return { [1]: string, [2]: string }[]
 function M.title_chunks(active_tab)
 	return tabs.title_chunks(TABS, active_tab, {
-		active_hl = "AtlasFilterActive",
+		active_hl = "AtlasDetailTabActive",
 		inactive_hl = "AtlasTextMuted",
 		gap = " ",
 	})
+end
+
+--- Whether the description field (the "description" tab's content) can be
+--- edited right now -- drives the content box's editable border color, same
+--- signal `M.edit_description`'s guard uses to decide whether "i" does
+--- anything.
+---@return boolean
+local function description_editable()
+	local core = state.provider and state.provider.capabilities.core
+	return state.current_tab == "description" and core ~= nil and core.update_milestone_description ~= nil
 end
 
 ---@return string[], table[]
@@ -257,6 +266,7 @@ function M.render()
 	end
 
 	detail_ui.set_content_title(M.title_chunks(state.current_tab))
+	detail_ui.set_content_border(description_editable() and "AtlasFieldBoxBorderEditable" or nil)
 
 	local lines, spans
 	if milestone == nil then

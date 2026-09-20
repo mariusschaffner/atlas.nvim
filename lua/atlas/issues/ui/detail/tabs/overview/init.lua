@@ -40,7 +40,7 @@ local function register_edit_keymap(buf, refresh)
 	local provider = detail.provider
 	local core = provider and provider.capabilities.core
 	local update_description = core and core.update_description
-	local keys = update_description and keymaps.resolve("ui.comments.edit") or nil
+	local keys = update_description and keymaps.resolve("ui.edit_description") or nil
 	if keys == nil then
 		return
 	end
@@ -49,7 +49,7 @@ local function register_edit_keymap(buf, refresh)
 		{
 			key = #keys == 1 and keys[1] or keys,
 			desc = "Edit description",
-			hint_desc = "Edit",
+			hint = false, -- no hint shown; the content box's editable border color is the only affordance
 			opts = { nowait = true, silent = true },
 			callback = function()
 				local issue = detail.current_issue
@@ -116,7 +116,7 @@ end
 
 ---@param buf integer
 function M.deactivate(buf)
-	local keys = keymaps.resolve("ui.comments.edit")
+	local keys = keymaps.resolve("ui.edit_description")
 	if keys then
 		help.remove("Detail", { { key = #keys == 1 and keys[1] or keys } }, { buffer = buf })
 	end

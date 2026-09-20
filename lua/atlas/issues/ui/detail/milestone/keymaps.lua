@@ -3,7 +3,6 @@ local M = {}
 local help = require("atlas.ui.popups.help")
 local resolver = require("atlas.core.keymaps")
 local utils = require("atlas.ui.shared.utils")
-local state = require("atlas.issues.ui.detail.milestone.state")
 
 ---@param buf integer
 function M.register(buf)
@@ -47,10 +46,9 @@ function M.register(buf)
 
 	utils.insert_if(
 		items,
-		resolver.item("ui.comments.edit", {
+		resolver.item("ui.edit_description", {
 			desc = "Edit description",
-			hint = state.current_tab == "description",
-			hint_desc = "Edit",
+			hint = false, -- no hint shown; the content box's editable border color is the only affordance
 			opts = { nowait = true, silent = true },
 			callback = function()
 				require("atlas.issues.ui.detail.milestone").edit_description()
@@ -118,7 +116,7 @@ function M.remove(buf)
 	utils.insert_if(items, resolver.remove_item("ui.next_panel_tab"))
 	utils.insert_if(items, resolver.remove_item("ui.previous_panel_tab"))
 	utils.insert_if(items, resolver.remove_item("issues.change_milestone_title"))
-	utils.insert_if(items, resolver.remove_item("ui.comments.edit"))
+	utils.insert_if(items, resolver.remove_item("ui.edit_description"))
 	utils.insert_if(items, resolver.remove_item("issues.change_milestone_start_date"))
 	utils.insert_if(items, resolver.remove_item("issues.change_milestone_due_date"))
 	utils.insert_if(items, resolver.remove_item("ui.help"))

@@ -337,8 +337,8 @@ local function change_tab(step)
 	if state.win and vim.api.nvim_win_is_valid(state.win) then
 		vim.api.nvim_win_set_cursor(state.win, { 1, 0 })
 	end
-	-- Re-register so the "Edit description" statusline hint (only shown on
-	-- the Description tab) reflects the newly active tab.
+	-- Re-register so tab-scoped keymaps (e.g. edit_description, a no-op off
+	-- the Description tab) stay correctly bound after switching tabs.
 	if state.buf and vim.api.nvim_buf_is_valid(state.buf) then
 		require("atlas.issues.ui.detail.milestone.keymaps").register(state.buf)
 	end

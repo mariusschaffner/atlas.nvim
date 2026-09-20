@@ -20,6 +20,12 @@ local state = {
 	render = nil,
 }
 
+---@param border_hl string
+---@return string
+local function content_winhighlight(border_hl)
+	return "Normal:Normal,NormalFloat:Normal,FloatBorder:" .. border_hl .. ",CursorLine:CursorLine"
+end
+
 ---@param win integer
 local function configure(win)
 	for name, value in pairs({
@@ -38,7 +44,7 @@ local function configure(win)
 		diff = false,
 		winbar = "",
 		colorcolumn = "",
-		winhighlight = "Normal:Normal,NormalFloat:Normal,FloatBorder:AtlasBorder,CursorLine:CursorLine",
+		winhighlight = content_winhighlight("AtlasBorder"),
 	}) do
 		vim.api.nvim_set_option_value(name, value, { win = win, scope = "local" })
 	end
@@ -351,6 +357,18 @@ function M.set_content_title(chunks)
 		title = (chunks == nil or #chunks == 0) and "" or chunks,
 		title_pos = "left",
 	})
+end
+
+--- Sets the content float's border highlight (e.g. `AtlasFieldBoxBorderEditable`
+--- while the active tab is ready for inline editing, matching every other
+--- editable field box). Pass `nil`/`""` to reset to the default border color.
+---@param hl_group string|nil
+function M.set_content_border(hl_group)
+	if state.layout ~= "split" or not utils.window.valid(state.win) then
+		return
+	end
+	local border_hl = (hl_group == nil or hl_group == "") and "AtlasBorder" or hl_group
+	pcall(vim.api.nvim_set_option_value, "winhighlight", content_winhighlight(border_hl), { win = state.win, scope = "local" })
 end
 
 ---@param tab integer|nil
