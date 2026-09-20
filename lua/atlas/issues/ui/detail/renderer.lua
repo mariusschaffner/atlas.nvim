@@ -6,7 +6,6 @@ local header = require("atlas.issues.ui.detail.components.header")
 local tabs = require("atlas.ui.components.tabs")
 local state = require("atlas.issues.ui.detail.state")
 local detail_ui = require("atlas.ui.detail")
-local keymaps = require("atlas.core.keymaps")
 local inline_edit = require("atlas.ui.inline_edit")
 local highlights = require("atlas.ui.shared.highlights")
 
@@ -140,21 +139,6 @@ local function description_editable()
 	return state.current_tab == "overview" and core ~= nil and core.update_description ~= nil
 end
 
---- "[i] - " prefix shown on the Description tab's own label, but only while
---- it's the active tab (and only when editing is actually possible) -- the
---- statusline hint was deliberately removed, so this is the sole affordance.
----@return string|nil
-local function edit_hint_prefix()
-	if not description_editable() then
-		return nil
-	end
-	local keys = keymaps.resolve("ui.edit_description")
-	if not keys or not keys[1] then
-		return nil
-	end
-	return string.format("[%s] - ", keys[1])
-end
-
 ---@param tab_items IssuesDetailTabDefinition[]
 ---@param active_tab string
 ---@return { [1]: string, [2]: string }[]
@@ -166,7 +150,6 @@ function M.title_chunks(tab_items, active_tab)
 		active_hl = "AtlasDetailTabActive",
 		inactive_hl = "AtlasTextMuted",
 		gap = " - ",
-		active_hint = edit_hint_prefix(),
 	})
 end
 

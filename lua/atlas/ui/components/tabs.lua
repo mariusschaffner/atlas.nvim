@@ -98,10 +98,13 @@ end
 --- always a real string ("" for "no highlight") -- `{text, nil}` silently
 --- truncates to a 1-element array under Neovim's title-chunk validation.
 --- Icons are deliberately omitted here (unlike `M.render`'s text row) --
---- native title chunks are meant to read as plain tab labels.
+--- native title chunks are meant to read as plain tab labels. The leading
+--- "─ " mirrors `bordered_box.lua`'s own `╭─ Title` pattern (border dash,
+--- then a space) instead of plain padding, so the title starts the same way
+--- every other field box's title does.
 ---@param items { key: string, label: string, icon: AtlasIconStyle|nil }[]
 ---@param active_tab string
----@param opts? { inactive_hl?: string, active_hl?: string, gap?: string, active_hint?: string }
+---@param opts? { inactive_hl?: string, active_hl?: string, gap?: string }
 ---@return { [1]: string, [2]: string }[]
 function M.title_chunks(items, active_tab, opts)
 	opts = opts or {}
@@ -109,12 +112,10 @@ function M.title_chunks(items, active_tab, opts)
 	local active_hl = opts.active_hl or ""
 	local gap = opts.gap or " "
 
-	local chunks = { { "  ", "" } }
+	local chunks = { { "─ ", "" } }
 	for i, tab in ipairs(items) do
-		local is_active = tab.key == active_tab
-		local hl = is_active and active_hl or inactive_hl
-		local label = (is_active and opts.active_hint) and (opts.active_hint .. tab.label) or tab.label
-		table.insert(chunks, { label, hl })
+		local hl = tab.key == active_tab and active_hl or inactive_hl
+		table.insert(chunks, { tab.label, hl })
 		if i < #items then
 			table.insert(chunks, { gap, "" })
 		end

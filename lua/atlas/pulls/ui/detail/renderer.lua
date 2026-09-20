@@ -11,7 +11,6 @@ local spinner = require("atlas.ui.components.spinner")
 local presentation = require("atlas.pulls.ui.presentation")
 local detail_ui = require("atlas.ui.detail")
 local inline_edit = require("atlas.ui.inline_edit")
-local keymaps = require("atlas.core.keymaps")
 
 local ns = vim.api.nvim_create_namespace("atlas.provider_detail")
 local header_ns = vim.api.nvim_create_namespace("atlas.provider_detail.header")
@@ -236,21 +235,6 @@ local function description_editable()
 	return false
 end
 
---- "[i] - " prefix shown on the Description tab's own label, but only while
---- it's the active tab (and only when editing is actually possible) -- the
---- statusline hint was deliberately removed, so this is the sole affordance.
----@return string|nil
-local function edit_hint_prefix()
-	if not description_editable() then
-		return nil
-	end
-	local keys = keymaps.resolve("ui.edit_description")
-	if not keys or not keys[1] then
-		return nil
-	end
-	return string.format("[%s] - ", keys[1])
-end
-
 ---@param tab_items PullsDetailTab[]
 ---@param active_tab string
 ---@return { [1]: string, [2]: string }[]
@@ -258,7 +242,7 @@ function M.title_chunks(tab_items, active_tab)
 	if #tab_items <= 1 then
 		return {}
 	end
-	return detail_tabs.title_chunks(tab_items, active_tab, edit_hint_prefix())
+	return detail_tabs.title_chunks(tab_items, active_tab)
 end
 
 ---@param tab_items PullsDetailTab[]
