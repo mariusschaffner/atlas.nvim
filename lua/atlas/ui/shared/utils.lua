@@ -416,6 +416,26 @@ function M.insert_if(list, value)
 	end
 end
 
+--- Prefixes a field box label with its editing keymap, e.g. "[ga] - Assignee",
+--- so the binding lives on the field itself instead of the statusline. Falls
+--- back to the plain label when the action has no key configured (or when
+--- `editable` is false, so the hint isn't shown for a field the user can't
+--- currently edit).
+---@param action_id string|nil
+---@param label string
+---@param editable boolean|nil
+---@return string
+function M.field_hint_label(action_id, label, editable)
+	if not editable or not action_id then
+		return label
+	end
+	local keys = require("atlas.core.keymaps").resolve(action_id)
+	if keys and keys[1] then
+		return string.format("[%s] - %s", keys[1], label)
+	end
+	return label
+end
+
 ---@param value any
 ---@return string
 function M.encode_pretty_json(value)

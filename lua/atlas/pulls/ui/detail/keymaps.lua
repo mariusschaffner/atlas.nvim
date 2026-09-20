@@ -174,7 +174,7 @@ function M.register(buf, opts)
 		items,
 		resolver.item("pulls.open_diff", {
 			desc = "Open PR diff",
-			hint_desc = "Diff",
+			hint = false,
 			index = 14,
 			opts = { nowait = true },
 			callback = function()
@@ -195,7 +195,7 @@ function M.register(buf, opts)
 			items,
 			resolver.item("pulls.open_pipeline", {
 				desc = "Focus pipeline tab",
-				hint_desc = "Pipeline",
+				hint = false,
 				index = 15,
 				opts = { nowait = true },
 				callback = function()
@@ -210,7 +210,7 @@ function M.register(buf, opts)
 			items,
 			resolver.item("pulls.edit_title", {
 				desc = "Edit PR title",
-				hint_desc = "Title",
+				hint = false,
 				index = 10,
 				opts = { nowait = true, silent = true },
 				callback = function()
@@ -235,7 +235,7 @@ function M.register(buf, opts)
 			items,
 			resolver.item("pulls.edit_reviewers", {
 				desc = "Edit reviewers",
-				hint_desc = "Reviewer",
+				hint = false,
 				index = 12,
 				opts = { nowait = true, silent = true },
 				callback = function()
@@ -260,7 +260,7 @@ function M.register(buf, opts)
 			items,
 			resolver.item("pulls.edit_assignees", {
 				desc = "Edit assignees",
-				hint_desc = "Assignee",
+				hint = false,
 				index = 11,
 				opts = { nowait = true, silent = true },
 				callback = function()
@@ -287,7 +287,7 @@ function M.register(buf, opts)
 			items,
 			resolver.item("pulls.toggle_remove_source_branch", {
 				desc = "Toggle delete source branch on merge",
-				hint_desc = "Delete Branch",
+				hint = false,
 				opts = { nowait = true, silent = true },
 				callback = function()
 					local pr = state.current_pr

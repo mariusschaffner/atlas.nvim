@@ -81,11 +81,13 @@ end
 --- conveying open/merged/declined/draft status in place of the old
 --- standalone status chip and author byline.
 ---@param pr PullRequest
+---@param editable boolean|nil
 ---@return PullsDetailHeaderField
-function M.title_field(pr)
+function M.title_field(pr, editable)
+	local label = string.format("Title - #%s", pr.id)
 	return {
 		id = "title",
-		label = string.format("Title - #%s", pr.id),
+		label = utils.field_hint_label("pulls.edit_title", label, editable),
 		value = pr.title,
 		border_hl = presentation.pr_state_fg_hl(pr.state),
 	}

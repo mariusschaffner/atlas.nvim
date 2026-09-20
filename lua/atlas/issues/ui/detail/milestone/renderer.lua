@@ -132,7 +132,7 @@ local function render_header(milestone, width)
 	local start_date_col = {
 		{
 			id = "start_date",
-			label = "Start date",
+			label = utils.field_hint_label("issues.change_milestone_start_date", "Start date", can_edit_start),
 			value = (milestone.start_date and milestone.start_date ~= "") and milestone.start_date or "None",
 			hl = "AtlasTextMuted",
 			editable = can_edit_start,
@@ -141,7 +141,7 @@ local function render_header(milestone, width)
 	local due_date_col = {
 		{
 			id = "due_date",
-			label = "Due date",
+			label = utils.field_hint_label("issues.change_milestone_due_date", "Due date", can_edit_due),
 			value = (milestone.due_date and milestone.due_date ~= "") and milestone.due_date or "None",
 			hl = "AtlasTextMuted",
 			editable = can_edit_due,

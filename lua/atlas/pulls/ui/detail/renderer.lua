@@ -71,10 +71,11 @@ local function reviewers_field()
 		return nil
 	end
 	local editable = supports_action("edit_reviewers")
+	local label = utils.field_hint_label("pulls.edit_reviewers", "Reviewers", editable)
 	if state.reviewers == "loading" then
 		return {
 			id = "reviewers",
-			label = "Reviewers",
+			label = label,
 			value = spinner.with_text("Loading..."),
 			hl = "AtlasTextMuted",
 			editable = editable,
@@ -83,7 +84,7 @@ local function reviewers_field()
 	if type(state.reviewers) == "string" then
 		return {
 			id = "reviewers",
-			label = "Reviewers",
+			label = label,
 			value = state.reviewers,
 			hl = "AtlasLogError",
 			editable = editable,
@@ -92,7 +93,7 @@ local function reviewers_field()
 	if #state.reviewers == 0 then
 		return {
 			id = "reviewers",
-			label = "Reviewers",
+			label = label,
 			value = "no reviewers yet",
 			hl = "AtlasTextMuted",
 			editable = editable,
@@ -107,12 +108,14 @@ local function reviewers_field()
 		table.insert(spans, { start_col = cursor, end_col = cursor + #style.icon, hl_group = style.hl })
 		cursor = cursor + #token + (i < #state.reviewers and 2 or 0)
 	end
-	return { id = "reviewers", label = "Reviewers", value = table.concat(parts, ", "), hl = spans, editable = editable }
+	return { id = "reviewers", label = label, value = table.concat(parts, ", "), hl = spans, editable = editable }
 end
 
 --- Merge checks + the delete-source-branch toggle, grouped into one
 --- "Merge Readiness" box with one row per item, rather than separate
---- one-line text fields.
+--- one-line text fields. The toggle's own keymap hint lives on the box
+--- title (there's no separate "row hint" concept), since the checks
+--- themselves aren't independently actionable.
 ---@param delete_source_branch_field PullsDetailHeaderField|nil
 ---@return PullsDetailHeaderField|nil
 local function merge_readiness_field(delete_source_branch_field)
@@ -149,7 +152,8 @@ local function merge_readiness_field(delete_source_branch_field)
 		return nil
 	end
 
-	return { label = "Merge Readiness", rows = rows }
+	local editable = delete_source_branch_field ~= nil and delete_source_branch_field.editable == true
+	return { label = utils.field_hint_label("pulls.toggle_remove_source_branch", "Merge Readiness", editable), rows = rows }
 end
 
 ---@param pr PullRequest
@@ -190,7 +194,7 @@ local function render_header(pr, tab_items, width)
 	local field_lines, field_spans, field_regions =
 		field_box.render_columns({ left_fields, middle_fields, branch_fields, readiness_fields }, {
 			width = width,
-			top_field = header.title_field(pr),
+			top_field = header.title_field(pr, supports_action("edit_title")),
 		})
 	utils.append_block(lines, spans, { lines = field_lines, highlights = field_spans })
 	table.insert(lines, "")

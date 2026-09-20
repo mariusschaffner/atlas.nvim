@@ -3,6 +3,7 @@ local M = {}
 local help = require("atlas.ui.popups.help")
 local resolver = require("atlas.core.keymaps")
 local utils = require("atlas.ui.shared.utils")
+local state = require("atlas.issues.ui.detail.milestone.state")
 
 ---@param buf integer
 function M.register(buf)
@@ -36,6 +37,7 @@ function M.register(buf)
 		items,
 		resolver.item("ui.comments.edit", {
 			desc = "Edit description",
+			hint = state.current_tab == "description",
 			hint_desc = "Edit",
 			opts = { nowait = true, silent = true },
 			callback = function()
@@ -48,7 +50,7 @@ function M.register(buf)
 		items,
 		resolver.item("issues.change_milestone_start_date", {
 			desc = "Edit start date",
-			hint_desc = "Start",
+			hint = false,
 			opts = { nowait = true, silent = true },
 			callback = function()
 				require("atlas.issues.ui.detail.milestone").edit_start_date()
@@ -60,7 +62,7 @@ function M.register(buf)
 		items,
 		resolver.item("issues.change_milestone_due_date", {
 			desc = "Edit due date",
-			hint_desc = "Due",
+			hint = false,
 			opts = { nowait = true, silent = true },
 			callback = function()
 				require("atlas.issues.ui.detail.milestone").edit_due_date()

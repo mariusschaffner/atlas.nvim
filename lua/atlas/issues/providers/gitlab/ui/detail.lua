@@ -6,6 +6,7 @@ local helper = require("atlas.issues.ui.presentation")
 local spinner = require("atlas.ui.components.spinner")
 local highlights = require("atlas.ui.shared.highlights")
 local actions = require("atlas.issues.providers.gitlab.actions")
+local utils = require("atlas.ui.shared.utils")
 
 ---@param action_id string
 ---@return boolean
@@ -48,36 +49,39 @@ end
 ---@param loading boolean
 ---@return IssuesDetailHeaderField
 local function labels_field(details, loading)
+	local editable = supports("labels")
+	local label = utils.field_hint_label("issues.change_label", "Labels", editable)
+
 	if loading then
 		return {
 			id = "labels",
-			label = "Labels",
+			label = label,
 			value = spinner.with_text("Loading..."),
 			hl = "AtlasTextMuted",
-			editable = supports("labels"),
+			editable = editable,
 		}
 	end
 
 	local names, spans, cursor = {}, {}, 0
-	for _, label in ipairs(details and details.labels or {}) do
-		local name = tostring(label.name or "")
+	for _, item in ipairs(details and details.labels or {}) do
+		local name = tostring(item.name or "")
 		if name ~= "" then
-			table.insert(spans, { start_col = cursor, end_col = cursor + #name, hl_group = label_fg_hl(label.color) })
+			table.insert(spans, { start_col = cursor, end_col = cursor + #name, hl_group = label_fg_hl(item.color) })
 			table.insert(names, name)
 			cursor = cursor + #name + 2
 		end
 	end
 
 	if #names == 0 then
-		return { id = "labels", label = "Labels", value = "None", hl = "AtlasTextMuted", editable = supports("labels") }
+		return { id = "labels", label = label, value = "None", hl = "AtlasTextMuted", editable = editable }
 	end
 
 	return {
 		id = "labels",
-		label = "Labels",
+		label = label,
 		value = table.concat(names, ", "),
 		hl = spans,
-		editable = supports("labels"),
+		editable = editable,
 	}
 end
 
@@ -101,6 +105,8 @@ function M.header_fields(issue, details, loading)
 	local milestone_text = details and details.milestone and details.milestone.title or ""
 	local assignee_text = string.format("%s %s", user_icon, assignee_name)
 	local assignee_hl = helper.person_hl(assignee and assignee.display_name or nil)
+	local assignee_editable = supports("assign")
+	local milestone_editable = supports("milestone")
 
 	return {
 		author = {
@@ -110,18 +116,18 @@ function M.header_fields(issue, details, loading)
 		},
 		assignee = {
 			id = "assignee",
-			label = "Assignee",
+			label = utils.field_hint_label("issues.change_assignee", "Assignee", assignee_editable),
 			value = assignee_text,
 			hl = assignee_hl,
-			editable = supports("assign"),
+			editable = assignee_editable,
 		},
 		labels = labels_field(details, loading),
 		milestone = {
 			id = "milestone",
-			label = "Milestone",
+			label = utils.field_hint_label("issues.change_milestone", "Milestone", milestone_editable),
 			value = milestone_text ~= "" and milestone_text or "None",
 			hl = "AtlasTextMuted",
-			editable = supports("milestone"),
+			editable = milestone_editable,
 		},
 	}
 end

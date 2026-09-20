@@ -59,6 +59,7 @@ function M.setup(buf, refresh)
 			items,
 			resolver.item("pulls.review.add_task", {
 				desc = "Add task",
+				hint = false,
 				opts = { nowait = true, silent = true },
 				callback = function()
 					local pr = detail.current_pr

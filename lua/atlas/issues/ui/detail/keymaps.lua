@@ -139,7 +139,7 @@ function M.register(buf, opts)
 			items,
 			resolver.item("issues.change_assignee", {
 				desc = "Change assignee",
-				hint_desc = "Assignee",
+				hint = false,
 				callback = function()
 					local issue = state.current_issue
 					if issue == nil then
@@ -159,7 +159,7 @@ function M.register(buf, opts)
 			items,
 			resolver.item("issues.change_label", {
 				desc = "Change labels",
-				hint_desc = "Label",
+				hint = false,
 				callback = function()
 					local issue = state.current_issue
 					if issue == nil then
@@ -179,7 +179,7 @@ function M.register(buf, opts)
 			items,
 			resolver.item("issues.change_milestone", {
 				desc = "Change milestone",
-				hint_desc = "Milestone",
+				hint = false,
 				callback = function()
 					local issue = state.current_issue
 					if issue == nil then
@@ -201,7 +201,7 @@ function M.register(buf, opts)
 			items,
 			resolver.item("issues.create_branch", {
 				desc = "Create branch from issue",
-				hint_desc = "Branch",
+				hint = false,
 				callback = function()
 					local issue = state.current_issue
 					if issue == nil then
@@ -280,7 +280,7 @@ function M.register(buf, opts)
 			items,
 			resolver.item("issues.go_to_pull", {
 				desc = "Go to linked pull request",
-				hint_desc = "Merge",
+				hint = false,
 				callback = function()
 					local linked = state.linked_merge_requests
 					if type(linked) ~= "table" or #linked == 0 then
@@ -313,7 +313,7 @@ function M.register(buf, opts)
 		items,
 		resolver.item("issues.go_to_milestone", {
 			desc = "Go to linked milestone",
-			hint_desc = "Milestone",
+			hint = false,
 			callback = function()
 				local details = state.current_details
 				local milestone = details and details.milestone
