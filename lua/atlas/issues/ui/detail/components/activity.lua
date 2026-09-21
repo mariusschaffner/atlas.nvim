@@ -94,6 +94,12 @@ function M.render(entries, width, opts)
 
 		local line = prefix .. table.concat(parts)
 		local line_spans = {}
+		if has_next then
+			table.insert(
+				line_spans,
+				{ line = 0, start_col = padding_x, end_col = padding_x + #"│", hl_group = "AtlasBorder" }
+			)
+		end
 		for _, span in ipairs(entry_spans) do
 			table.insert(line_spans, {
 				line = 0,

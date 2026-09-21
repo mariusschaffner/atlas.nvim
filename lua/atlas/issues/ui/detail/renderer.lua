@@ -9,6 +9,7 @@ local detail_ui = require("atlas.ui.detail")
 local inline_edit = require("atlas.ui.inline_edit")
 local inline_field_edit = require("atlas.ui.inline_field_edit")
 local highlights = require("atlas.ui.shared.highlights")
+local conversation_state = require("atlas.issues.ui.detail.tabs.conversation.state")
 
 local ns = vim.api.nvim_create_namespace("atlas.issues.provider_detail")
 local header_ns = vim.api.nvim_create_namespace("atlas.issues.provider_detail.header")
@@ -140,13 +141,34 @@ local function description_editable()
 	return state.current_tab == "overview" and core ~= nil and core.update_description ~= nil
 end
 
+--- Whether an inline add/reply is in progress on the Activity tab, and what
+--- color the panel's global border should take on because of it: blue while
+--- composing (a reply, or a not-yet-typing-in top-level add), escalating to
+--- orange only once actively typing a new top-level comment. Replies keep
+--- their own comment box's border as the "is this actively being edited"
+--- signal, so the global border just stays blue for those.
+---@return string|nil
+local function conversation_border_hl()
+	if state.current_tab ~= "conversation" then
+		return nil
+	end
+	local composing = conversation_state.composing
+	if composing == nil then
+		return nil
+	end
+	if composing.kind == "add" and inline_field_edit.is_active() then
+		return "AtlasFieldBoxBorderEditing"
+	end
+	return "AtlasFieldBoxBorderEditable"
+end
+
 --- The content box's current border color -- reused for both the actual
 --- border (`detail_ui.set_content_border`) and the title's non-label
 --- characters, so the "-" separators/leading dash match the border instead
 --- of sitting at the default `FloatTitle` color.
 ---@return string
 local function content_border_hl()
-	return description_editable() and "AtlasFieldBoxBorderEditable" or "AtlasBorder"
+	return conversation_border_hl() or (description_editable() and "AtlasFieldBoxBorderEditable" or "AtlasBorder")
 end
 
 --- Whether the Activity tab's "[i] - Add" footer hint should show: only on
@@ -223,11 +245,14 @@ function M.render(tab_items, get_tab_module)
 		footer_chunks = {
 			{ "─ ", hl },
 			{ utils.field_hint_label("ui.edit_description", "Edit", true), hl },
+			{ " ", hl },
 		}
 	elseif conversation_addable() then
+		local hl = content_border_hl()
 		footer_chunks = {
-			{ "─ ", content_border_hl() },
+			{ "─ ", hl },
 			{ utils.field_hint_label("issues.add_comment", "Add", true), "AtlasFooterInfo" },
+			{ " ", hl },
 		}
 	end
 	detail_ui.set_content_footer(footer_chunks)

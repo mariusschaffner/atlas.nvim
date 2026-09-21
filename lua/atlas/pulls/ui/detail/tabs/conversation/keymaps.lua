@@ -57,7 +57,7 @@ local function start_inline_edit(buf, refresh, opts)
 		on_cancel = function() end,
 		on_done = opts.on_done,
 	})
-	-- The detail view's own footer ("[gA] - Add") is driven by
+	-- The detail view's own footer ("[i] - Add") is driven by
 	-- inline_field_edit.is_active(), which only flips true once start() above
 	-- returns -- refresh again so it picks that up.
 	refresh()
@@ -287,7 +287,7 @@ function M.setup(buf, refresh)
 		items,
 		resolver.item("ui.comments.add", {
 			desc = "Add comment",
-			hint_desc = "Add",
+			hint = false,
 			opts = { nowait = true, silent = true },
 			callback = function()
 				start_add(buf, refresh)
@@ -298,7 +298,7 @@ function M.setup(buf, refresh)
 		items,
 		resolver.item("ui.comments.reply", {
 			desc = "Reply to comment",
-			hint_desc = "Reply",
+			hint = false,
 			opts = { nowait = true, silent = true },
 			callback = function()
 				start_reply(buf, refresh)
@@ -309,7 +309,7 @@ function M.setup(buf, refresh)
 		items,
 		resolver.item("ui.comments.edit", {
 			desc = has_tasks and "Edit comment / task / review" or "Edit comment",
-			hint_desc = "Edit",
+			hint = false,
 			opts = { nowait = true, silent = true },
 			callback = function()
 				start_edit(buf, refresh)
@@ -320,7 +320,7 @@ function M.setup(buf, refresh)
 		items,
 		resolver.item("ui.delete", {
 			desc = has_tasks and "Delete comment / task" or "Delete comment",
-			hint_desc = "Delete",
+			hint = false,
 			opts = { nowait = true, silent = true },
 			callback = function()
 				do_delete(refresh)

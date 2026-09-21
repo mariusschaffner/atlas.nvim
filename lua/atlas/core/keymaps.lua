@@ -118,7 +118,7 @@ local M = {}
 ---@field create_branch? AtlasKeymapValue
 ---@field go_to_pull? AtlasKeymapValue
 ---@field go_to_milestone? AtlasKeymapValue
----@field add_comment? AtlasKeymapValue Adds a new comment on the issue detail view's Activity tab (inline, not the shared ui.comments.add popup flow).
+---@field add_comment? AtlasKeymapValue Adds a new comment on the issue detail view's Activity tab (inline). Separate action id from the pulls detail view's equivalent (`ui.comments.add`), but they share the same default key.
 
 ---@class AtlasKeymapsConfig
 ---@field ui? AtlasUIKeymaps
@@ -375,10 +375,6 @@ function M.validate()
 		-- (the standalone native diff viewer, a separate buffer) never apply
 		-- to the same buffer, so sharing "gc" is safe.
 		{ "ui.comments.reply", "pulls.review.diff.toggle_compact" },
-		-- comments.add (review/conversation tabs) and external_help (codediff/
-		-- diffview external viewers, separate buffers) never apply to the
-		-- same buffer, so sharing "gA" is safe.
-		{ "ui.comments.add", "pulls.external_help" },
 		-- change_milestone_start_date (milestone detail buffer) and
 		-- transition_issue (declared, not yet wired to any keymap) can't
 		-- collide in practice.
@@ -387,11 +383,12 @@ function M.validate()
 		-- (issue detail buffer) are separate panels that are never open at
 		-- once, so sharing "gt" is safe.
 		{ "issues.change_milestone_title", "issues.edit_issue" },
-		-- edit_description (Description tab) and add_comment (Activity tab)
-		-- are different tabs of the same detail view, never active at once;
-		-- ui.inspect is the dashboard's own row-list buffer, a different
-		-- buffer entirely. All three sharing "i" is safe.
-		{ "ui.edit_description", "issues.add_comment", "ui.inspect" },
+		-- edit_description (Description tab) and add_comment (Activity tab,
+		-- issues.add_comment/ui.comments.add) are different tabs of the same
+		-- detail view, never active at once; ui.inspect is the dashboard's
+		-- own row-list buffer, a different buffer entirely. All four sharing
+		-- "i" is safe.
+		{ "ui.edit_description", "issues.add_comment", "ui.comments.add", "ui.inspect" },
 	}
 
 	local function conflict_allowed(actions)

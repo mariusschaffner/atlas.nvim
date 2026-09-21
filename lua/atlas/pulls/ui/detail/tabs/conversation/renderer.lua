@@ -304,7 +304,7 @@ local function render_comment_box(
 	extra_content_highlights
 )
 	local id = tostring(comment.id)
-	local indent = depth * INDENT_STEP
+	local indent = PADDING_X + depth * INDENT_STEP
 	local available = math.max(MIN_BOX_WIDTH, width - indent)
 	local box_width = comment_box_width(available)
 	local wrap_width = math.max(1, box_width - 2 - #CONTENT_PAD)
@@ -393,7 +393,7 @@ local function render_composing_box(width, depth, lines, spans)
 		title_highlights = { { start_col = 0, end_col = #title, hl_group = author_hl(title) } }
 	end
 
-	local indent = depth * INDENT_STEP
+	local indent = PADDING_X + depth * INDENT_STEP
 	local available = math.max(MIN_BOX_WIDTH, width - indent)
 	local box_width = comment_box_width(available)
 	local content_lines = { "", "", "" }
