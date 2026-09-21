@@ -322,6 +322,25 @@ function M.edit_due_date()
 	edit_field("due_date", "Due date", core and core.update_milestone_due_date, false)
 end
 
+--- Opens the issue detail view for the Work Items row under the cursor.
+--- No-op off the Work Items tab, or when the cursor isn't on an issue row
+--- (header/blank rows aren't in `state.line_map`).
+function M.open_selected_work_item()
+	if state.current_tab ~= "work_items" then
+		return
+	end
+	local win = state.win
+	if win == nil or not vim.api.nvim_win_is_valid(win) then
+		return
+	end
+	local row = vim.api.nvim_win_get_cursor(win)[1]
+	local entry = state.line_map[row]
+	if entry == nil or entry.kind ~= "issue" or entry._issue == nil then
+		return
+	end
+	require("atlas.issues.ui.detail").open(entry._issue, { provider = state.provider })
+end
+
 ---@param step 1|-1
 local function change_tab(step)
 	local items = renderer.tabs

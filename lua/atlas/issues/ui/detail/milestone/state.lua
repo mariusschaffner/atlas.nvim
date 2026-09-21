@@ -16,6 +16,7 @@ local request_scope = require("atlas.core.requests")
 ---@field merge_requests MilestoneWorkItem[]|nil
 ---@field merge_requests_loading boolean
 ---@field current_tab "description"|"work_items"|"merge_requests"
+---@field line_map table<integer, table> Work Items tab's row (1-indexed buffer line) -> `{kind, key, _issue}` map from the last render, used to resolve the row under the cursor.
 ---@field requests AtlasRequestScope
 local M = {
 	win = nil,
@@ -33,6 +34,7 @@ local M = {
 	merge_requests = nil,
 	merge_requests_loading = false,
 	current_tab = "description",
+	line_map = {},
 	requests = request_scope.new(),
 }
 
@@ -52,6 +54,7 @@ function M.reset()
 	M.merge_requests = nil
 	M.merge_requests_loading = false
 	M.current_tab = "description"
+	M.line_map = {}
 	M.requests.cancel()
 	M.requests = request_scope.new()
 end

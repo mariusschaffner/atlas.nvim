@@ -5,6 +5,8 @@ local icons = require("atlas.ui.shared.icons")
 local spinner = require("atlas.ui.components.spinner")
 local field_box = require("atlas.ui.components.field_box")
 local tabs = require("atlas.ui.components.tabs")
+local table_tree = require("atlas.ui.components.table_tree")
+local dashboard_providers = require("atlas.issues.ui.dashboard.providers")
 local detail_ui = require("atlas.ui.detail")
 local inline_edit = require("atlas.ui.inline_edit")
 local state = require("atlas.issues.ui.detail.milestone.state")
@@ -250,6 +252,90 @@ local function render_bare_list(items, loading, loading_text, empty_text, unavai
 	return lines, spans
 end
 
+---@param issues Issue[]
+---@return integer
+local function max_key_label_width(issues)
+	local display = dashboard_providers.get(state.provider and state.provider.id)
+	if not display.label then
+		return 0
+	end
+	local width = 0
+	for _, issue in ipairs(issues) do
+		width = math.max(width, #tostring(display.label(issue) or ""))
+	end
+	return width
+end
+
+---@param issue Issue
+---@param label_width integer
+---@return table
+local function work_item_row(issue, label_width)
+	local display = dashboard_providers.get(state.provider and state.provider.id)
+	local row = display.values(issue, { depth = 0, is_last = true }, "plain", label_width)
+	row._item = { kind = "issue", key = issue.key, _issue = issue }
+	row._issue = issue
+	return row
+end
+
+---@param row table
+---@param col table
+---@param ctx { text: string, padded: string, width: integer }
+---@return table[]|nil
+local function work_item_cell_hl(row, col, ctx)
+	local display = dashboard_providers.get(state.provider and state.provider.id)
+	return display.highlights and display.highlights(row, col, ctx) or nil
+end
+
+--- Same styled, columned table as the main issue dashboard (icon/name/
+--- assignee/labels/status), just a flat list -- Work Items are always
+--- issues linked to this milestone, never sub-milestones, so there's no
+--- tree grouping to do.
+---@param issues Issue[]
+---@param width integer
+---@return string[] lines
+---@return table[] spans
+---@return table<integer, table> line_map
+local function render_work_items_table(issues, width)
+	local display = dashboard_providers.get(state.provider and state.provider.id)
+	local columns = display.columns("plain")
+	local label_width = max_key_label_width(issues)
+	local rows = {}
+	for _, issue in ipairs(issues) do
+		table.insert(rows, work_item_row(issue, label_width))
+	end
+	local lines, line_map, spans = table_tree.render({
+		width = width,
+		margin = PADDING_X,
+		columns = columns,
+		rows = rows,
+		cell_hl = work_item_cell_hl,
+	})
+	return lines, spans, line_map
+end
+
+---@param width integer
+---@return string[] lines
+---@return table[] spans
+---@return table<integer, table> line_map
+local function render_work_items(width)
+	if state.work_items_loading then
+		local lines, spans = {}, {}
+		utils.push(lines, spans, spinner.with_text("Loading work items..."), "AtlasTextMuted", PADDING_X)
+		return lines, spans, {}
+	end
+	if state.work_items == nil then
+		local lines, spans = {}, {}
+		utils.push(lines, spans, "Work items unavailable.", "AtlasTextMuted", PADDING_X)
+		return lines, spans, {}
+	end
+	if #state.work_items == 0 then
+		local lines, spans = {}, {}
+		utils.push(lines, spans, "No linked issues", "AtlasTextMuted", PADDING_X)
+		return lines, spans, {}
+	end
+	return render_work_items_table(state.work_items, width)
+end
+
 function M.render()
 	local buf = state.buf
 	local win = state.win
@@ -308,12 +394,11 @@ function M.render()
 	end
 	detail_ui.set_content_border(content_border_hl())
 
-	local lines, spans
+	local lines, spans, line_map = nil, nil, {}
 	if milestone == nil then
 		lines, spans = { "", "  Nothing selected..." }, {}
 	elseif state.current_tab == "work_items" then
-		lines, spans =
-			render_bare_list(state.work_items, state.work_items_loading, "Loading work items...", "No linked issues", "Work items unavailable.")
+		lines, spans, line_map = render_work_items(vim.api.nvim_win_get_width(win))
 	elseif state.current_tab == "merge_requests" then
 		lines, spans = render_bare_list(
 			state.merge_requests,
@@ -325,6 +410,7 @@ function M.render()
 	else
 		lines, spans = render_description()
 	end
+	state.line_map = line_map
 
 	set_lines(buf, lines)
 	utils.apply_spans(buf, ns, spans)
