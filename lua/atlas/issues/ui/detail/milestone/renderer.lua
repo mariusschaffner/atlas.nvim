@@ -288,12 +288,14 @@ function M.render()
 			{ utils.field_hint_label("ui.submit", "Save", true), hl },
 			{ " ── ", hl },
 			{ utils.field_hint_label("ui.field_edit.close", "Cancel", true), hl },
+			{ " ", hl },
 		}
 	elseif description_editable() then
 		local hl = content_border_hl()
 		footer_chunks = {
 			{ "─ ", hl },
 			{ utils.field_hint_label("ui.edit_description", "Edit", true), hl },
+			{ " ", hl },
 		}
 	end
 	detail_ui.set_content_footer(footer_chunks)
