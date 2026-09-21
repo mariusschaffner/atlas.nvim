@@ -45,10 +45,10 @@ function M.register(buf)
 		})
 	)
 
-	-- Both share the "i" key (see core/keymaps.lua's ALLOWED_CONFLICTS): only
-	-- one of the two tabs is ever active, so only one of these is ever
-	-- actually registered at a time -- re-registered on every tab switch
-	-- (see change_tab) to stay in sync.
+	-- All three share the "i" key (see core/keymaps.lua's ALLOWED_CONFLICTS):
+	-- only one tab is ever active, so only one of these is ever actually
+	-- registered at a time -- re-registered on every tab switch (see
+	-- change_tab) to stay in sync.
 	if state.current_tab == "work_items" then
 		utils.insert_if(
 			items,
@@ -58,6 +58,18 @@ function M.register(buf)
 				opts = { nowait = true, silent = true },
 				callback = function()
 					require("atlas.issues.ui.detail.milestone").open_selected_work_item()
+				end,
+			})
+		)
+	elseif state.current_tab == "merge_requests" then
+		utils.insert_if(
+			items,
+			resolver.item("ui.inspect", {
+				desc = "Open selected merge request",
+				hint = false, -- no hint shown; matches the Description tab's own edit_description affordance
+				opts = { nowait = true, silent = true },
+				callback = function()
+					require("atlas.issues.ui.detail.milestone").open_selected_merge_request()
 				end,
 			})
 		)

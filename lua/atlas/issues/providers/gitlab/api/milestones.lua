@@ -4,6 +4,7 @@ local json = require("atlas.core.json")
 local service = require("atlas.providers.gitlab.client")
 local list_helper = require("atlas.issues.providers.gitlab.api.list_helper")
 local issues_mapper = require("atlas.issues.providers.gitlab.api.mapper")
+local pulls_mapper = require("atlas.pulls.providers.gitlab.api.mapper")
 
 ---@class GitLabMilestone : IssueMilestone
 ---@field id integer
@@ -27,17 +28,6 @@ local function to_milestone(raw)
 	}
 end
 
----@param raw table
----@param prefix string
----@return MilestoneWorkItem|nil
-local function to_work_item(raw, prefix)
-	local iid = tonumber(raw.iid)
-	local title = json.safe_str(raw.title)
-	if not iid or not title then
-		return nil
-	end
-	return { key = prefix .. tostring(iid), title = title }
-end
 
 ---@param project_path string
 ---@param on_done fun(milestones: IssueMilestone[]|nil, err: string|nil)
@@ -121,7 +111,7 @@ end
 
 ---@param project_path string
 ---@param milestone_id integer
----@param on_done fun(items: MilestoneWorkItem[]|nil, err: string|nil)
+---@param on_done fun(items: PullRequest[]|nil, err: string|nil)
 ---@return { cancel: fun() }|nil
 function M.list_merge_requests(project_path, milestone_id, on_done)
 	if project_path == "" then
@@ -138,14 +128,20 @@ function M.list_merge_requests(project_path, milestone_id, on_done)
 			on_done(nil, err)
 			return
 		end
-		local items = {}
-		for _, raw in ipairs(json.safe_table(result)) do
-			local item = to_work_item(json.safe_table(raw), "!")
-			if item then
-				table.insert(items, item)
-			end
+		local pulls = pulls_mapper.to_pull_requests(result)
+		local workspace, repo = project_path:match("^(.*)/([^/]+)$")
+		workspace = workspace or ""
+		repo = repo or project_path
+		-- Same reasoning as list_issues above: this endpoint is
+		-- project-scoped, so every returned MR unambiguously belongs to
+		-- `project_path` -- enforce it directly rather than trusting the
+		-- mapper's `references.full`/`web_url` derivation.
+		for _, pr in ipairs(pulls) do
+			pr.repo_full_name = project_path
+			pr.workspace = workspace
+			pr.repo = repo
 		end
-		on_done(items, nil)
+		on_done(pulls, nil)
 	end, {
 		action = "Fetch milestone merge requests",
 		project = project_path,

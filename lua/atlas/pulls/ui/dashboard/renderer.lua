@@ -239,8 +239,9 @@ end
 ---@param layout "compact"|"grouped"|"plain"
 ---@param width integer
 ---@param display table
+---@param opts { header_separator: boolean|nil }|nil
 ---@return string[], table[], table<integer, table>
-local function render_table(pulls, layout, width, display)
+function M.render_table(pulls, layout, width, display, opts)
 	local compact = layout ~= "grouped" and layout ~= "plain"
 	local lines, line_map, spans = table_tree.render({
 		width = width,
@@ -250,6 +251,7 @@ local function render_table(pulls, layout, width, display)
 		cell_hl = function(row, col, ctx)
 			return cell_hl(row, col, ctx, display)
 		end,
+		header_separator = opts and opts.header_separator or nil,
 	})
 	for lnum, item in pairs(line_map) do
 		if item.kind == "pr" then
@@ -299,7 +301,7 @@ function M.render(opts)
 		append_centered_loading(lines, loading, opts.width, opts.height)
 	else
 		local layout = state.active_view and state.active_view.layout or "compact"
-		local body_lines, body_spans, body_map = render_table(pulls, layout, opts.width, display)
+		local body_lines, body_spans, body_map = M.render_table(pulls, layout, opts.width, display)
 		local base = #lines
 		utils.append_block(lines, spans, { lines = body_lines, highlights = body_spans })
 		for lnum, item in pairs(body_map) do

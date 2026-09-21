@@ -341,6 +341,30 @@ function M.open_selected_work_item()
 	require("atlas.issues.ui.detail").open(entry._issue, { provider = state.provider })
 end
 
+--- Opens the pull request detail view for the Merge Requests row under the
+--- cursor. No-op off the Merge Requests tab, or when the cursor isn't on a
+--- PR row (header/spacer/blank rows aren't in `state.line_map`).
+function M.open_selected_merge_request()
+	if state.current_tab ~= "merge_requests" then
+		return
+	end
+	local win = state.win
+	if win == nil or not vim.api.nvim_win_is_valid(win) then
+		return
+	end
+	local row = vim.api.nvim_win_get_cursor(win)[1]
+	local entry = state.line_map[row]
+	if entry == nil or entry.kind ~= "pr" or entry.pr == nil then
+		return
+	end
+	local pulls_provider = require("atlas.providers").load("gitlab", "pulls")
+	if pulls_provider == nil then
+		notify.error("Pull request provider unavailable")
+		return
+	end
+	require("atlas.pulls.ui.detail").open(entry.pr, { provider = pulls_provider })
+end
+
 ---@param step 1|-1
 local function change_tab(step)
 	local items = renderer.tabs

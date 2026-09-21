@@ -13,10 +13,10 @@ local request_scope = require("atlas.core.requests")
 ---@field description_loading boolean
 ---@field work_items Issue[]|nil
 ---@field work_items_loading boolean
----@field merge_requests MilestoneWorkItem[]|nil
+---@field merge_requests PullRequest[]|nil
 ---@field merge_requests_loading boolean
 ---@field current_tab "description"|"work_items"|"merge_requests"
----@field line_map table<integer, table> Work Items tab's row (1-indexed buffer line) -> `{kind, key, _issue}` map from the last render, used to resolve the row under the cursor.
+---@field line_map table<integer, table> Work Items/Merge Requests tab's row (1-indexed buffer line) -> row entry map from the last render, used to resolve the row under the cursor.
 ---@field requests AtlasRequestScope
 local M = {
 	win = nil,

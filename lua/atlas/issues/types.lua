@@ -61,10 +61,6 @@
 ---@field description string|nil
 ---@field state string|nil "active"|"closed"
 
----@class MilestoneWorkItem Bare-text list entry (merge requests linked to a milestone).
----@field key string
----@field title string
-
 --------------------------------------------------------------------------------
 -- Group
 --------------------------------------------------------------------------------

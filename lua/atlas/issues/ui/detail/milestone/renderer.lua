@@ -7,6 +7,8 @@ local field_box = require("atlas.ui.components.field_box")
 local tabs = require("atlas.ui.components.tabs")
 local table_tree = require("atlas.ui.components.table_tree")
 local dashboard_providers = require("atlas.issues.ui.dashboard.providers")
+local pulls_dashboard_renderer = require("atlas.pulls.ui.dashboard.renderer")
+local pulls_dashboard_providers = require("atlas.pulls.ui.dashboard.providers")
 local detail_ui = require("atlas.ui.detail")
 local inline_edit = require("atlas.ui.inline_edit")
 local state = require("atlas.issues.ui.detail.milestone.state")
@@ -225,33 +227,6 @@ local function render_description()
 	return lines, spans
 end
 
----@param items table[]|nil
----@param loading boolean
----@param loading_text string
----@param empty_text string
----@param unavailable_text string
----@return string[], table[]
-local function render_bare_list(items, loading, loading_text, empty_text, unavailable_text)
-	local lines, spans = {}, {}
-	if loading then
-		utils.push(lines, spans, spinner.with_text(loading_text), "AtlasTextMuted", PADDING_X)
-		return lines, spans
-	end
-	if items == nil then
-		utils.push(lines, spans, unavailable_text, "AtlasTextMuted", PADDING_X)
-		return lines, spans
-	end
-	if #items == 0 then
-		utils.push(lines, spans, empty_text, "AtlasTextMuted", PADDING_X)
-		return lines, spans
-	end
-	for _, item in ipairs(items) do
-		local text = string.format("%s  %s", tostring(item.key or ""), tostring(item.title or ""))
-		utils.push(lines, spans, text, nil, PADDING_X)
-	end
-	return lines, spans
-end
-
 ---@param issues Issue[]
 ---@return integer
 local function max_key_label_width(issues)
@@ -286,6 +261,28 @@ local function work_item_cell_hl(row, col, ctx)
 	return display.highlights and display.highlights(row, col, ctx) or nil
 end
 
+--- Inserts a blank line between the window's own title (the tab bar) and
+--- the table header, matching the gap every other tab's content has below
+--- the border. Shifts the already-1-indexed lines/spans/line_map down by
+--- one to make room.
+---@param lines string[]
+---@param spans table[]
+---@param line_map table<integer, table>
+---@return string[] lines
+---@return table[] spans
+---@return table<integer, table> line_map
+local function prepend_header_gap(lines, spans, line_map)
+	table.insert(lines, 1, "")
+	for _, span in ipairs(spans) do
+		span.line = span.line + 1
+	end
+	local shifted_map = {}
+	for lnum, row in pairs(line_map) do
+		shifted_map[lnum + 1] = row
+	end
+	return lines, spans, shifted_map
+end
+
 --- Same styled, columned table as the main issue dashboard (icon/name/
 --- assignee/labels/status), just a flat list -- Work Items are always
 --- issues linked to this milestone, never sub-milestones, so there's no
@@ -314,21 +311,7 @@ local function render_work_items_table(issues, width)
 		cell_hl = work_item_cell_hl,
 		header_separator = true,
 	})
-
-	-- A blank line between the window's own title (the tab bar) and the
-	-- table header, matching the gap every other tab's content has below
-	-- the border. Shift the already-1-indexed lines/spans/line_map down by
-	-- one to make room.
-	table.insert(lines, 1, "")
-	for _, span in ipairs(spans) do
-		span.line = span.line + 1
-	end
-	local shifted_map = {}
-	for lnum, row in pairs(line_map) do
-		shifted_map[lnum + 1] = row
-	end
-
-	return lines, spans, shifted_map
+	return prepend_header_gap(lines, spans, line_map)
 end
 
 ---@param width integer
@@ -352,6 +335,46 @@ local function render_work_items(width)
 		return lines, spans, {}
 	end
 	return render_work_items_table(state.work_items, width)
+end
+
+--- Same styled, columned table as the main pulls dashboard (title/comments/
+--- reviewer/dates), just a flat "plain" list -- Merge Requests are always
+--- linked to this milestone's own project, so there's no repo grouping to
+--- do (the "plain" layout's blank line between rows is the pulls table's
+--- own native styling, not something added here).
+---@param pulls PullRequest[]
+---@param width integer
+---@return string[] lines
+---@return table[] spans
+---@return table<integer, table> line_map
+local function render_merge_requests_table(pulls, width)
+	local display = pulls_dashboard_providers.get(state.provider and state.provider.id)
+	local lines, spans, line_map =
+		pulls_dashboard_renderer.render_table(pulls, "plain", width, display, { header_separator = true })
+	return prepend_header_gap(lines, spans, line_map)
+end
+
+---@param width integer
+---@return string[] lines
+---@return table[] spans
+---@return table<integer, table> line_map
+local function render_merge_requests(width)
+	if state.merge_requests_loading then
+		local lines, spans = {}, {}
+		utils.push(lines, spans, spinner.with_text("Loading merge requests..."), "AtlasTextMuted", PADDING_X)
+		return lines, spans, {}
+	end
+	if state.merge_requests == nil then
+		local lines, spans = {}, {}
+		utils.push(lines, spans, "Merge requests unavailable.", "AtlasTextMuted", PADDING_X)
+		return lines, spans, {}
+	end
+	if #state.merge_requests == 0 then
+		local lines, spans = {}, {}
+		utils.push(lines, spans, "No linked merge requests", "AtlasTextMuted", PADDING_X)
+		return lines, spans, {}
+	end
+	return render_merge_requests_table(state.merge_requests, width)
 end
 
 function M.render()
@@ -418,13 +441,7 @@ function M.render()
 	elseif state.current_tab == "work_items" then
 		lines, spans, line_map = render_work_items(vim.api.nvim_win_get_width(win))
 	elseif state.current_tab == "merge_requests" then
-		lines, spans = render_bare_list(
-			state.merge_requests,
-			state.merge_requests_loading,
-			"Loading merge requests...",
-			"No linked merge requests",
-			"Merge requests unavailable."
-		)
+		lines, spans, line_map = render_merge_requests(vim.api.nvim_win_get_width(win))
 	else
 		lines, spans = render_description()
 	end
