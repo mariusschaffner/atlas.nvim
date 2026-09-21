@@ -74,9 +74,18 @@ end
 ---@return string[] lines
 ---@return table[] highlights
 local function comment_content(comment, reaction_options)
+	local lines, highlights = {}, {}
+	local date_text = utils.format_date(comment.created)
+	if date_text ~= "" then
+		table.insert(lines, date_text)
+		table.insert(highlights, { line = 0, start_col = 0, end_col = #date_text, hl_group = "AtlasTextMuted" })
+	end
+
 	if comment.deleted then
 		local text = "(deleted comment)"
-		return { text }, { { line = 0, start_col = 0, end_col = #text, hl_group = "AtlasTextMutedItalic" } }
+		table.insert(lines, text)
+		table.insert(highlights, { line = #lines - 1, start_col = 0, end_col = #text, hl_group = "AtlasTextMutedItalic" })
+		return lines, highlights
 	end
 
 	local body_lines = utils.sanitize_lines(utils.strip_markup(comment.body or ""))
@@ -87,7 +96,6 @@ local function comment_content(comment, reaction_options)
 		body_lines = { "(empty comment)" }
 	end
 
-	local lines, highlights = {}, {}
 	local max_lines = state.comment_max_lines(comment)
 	local truncated = max_lines ~= nil and #body_lines > max_lines
 	local visible_count = truncated and max_lines or #body_lines
@@ -161,31 +169,28 @@ end
 
 ---@param comment IssueComment
 ---@return string title
----@return table[] title_highlights Spans relative to `title`, coloring just the author name.
+---@return table[] title_highlights Spans relative to `title`, coloring the whole (name-only) title.
 local function title_for(comment)
 	local name = comment_threads.author_name(comment.author)
-	local timestamp = utils.relative_time(comment.created)
-	local title = string.format("%s · %s", name, timestamp)
-	return title, { { start_col = 0, end_col = #name, hl_group = presentation.person_hl(name) } }
+	return name, { { start_col = 0, end_col = #name, hl_group = presentation.person_hl(name) } }
 end
 
---- Adds a blank line above/below the content and a space of horizontal
---- padding on every line, so the border isn't flush against the text.
+--- Adds a space of horizontal padding on every content line, so the border
+--- isn't flush against the text.
 ---@param lines string[]
 ---@param highlights table[]
 ---@return string[] lines
 ---@return table[] highlights
 local function frame_content(lines, highlights)
-	local framed_lines = { "" }
+	local framed_lines = {}
 	for _, line in ipairs(lines) do
 		table.insert(framed_lines, CONTENT_PAD .. line)
 	end
-	table.insert(framed_lines, "")
 
 	local framed_highlights = {}
 	for _, span in ipairs(highlights) do
 		table.insert(framed_highlights, {
-			line = span.line + 1,
+			line = span.line,
 			start_col = span.start_col + #CONTENT_PAD,
 			end_col = span.end_col + #CONTENT_PAD,
 			hl_group = span.hl_group,
