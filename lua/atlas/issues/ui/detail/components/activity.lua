@@ -2,8 +2,7 @@ local M = {}
 
 local utils = require("atlas.ui.shared.utils")
 local icons = require("atlas.ui.shared.icons")
-local threads = require("atlas.ui.components.threadsv2")
-local helper = require("atlas.issues.ui.presentation")
+local presentation = require("atlas.issues.ui.presentation")
 
 local COLLAPSE_KEEP = 2
 local COLLAPSE_THRESHOLD = 4
@@ -23,97 +22,20 @@ local function actor_name(actor)
 	return "Unknown"
 end
 
-local EVENT_ICON = {
-	labeled = { icons.pulls("activity") },
-	unlabeled = { icons.pulls("activity") },
-	assigned = { icons.general("user") },
-	unassigned = { icons.general("user") },
-	milestoned = { icons.pulls("activity") },
-	demilestoned = { icons.pulls("activity") },
-	renamed = { icons.general("edit"), "AtlasTextMuted" },
-	closed = { icons.pulls_status("successful") },
-	reopened = { icons.issues("issue") },
-	locked = { icons.pulls_status("stopped") },
-	unlocked = { icons.pulls_status("stopped") },
-	pinned = { icons.pulls("activity") },
-	unpinned = { icons.pulls("activity") },
-	transferred = { icons.pulls("activity") },
-	marked_as_duplicate = { icons.pulls("activity") },
-	["cross-referenced"] = { icons.pulls("activity") },
-	referenced = { icons.pulls("activity") },
-}
-
 ---@param entry IssueActivityEntry
----@return { icon: string, icon_hl: string, additional: string|nil, content: string|nil }
+---@return { additional: string }
 function M.classify(entry)
 	local raw = tostring(entry.label or "")
-	local style = EVENT_ICON[entry.kind] or { icons.pulls("activity") }
-	return {
-		icon = style[1],
-		icon_hl = style[2],
-		additional = raw ~= "" and raw or entry.kind,
-		content = entry.body,
-	}
-end
-
----@param entries IssueActivityEntry[]
----@param run_id string|nil
----@return AtlasThreadV2Item[]
-local function to_thread_items(entries, run_id)
-	local items = {}
-	for _, e in ipairs(entries) do
-		local classified = M.classify(e)
-		items[#items + 1] = {
-			icon = classified.icon,
-			icon_hl = classified.icon_hl,
-			author = actor_name(e.actor),
-			right_text = utils.format_datetime(e.date),
-			additional = classified.additional,
-			content = classified.content,
-			line_map = {
-				kind = "activity",
-				activity_entry = e,
-				activity_actor = e.actor,
-				run_id = run_id,
-			},
-		}
-	end
-	return items
-end
-
----@param _item AtlasThreadV2Item
----@param _text string
----@return string|nil
-local function additional_hl(_item, _text)
-	return "AtlasTextMuted"
-end
-
----@param item AtlasThreadV2Item
----@param _author string
-local function author_hl(item, _author)
-	return helper.person_hl(item.author)
-end
-
----@param item AtlasThreadV2Item
----@param row string
----@param row_index integer
----@return table[]|nil
-local function content_hl(item, row, row_index)
-	local entry = item.line_map and item.line_map.activity_entry
-	if entry == nil or entry.body_hl == nil then
-		return nil
-	end
-	return entry.body_hl(row, row_index)
+	return { additional = raw ~= "" and raw or entry.kind }
 end
 
 ---@param entries IssueActivityEntry[]
 ---@param width integer
----@param opts { padding_x: integer|nil, content_max_lines: integer|nil, squash: boolean|nil, run_id: string|nil, has_next: boolean|nil }|nil
+---@param opts { padding_x: integer|nil, squash: boolean|nil, run_id: string|nil, has_next: boolean|nil }|nil
 ---@return string[] lines, table[] spans, table<integer, table>|nil line_map
 function M.render(entries, width, opts)
 	opts = opts or {}
 	local padding_x = opts.padding_x or 1
-	local content_max_lines = opts.content_max_lines or 3
 
 	local lines, spans, line_map = {}, {}, {}
 
@@ -142,16 +64,48 @@ function M.render(entries, width, opts)
 		)
 	end
 
+	--- "<username> - <timestamp> - <action>", e.g. "Jane - 14:05 - 15.03.2024 - changed the description".
+	---@param entry IssueActivityEntry
+	---@param has_next boolean
 	local function render_entry(entry, has_next)
 		separator()
-		append(threads.render(to_thread_items({ entry }, opts.run_id), width, {
-			padding_x = padding_x,
-			content_max_lines = content_max_lines,
-			content_prefix = has_next and "│  " or "   ",
-			additional_hl = additional_hl,
-			author_hl = author_hl,
-			content_hl = content_hl,
-		}))
+
+		local prefix = string.rep(" ", padding_x) .. (has_next and "│  " or "   ")
+		local name = actor_name(entry.actor)
+		local timestamp = utils.format_datetime(entry.date)
+		local action = M.classify(entry).additional or ""
+
+		local parts, entry_spans, cursor = {}, {}, 0
+		local function add(text, hl)
+			if hl then
+				table.insert(entry_spans, { start_col = cursor, end_col = cursor + #text, hl_group = hl })
+			end
+			table.insert(parts, text)
+			cursor = cursor + #text
+		end
+
+		add(name, presentation.person_hl(name))
+		add(" - ")
+		if timestamp ~= "" then
+			add(timestamp, "AtlasTextMuted")
+			add(" - ")
+		end
+		add(action, "AtlasTextMuted")
+
+		local line = prefix .. table.concat(parts)
+		local line_spans = {}
+		for _, span in ipairs(entry_spans) do
+			table.insert(line_spans, {
+				line = 0,
+				start_col = #prefix + span.start_col,
+				end_col = #prefix + span.end_col,
+				hl_group = span.hl_group,
+			})
+		end
+
+		append({ line }, line_spans, {
+			[1] = { kind = "activity", activity_entry = entry, activity_actor = entry.actor, run_id = opts.run_id },
+		})
 	end
 
 	local function render_gap(count)
