@@ -57,6 +57,11 @@ local function start_inline_edit(buf, refresh, opts)
 		on_cancel = function() end,
 		on_done = opts.on_done,
 	})
+	-- The detail view's own footer ("[i] - Add") is driven by
+	-- inline_field_edit.is_active(), which only flips true once start() above
+	-- returns -- refresh again so it picks that up (the refresh() the caller
+	-- already did happened before the overlay existed).
+	refresh()
 end
 
 ---@param refresh fun()

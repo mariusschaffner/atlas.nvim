@@ -166,6 +166,28 @@ local function comment_content(comment, reaction_options, wrap_width)
 	return lines, highlights, body_start, body_line_count
 end
 
+---@param segments { action_id: string, label: string, hl: string }[]
+---@return string|nil text
+---@return table[]|nil highlights
+local function build_hint(segments)
+	local parts, highlights, cursor = {}, {}, 0
+	for _, seg in ipairs(segments) do
+		if #parts > 0 then
+			local sep = " ── "
+			table.insert(parts, sep)
+			cursor = cursor + #sep
+		end
+		local segment = utils.field_hint_label(seg.action_id, seg.label, true)
+		table.insert(highlights, { start_col = cursor, end_col = cursor + #segment, hl_group = seg.hl })
+		table.insert(parts, segment)
+		cursor = cursor + #segment
+	end
+	if #parts == 0 then
+		return nil, nil
+	end
+	return table.concat(parts), highlights
+end
+
 ---@param comment IssueComment
 ---@return string|nil text
 ---@return table[]|nil highlights
@@ -175,37 +197,32 @@ local function bottom_hint_for(comment)
 		return nil, nil
 	end
 
-	local parts, highlights, cursor = {}, {}, 0
-	---@param action_id string
-	---@param label string
-	---@param hl string
-	local function add_segment(action_id, label, hl)
-		if #parts > 0 then
-			local sep = " ── "
-			table.insert(parts, sep)
-			cursor = cursor + #sep
-		end
-		local segment = utils.field_hint_label(action_id, label, true)
-		table.insert(highlights, { start_col = cursor, end_col = cursor + #segment, hl_group = hl })
-		table.insert(parts, segment)
-		cursor = cursor + #segment
-	end
-
+	local segments = {}
 	if comments.add_comment or comments.reply_comment then
-		add_segment("ui.comments.reply", "Reply", "AtlasFooterInfo")
+		table.insert(segments, { action_id = "ui.comments.reply", label = "Reply", hl = "AtlasFooterInfo" })
 	end
 	local own = actions.is_own_comment(comment)
 	if own and comments.edit_comment then
-		add_segment("ui.comments.edit", "Edit", "AtlasFooterWarning")
+		table.insert(segments, { action_id = "ui.comments.edit", label = "Edit", hl = "AtlasFooterWarning" })
 	end
 	if own and comments.delete_comment then
-		add_segment("ui.delete", "Delete", "AtlasFooterError")
+		table.insert(segments, { action_id = "ui.delete", label = "Delete", hl = "AtlasFooterError" })
 	end
+	return build_hint(segments)
+end
 
-	if #parts == 0 then
-		return nil, nil
-	end
-	return table.concat(parts), highlights
+--- Shown on a comment's own bottom border while it is being inline-edited,
+--- and on the composing box while adding/replying -- mirrors the
+--- description tab's editing footer (same action ids, same border-matching
+--- color) instead of the Reply/Edit/Delete affordances.
+---@return string text
+---@return table[] highlights
+local function editing_hint()
+	local hl = "AtlasFieldBoxBorderEditing"
+	return build_hint({
+		{ action_id = "ui.submit", label = "Save", hl = hl },
+		{ action_id = "ui.field_edit.close", label = "Cancel", hl = hl },
+	})
 end
 
 ---@param comment IssueComment
@@ -288,7 +305,9 @@ local function render_comment_box(comment, depth, width, lines, spans, line_map,
 		or "AtlasFieldBoxBorder"
 
 	local bottom_hint, bottom_hint_highlights
-	if is_active and not is_editing then
+	if is_editing then
+		bottom_hint, bottom_hint_highlights = editing_hint()
+	elseif is_active then
 		bottom_hint, bottom_hint_highlights = bottom_hint_for(comment)
 	end
 
@@ -353,6 +372,7 @@ local function render_composing_box(width, depth, lines, spans)
 	local available = math.max(MIN_BOX_WIDTH, width - indent)
 	local box_width = comment_box_width(available)
 	local content_lines = { "", "", "" }
+	local bottom_hint, bottom_hint_highlights = editing_hint()
 
 	local box_lines, box_highlights = bordered_box.render({
 		width = box_width,
@@ -361,6 +381,8 @@ local function render_composing_box(width, depth, lines, spans)
 		title_highlights = title_highlights,
 		content_lines = content_lines,
 		border_hl = "AtlasFieldBoxBorderEditing",
+		bottom_hint = bottom_hint,
+		bottom_hint_highlights = bottom_hint_highlights,
 	})
 	apply_indent(box_lines, box_highlights, indent)
 

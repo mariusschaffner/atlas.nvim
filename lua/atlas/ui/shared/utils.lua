@@ -437,6 +437,24 @@ end
 --- of the statusline. Falls back to the plain label when none of the
 --- actions has a key configured (or when `editable` is false, so the hint
 --- isn't shown for a field the user can't currently edit).
+--- Strips the enclosing "<...>" off a Vim key notation special key (e.g.
+--- "<C-s>", "<Esc>") for display, lower-casing plain named keys ("<Esc>" ->
+--- "esc") but leaving modifier combos as-is ("<C-s>" -> "C-s", matching Vim's
+--- own case-sensitive modifier convention). Literal keys with no brackets
+--- (e.g. "gE", "i") are returned unchanged -- their case is meaningful.
+---@param key string
+---@return string
+local function display_key(key)
+	local inner = key:match("^<(.+)>$")
+	if inner then
+		if not inner:find("%-") then
+			inner = inner:lower()
+		end
+		return inner
+	end
+	return key
+end
+
 ---@param action_id string|string[]|nil
 ---@param label string
 ---@param editable boolean|nil
@@ -451,7 +469,7 @@ function M.field_hint_label(action_id, label, editable)
 	for _, id in ipairs(action_ids) do
 		local keys = resolver.resolve(id)
 		if keys and keys[1] then
-			table.insert(first_keys, keys[1])
+			table.insert(first_keys, display_key(keys[1]))
 		end
 	end
 	if #first_keys > 0 then
