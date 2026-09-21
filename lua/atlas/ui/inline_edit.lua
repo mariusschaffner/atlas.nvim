@@ -50,8 +50,18 @@ function M.start(opts)
 
 	-- Same affordance as every other editable field box: editing starts
 	-- already in Insert mode, and the box's border switches to the "actively
-	-- editing" color while it's open.
+	-- editing" color while it's open. Set directly (not via the renderer's
+	-- own render()) because M.start() is invoked straight from a keymap
+	-- callback with no refresh() before it -- nothing else re-renders the
+	-- footer at the moment editing actually begins.
 	detail_ui.set_content_border("AtlasFieldBoxBorderEditing")
+	local hl = "AtlasFieldBoxBorderEditing"
+	detail_ui.set_content_footer({
+		{ "─ ", hl },
+		{ utils.field_hint_label("ui.submit", "Save", true), hl },
+		{ " ── ", hl },
+		{ utils.field_hint_label("ui.field_edit.close", "Cancel", true), hl },
+	})
 	local win = vim.fn.bufwinid(buf)
 	if win ~= -1 then
 		pcall(vim.api.nvim_win_set_cursor, win, { 1, 0 })
@@ -82,10 +92,11 @@ function M.start(opts)
 		if vim.api.nvim_buf_is_valid(buf) then
 			vim.api.nvim_set_option_value("modifiable", false, { buf = buf })
 		end
-		-- Reset to the default border; the caller's post-edit refresh (always
-		-- triggered from on_save/on_cancel) restores the editable color if
-		-- the description tab is still showing.
+		-- Reset to the default border/footer; the caller's post-edit refresh
+		-- (always triggered from on_save/on_cancel) restores the editable
+		-- color/hint if the description tab is still showing.
 		detail_ui.set_content_border(nil)
+		detail_ui.set_content_footer(nil)
 		opts.on_done()
 	end
 

@@ -289,11 +289,25 @@ function M.start(opts)
 	vim.api.nvim_buf_set_lines(buf, 0, -1, false, { opts.seed_text or "" })
 
 	local restore_win = vim.api.nvim_get_current_win()
+	-- `row`/`col` are documented (and every caller treats them) as absolute
+	-- positions within `anchor_win`'s buffer, but `relative = "win"` actually
+	-- positions floats using screen rows/cols from the window's own top-left
+	-- corner -- Neovim does not compensate for scroll. Convert here so a
+	-- region anywhere in the buffer (not just what happened to be at the top
+	-- when unscrolled) lands in the right place; callers are expected to have
+	-- already scrolled the target row into view (see conversation/keymaps.lua's
+	-- move_cursor_to) since a still off-screen row can't be drawn at all.
+	local topline = vim.fn.line("w0", opts.anchor_win)
+	local leftcol = vim.api.nvim_win_call(opts.anchor_win, function()
+		return vim.fn.winsaveview().leftcol
+	end)
+	local screen_row = opts.row - (topline - 1)
+	local screen_col = opts.col - leftcol
 	local win = vim.api.nvim_open_win(buf, true, {
 		relative = "win",
 		win = opts.anchor_win,
-		row = opts.row,
-		col = opts.col,
+		row = screen_row,
+		col = screen_col,
 		width = math.max(1, opts.width),
 		height = math.max(1, opts.height or 1),
 		style = "minimal",

@@ -73,6 +73,7 @@ local function start_add(buf, refresh)
 		state.composing = nil
 		return
 	end
+	move_cursor_to(region)
 	start_inline_edit(buf, refresh, {
 		region = region,
 		seed_text = "",
@@ -131,6 +132,14 @@ local function start_reply(buf, refresh)
 		state.composing = nil
 		return
 	end
+	-- The composing box always renders at the end of the thread (see
+	-- render_thread_node), which can be well past the reply being answered
+	-- and thus outside the window's current viewport. `relative="win"`
+	-- floats use absolute buffer coordinates and Neovim does not auto-scroll
+	-- the host window to keep them visible, so without this the overlay
+	-- could open off-screen while the visible cursor stays on the comment
+	-- that was replied to.
+	move_cursor_to(region)
 	start_inline_edit(buf, refresh, {
 		region = region,
 		seed_text = seed_text,
@@ -164,6 +173,7 @@ local function start_edit(buf, refresh)
 		state.editing_id = nil
 		return
 	end
+	move_cursor_to(region)
 	start_inline_edit(buf, refresh, {
 		region = region,
 		seed_text = tostring(comment.body or ""),

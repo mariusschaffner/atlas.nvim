@@ -101,6 +101,8 @@ end
 ---@param wrap_width integer Display width each body line is word-wrapped to.
 ---@return string[] lines
 ---@return table[] highlights
+---@return integer body_start 0-indexed row (within `lines`) where the raw editable body starts.
+---@return integer body_line_count How many rows of `lines` are the raw editable body (excludes the date line and any trailing truncation-indicator/reactions rows).
 local function comment_content(comment, reaction_options, wrap_width)
 	local lines, highlights = {}, {}
 	local date_text = utils.format_datetime(comment.created)
@@ -108,12 +110,13 @@ local function comment_content(comment, reaction_options, wrap_width)
 		table.insert(lines, date_text)
 		table.insert(highlights, { line = 0, start_col = 0, end_col = #date_text, hl_group = "AtlasTextMuted" })
 	end
+	local body_start = #lines
 
 	if comment.deleted then
 		local text = "(deleted comment)"
 		table.insert(lines, text)
 		table.insert(highlights, { line = #lines - 1, start_col = 0, end_col = #text, hl_group = "AtlasTextMutedItalic" })
-		return lines, highlights
+		return lines, highlights, body_start, 0
 	end
 
 	local body_lines = utils.sanitize_lines(utils.strip_markup(comment.body or ""))
@@ -139,6 +142,7 @@ local function comment_content(comment, reaction_options, wrap_width)
 			end
 		end
 	end
+	local body_line_count = #lines - body_start
 	if truncated then
 		local fold_keys = keymaps.resolve("ui.toggle_fold")
 		local key = fold_keys and fold_keys[1]
@@ -159,7 +163,7 @@ local function comment_content(comment, reaction_options, wrap_width)
 		end
 	end
 
-	return lines, highlights
+	return lines, highlights, body_start, body_line_count
 end
 
 ---@param comment IssueComment
@@ -269,7 +273,7 @@ local function render_comment_box(comment, depth, width, lines, spans, line_map,
 	local wrap_width = math.max(1, box_width - 2 - #CONTENT_PAD)
 
 	local reaction_options = detail.provider and detail.provider.capabilities.comments and detail.provider.capabilities.comments.reaction_options
-	local content_lines, content_highlights = comment_content(comment, reaction_options, wrap_width)
+	local content_lines, content_highlights, body_start, body_line_count = comment_content(comment, reaction_options, wrap_width)
 	for _, line in ipairs(extra_content_lines or {}) do
 		table.insert(content_lines, line)
 	end
@@ -305,7 +309,16 @@ local function render_comment_box(comment, depth, width, lines, spans, line_map,
 	apply_indent(box_lines, box_highlights, indent)
 
 	local base = #lines
-	state.regions["comment:" .. id] = { row = base + 1, col = indent + 1, width = box_width - 2, height = #framed_lines }
+	-- Points at just the raw editable body (skipping the date line above it
+	-- and any truncation-indicator/reactions/"N replies" rows below it), so
+	-- the inline edit overlay lands exactly on the body text, not adjacent
+	-- content.
+	state.regions["comment:" .. id] = {
+		row = base + 1 + body_start,
+		col = indent + 1,
+		width = box_width - 2,
+		height = math.max(1, body_line_count),
+	}
 
 	for _, line in ipairs(box_lines) do
 		table.insert(lines, line)
