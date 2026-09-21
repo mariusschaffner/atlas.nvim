@@ -65,13 +65,6 @@ end
 ---@param width integer
 M.render = renderer.render
 
----@param _lnum integer
----@param entry table
----@return boolean
-function M.is_selectable_line(_lnum, entry)
-	return entry.conversation_item ~= nil or entry.kind == "activity_gap"
-end
-
 ---@return boolean
 function M.is_loading()
 	return state.is_loading()

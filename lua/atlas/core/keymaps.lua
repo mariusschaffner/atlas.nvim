@@ -118,6 +118,7 @@ local M = {}
 ---@field create_branch? AtlasKeymapValue
 ---@field go_to_pull? AtlasKeymapValue
 ---@field go_to_milestone? AtlasKeymapValue
+---@field add_comment? AtlasKeymapValue Adds a new comment on the issue detail view's Activity tab (inline, not the shared ui.comments.add popup flow).
 
 ---@class AtlasKeymapsConfig
 ---@field ui? AtlasUIKeymaps
@@ -219,6 +220,7 @@ local M = {}
 ---| "issues.create_branch"
 ---| "issues.go_to_pull"
 ---| "issues.go_to_milestone"
+---| "issues.add_comment"
 
 ---@param value AtlasKeymapValue
 ---@return string[]|nil
@@ -385,6 +387,11 @@ function M.validate()
 		-- (issue detail buffer) are separate panels that are never open at
 		-- once, so sharing "gt" is safe.
 		{ "issues.change_milestone_title", "issues.edit_issue" },
+		-- edit_description (Description tab) and add_comment (Activity tab)
+		-- are different tabs of the same detail view, never active at once;
+		-- ui.inspect is the dashboard's own row-list buffer, a different
+		-- buffer entirely. All three sharing "i" is safe.
+		{ "ui.edit_description", "issues.add_comment", "ui.inspect" },
 	}
 
 	local function conflict_allowed(actions)

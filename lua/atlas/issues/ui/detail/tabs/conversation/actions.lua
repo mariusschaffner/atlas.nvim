@@ -1,8 +1,6 @@
 local M = {}
 
-local md_editor = require("atlas.ui.popups.editor")
 local picker = require("atlas.ui.picker")
-local comment_threads = require("atlas.issues.ui.components.comment_threads")
 local notify = require("atlas.core.notify")
 local state = require("atlas.issues.ui.detail.tabs.conversation.state")
 local detail = require("atlas.issues.ui.detail.state")
@@ -26,6 +24,7 @@ local function get_completion(issue)
 	end
 	return nil
 end
+M.get_completion = get_completion
 
 ---@param issue Issue
 ---@param amount integer
@@ -40,169 +39,143 @@ local function adjust_comment_count(issue, amount)
 	end
 end
 
----@param issue Issue
----@param refresh fun()
-function M.add(issue, refresh)
-	local comments = get_comments()
-	if not comments or not comments.add_comment then
-		return
+--- Whether `comment` was authored by the currently signed-in user, used to
+--- gate the Edit/Delete bottom-border hints to your own comments. Compares
+--- `id` first, falling back to `account_id` -- the dashboard-level
+--- `current_user` (populated by `fetch_current_user()` on every dashboard
+--- load, so it's reliably available by the time a detail view is open).
+---@param comment IssueComment|nil
+---@return boolean
+function M.is_own_comment(comment)
+	local user = require("atlas.issues.state").current_user
+	local author = comment and comment.author
+	if user == nil or author == nil then
+		return false
 	end
-	md_editor.open({
-		key = "issue-comment-add",
-		title = " Add Comment ",
-		width_ratio = 0.5,
-		height_ratio = 0.18,
-		completion = get_completion(issue),
-		on_save = function(text)
-			if not text or vim.trim(text) == "" then
-				return
-			end
-			notify.loading("Adding comment...")
-			comments.add_comment(issue, text, function(created, err)
-				if not state.is_current(issue) then
-					return
-				end
-				if err then
-					notify.error("Add comment failed: " .. err)
-					return
-				end
-				if created then
-					state.upsert_comment(created)
-					adjust_comment_count(issue, 1)
-				end
-				notify.success("Comment added", { timeout = 1200 })
-				refresh()
-			end)
-		end,
-	})
+	if user.id ~= nil and author.id ~= nil then
+		return user.id == author.id
+	end
+	if user.account_id ~= nil and user.account_id ~= "" and author.account_id ~= nil and author.account_id ~= "" then
+		return user.account_id == author.account_id
+	end
+	return false
 end
 
 ---@param issue Issue
----@param entry table
----@param refresh fun()
-function M.reply(issue, entry, refresh)
-	local item = entry and entry.conversation_item or nil
-	if not item then
+---@param text string
+---@param done fun(ok: boolean, err: string|nil)
+function M.add(issue, text, done)
+	if not text or vim.trim(text) == "" then
+		done(false, "Comment is empty")
 		return
 	end
-	if item.kind ~= "comment" then
-		return
-	end
-	---@type IssueComment
-	local comment = item.entity
 	local comments = get_comments()
 	if not comments or not comments.add_comment then
+		done(false, "Not supported")
 		return
 	end
-	local completion = get_completion(issue)
-	local mention = ""
-	if completion and completion.format_mention then
-		mention = completion.format_mention(comment.author) or ""
-	end
-	local initial_text = mention ~= "" and (mention .. " ") or ""
-
-	local parent = entry.thread_root or comment
-	md_editor.open({
-		key = "issue-comment-reply-" .. tostring(comment.id),
-		title = " Reply to Comment ",
-		width_ratio = 0.5,
-		height_ratio = 0.18,
-		initial_text = initial_text,
-		completion = completion,
-		preview = comment_threads.render_comment(comment, math.max(math.floor(vim.o.columns * 0.5), 80)),
-		on_save = function(text)
-			if not text or vim.trim(text) == "" then
-				return
-			end
-			notify.loading("Sending reply...")
-			local function done(created, err)
-				if not state.is_current(issue) then
-					return
-				end
-				if err then
-					notify.error("Reply failed: " .. err)
-					return
-				end
-				if created then
-					state.upsert_comment(created)
-					adjust_comment_count(issue, 1)
-				end
-				notify.success("Reply added", { timeout = 1200 })
-				refresh()
-			end
-			if comments.reply_comment then
-				comments.reply_comment(issue, parent, text, done)
-			else
-				comments.add_comment(issue, text, done)
-			end
-		end,
-	})
+	notify.loading("Adding comment...")
+	comments.add_comment(issue, text, function(created, err)
+		if not state.is_current(issue) then
+			done(true)
+			return
+		end
+		if err then
+			notify.error("Add comment failed: " .. err)
+			done(false, err)
+			return
+		end
+		if created then
+			state.upsert_comment(created)
+			adjust_comment_count(issue, 1)
+			state.active_id = tostring(created.id)
+		end
+		notify.success("Comment added", { timeout = 1200 })
+		done(true)
+	end)
 end
 
 ---@param issue Issue
----@param entry table
----@param refresh fun()
-function M.edit(issue, entry, refresh)
-	local item = entry and entry.conversation_item or nil
-	if not item then
+---@param parent IssueComment
+---@param text string
+---@param done fun(ok: boolean, err: string|nil)
+function M.reply(issue, parent, text, done)
+	if not text or vim.trim(text) == "" then
+		done(false, "Reply is empty")
 		return
 	end
-	if item.kind ~= "comment" then
+	local comments = get_comments()
+	if not comments or not comments.add_comment then
+		done(false, "Not supported")
 		return
 	end
-	---@type IssueComment
-	local comment = item.entity
+	notify.loading("Sending reply...")
+	local function on_result(created, err)
+		if not state.is_current(issue) then
+			done(true)
+			return
+		end
+		if err then
+			notify.error("Reply failed: " .. err)
+			done(false, err)
+			return
+		end
+		if created then
+			state.upsert_comment(created)
+			adjust_comment_count(issue, 1)
+			state.active_id = tostring(created.id)
+		end
+		notify.success("Reply added", { timeout = 1200 })
+		done(true)
+	end
+	if comments.reply_comment then
+		comments.reply_comment(issue, parent, text, on_result)
+	else
+		comments.add_comment(issue, text, on_result)
+	end
+end
+
+---@param issue Issue
+---@param comment IssueComment
+---@param text string
+---@param done fun(ok: boolean, err: string|nil)
+function M.edit(issue, comment, text, done)
+	if not text or vim.trim(text) == "" then
+		done(false, "Comment is empty")
+		return
+	end
 	local comments = get_comments()
 	if not comments or not comments.edit_comment then
+		done(false, "Not supported")
 		return
 	end
-	md_editor.open({
-		key = "issue-comment-edit-" .. tostring(comment.id),
-		title = " Edit Comment ",
-		width_ratio = 0.5,
-		height_ratio = 0.18,
-		initial_text = tostring(comment.body or ""),
-		completion = get_completion(issue),
-		on_save = function(text)
-			if not text or vim.trim(text) == "" then
-				return
-			end
-			notify.loading("Editing comment...")
-			comments.edit_comment(issue, comment, text, function(updated, err)
-				if not state.is_current(issue) then
-					return
-				end
-				if err then
-					notify.error("Edit failed: " .. err)
-					return
-				end
-				if updated then
-					updated.parent_id = updated.parent_id or comment.parent_id
-					updated._raw = vim.tbl_extend("keep", updated._raw or {}, comment._raw or {})
-					state.upsert_comment(updated)
-				else
-					comment.body = text
-				end
-				notify.success("Comment updated", { timeout = 1200 })
-				refresh()
-			end)
-		end,
-	})
+	notify.loading("Editing comment...")
+	comments.edit_comment(issue, comment, text, function(updated, err)
+		if not state.is_current(issue) then
+			done(true)
+			return
+		end
+		if err then
+			notify.error("Edit failed: " .. err)
+			done(false, err)
+			return
+		end
+		if updated then
+			updated.parent_id = updated.parent_id or comment.parent_id
+			updated._raw = vim.tbl_extend("keep", updated._raw or {}, comment._raw or {})
+			state.upsert_comment(updated)
+		else
+			comment.body = text
+		end
+		notify.success("Comment updated", { timeout = 1200 })
+		done(true)
+	end)
 end
 
 ---@param issue Issue
----@param entry table
+---@param comment IssueComment
 ---@param refresh fun()
-function M.delete(issue, entry, refresh)
-	local item = entry and entry.conversation_item or nil
-	if not item then
-		return
-	end
-	if item.kind ~= "comment" then
-		return
-	end
-	---@type IssueComment
-	local comment = item.entity
+function M.delete(issue, comment, refresh)
 	local comments = get_comments()
 	if not comments or not comments.delete_comment then
 		return
@@ -231,13 +204,9 @@ function M.delete(issue, entry, refresh)
 end
 
 ---@param issue Issue
----@param entry table
+---@param comment IssueComment
 ---@param refresh fun()
-function M.react(issue, entry, refresh)
-	local item = entry and entry.conversation_item or nil
-	if not item or item.kind ~= "comment" then
-		return
-	end
+function M.react(issue, comment, refresh)
 	local comments = get_comments()
 	if not comments or not comments.add_reaction then
 		notify.warn("Provider does not support reactions")
@@ -248,8 +217,6 @@ function M.react(issue, entry, refresh)
 		notify.warn("No reactions available for this provider")
 		return
 	end
-	---@type IssueComment
-	local target = item.entity
 	local choices = {}
 	for _, opt in ipairs(options) do
 		table.insert(choices, {
@@ -268,7 +235,7 @@ function M.react(issue, entry, refresh)
 				return
 			end
 			notify.loading("Adding reaction...")
-			comments.add_reaction(issue, item, selected.key, function(ok, err)
+			comments.add_reaction(issue, { kind = "comment", entity = comment }, selected.key, function(ok, err)
 				if not state.is_current(issue) then
 					return
 				end
@@ -277,8 +244,8 @@ function M.react(issue, entry, refresh)
 					return
 				end
 				if ok then
-					target.reactions = target.reactions or {}
-					target.reactions[selected.key] = (tonumber(target.reactions[selected.key]) or 0) + 1
+					comment.reactions = comment.reactions or {}
+					comment.reactions[selected.key] = (tonumber(comment.reactions[selected.key]) or 0) + 1
 				end
 				notify.success("Reaction added", { timeout = 1200 })
 				refresh()

@@ -66,9 +66,32 @@ local function build_top(interior_width, title, title_highlights, title_right, t
 end
 
 ---@param interior_width integer
----@return string
-local function build_bottom(interior_width)
-	return BL .. string.rep(H, math.max(0, interior_width)) .. BR
+---@param hint string|nil Left-aligned segment near the bottom-left corner (e.g. action hints).
+---@param hint_highlights table[]|nil Spans {start_col, end_col, hl_group} relative to `hint` itself.
+---@return string bottom
+---@return table[] highlights Spans {start_col, end_col, hl_group} relative to the returned `bottom` line.
+local function build_bottom(interior_width, hint, hint_highlights)
+	if hint == nil or hint == "" then
+		return BL .. string.rep(H, math.max(0, interior_width)) .. BR, {}
+	end
+
+	local label = string.format(" %s ", hint)
+	local label_w = text_width(label)
+	local remaining = math.max(0, interior_width - 1 - label_w)
+	local bottom = BL .. H .. label .. string.rep(H, remaining) .. BR
+
+	local hint_offset = #BL + #H + 1 -- corner + dash + leading space
+	local hint_len = #hint
+	local highlights = {}
+	for _, span in ipairs(hint_highlights or {}) do
+		local sc = math.min(span.start_col, hint_len)
+		local ec = math.min(span.end_col, hint_len)
+		if ec > sc then
+			table.insert(highlights, { start_col = hint_offset + sc, end_col = hint_offset + ec, hl_group = span.hl_group })
+		end
+	end
+
+	return bottom, highlights
 end
 
 ---@param opts {
@@ -86,6 +109,8 @@ end
 ---  content_background_hl: string|nil,
 ---  right_content: { lines: string[], highlights: table[]|nil }|nil,
 ---  right_content_row: integer|nil,
+---  bottom_hint: string|nil Left-aligned segment near the bottom-left corner (e.g. action hints).
+---  bottom_hint_highlights: table[]|nil Spans {start_col, end_col, hl_group} relative to `bottom_hint` itself.
 --- }
 ---@return string[] lines
 ---@return table[] highlights
@@ -179,9 +204,16 @@ function M.render(opts)
 		end
 	end
 
-	local bottom = build_bottom(interior_width)
+	local bottom, bottom_hint_highlights = build_bottom(interior_width, opts.bottom_hint, opts.bottom_hint_highlights)
+	local bottom_line_idx = #lines
 	table.insert(lines, bottom)
-	table.insert(highlights, { line = #lines - 1, start_col = 0, end_col = #bottom, hl_group = border_hl })
+	table.insert(highlights, { line = bottom_line_idx, start_col = 0, end_col = #bottom, hl_group = border_hl })
+	for _, span in ipairs(bottom_hint_highlights) do
+		table.insert(
+			highlights,
+			{ line = bottom_line_idx, start_col = span.start_col, end_col = span.end_col, hl_group = span.hl_group }
+		)
+	end
 
 	return lines, highlights
 end

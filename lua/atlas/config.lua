@@ -279,6 +279,7 @@ M.options = {
 			create_branch = "gb",
 			go_to_pull = "gp",
 			go_to_milestone = "gm",
+			add_comment = "i",
 		},
 	},
 }
