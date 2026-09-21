@@ -6,7 +6,6 @@
 local M = {}
 
 local keymaps = require("atlas.core.keymaps")
-local notify = require("atlas.core.notify")
 local utils = require("atlas.ui.shared.utils")
 local detail_ui = require("atlas.ui.detail")
 
@@ -135,17 +134,6 @@ function M.start(opts)
 	end
 	for _, key in ipairs(close_keys) do
 		vim.keymap.set("n", key, cancel, { buffer = buf, nowait = true, silent = true })
-	end
-
-	if #submit_keys > 0 or #close_keys > 0 then
-		local hint = {}
-		if #submit_keys > 0 then
-			table.insert(hint, table.concat(submit_keys, "/") .. " save")
-		end
-		if #close_keys > 0 then
-			table.insert(hint, table.concat(close_keys, "/") .. " discard")
-		end
-		notify.info("Editing: " .. table.concat(hint, ", "), { timeout = 2000 })
 	end
 end
 

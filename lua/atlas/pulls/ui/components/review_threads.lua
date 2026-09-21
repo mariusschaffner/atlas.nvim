@@ -27,6 +27,7 @@ local function author_name(author)
 	end
 	return "Unknown"
 end
+M.author_name = author_name
 
 ---@param author PullsAuthor|nil
 ---@return string|nil

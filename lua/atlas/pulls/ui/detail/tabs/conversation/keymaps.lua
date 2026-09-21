@@ -3,82 +3,277 @@ local M = {}
 local help = require("atlas.ui.popups.help")
 local resolver = require("atlas.core.keymaps")
 local utils = require("atlas.ui.shared.utils")
-local detail = require("atlas.pulls.ui.detail.state")
 local review_threads = require("atlas.pulls.ui.components.review_threads")
-local state = require("atlas.pulls.ui.detail.tabs.conversation.state")
+local inline_field_edit = require("atlas.ui.inline_field_edit")
 local actions = require("atlas.pulls.ui.detail.tabs.conversation.actions")
+local detail = require("atlas.pulls.ui.detail.state")
+local state = require("atlas.pulls.ui.detail.tabs.conversation.state")
 
-local COMMENT_ACTIONS = {
+local ACTIONS = {
 	"ui.comments.add",
 	"ui.comments.reply",
 	"ui.comments.edit",
 	"ui.delete",
 	"ui.comments.react",
+	"ui.next_item",
+	"ui.previous_item",
 }
 
-local function cursor_entry()
+---@param region AtlasFieldBoxRegion
+local function move_cursor_to(region)
 	local win = detail.win
 	if win == nil or not vim.api.nvim_win_is_valid(win) then
-		return nil
+		return
 	end
-	local lnum = vim.api.nvim_win_get_cursor(win)[1]
-	return detail.line_map[lnum]
+	pcall(vim.api.nvim_win_set_cursor, win, { region.row + 1, 0 })
 end
 
 ---@param refresh fun()
----@param fn fun(pr: PullRequest, refresh: fun())
-local function dispatch_simple(refresh, fn)
-	local pr = detail.current_pr
-	if pr == nil then
+local function refresh_and_follow(refresh)
+	refresh()
+	local id = state.active_id
+	local region = id and state.regions[id]
+	if region then
+		move_cursor_to(region)
+	end
+end
+
+---@param buf integer
+---@param refresh fun()
+---@param opts { region: AtlasFieldBoxRegion, seed_text: string, on_save: fun(text: string, done: fun(ok: boolean, err: string|nil)), on_done: fun() }
+local function start_inline_edit(buf, refresh, opts)
+	local win = detail.win
+	if win == nil or not vim.api.nvim_win_is_valid(win) then
 		return
 	end
-	fn(pr, refresh)
+	inline_field_edit.start({
+		anchor_win = win,
+		row = opts.region.row,
+		col = opts.region.col,
+		width = opts.region.width,
+		height = opts.region.height,
+		seed_text = opts.seed_text,
+		on_save = opts.on_save,
+		on_cancel = function() end,
+		on_done = opts.on_done,
+	})
+	-- The detail view's own footer ("[gA] - Add") is driven by
+	-- inline_field_edit.is_active(), which only flips true once start() above
+	-- returns -- refresh again so it picks that up.
+	refresh()
 end
 
 ---@param refresh fun()
----@param fn fun(pr: PullRequest, entry: table, refresh: fun())
-local function dispatch_with_entry(refresh, fn)
+local function start_add(buf, refresh)
 	local pr = detail.current_pr
-	if pr == nil then
+	local comments = detail.provider and detail.provider.capabilities.comments
+	if not pr or not comments or not comments.add_comment then
 		return
 	end
-	local entry = cursor_entry()
-	if not entry then
+	state.composing = { kind = "add", seed_text = "" }
+	refresh()
+	local region = state.regions.composing
+	if not region then
+		state.composing = nil
 		return
 	end
-	fn(pr, entry, refresh)
+	move_cursor_to(region)
+	start_inline_edit(buf, refresh, {
+		region = region,
+		seed_text = "",
+		on_save = function(text, done)
+			actions.add(pr, text, done)
+		end,
+		on_done = function()
+			state.composing = nil
+			refresh_and_follow(refresh)
+		end,
+	})
+end
+
+---@param comment PullsComment
+---@return PullsComment thread_root
+local function find_thread_root(comment)
+	local thread_root = comment
+	for _, node in ipairs(review_threads.group_comments(state.comments(false))) do
+		local function find(n)
+			if tostring(n.comment.id) == tostring(comment.id) then
+				return n.comment
+			end
+			for _, child in ipairs(n.children) do
+				local found = find(child)
+				if found then
+					return n.comment
+				end
+			end
+			return nil
+		end
+		local found_root = find(node)
+		if found_root then
+			thread_root = found_root
+			break
+		end
+	end
+	return thread_root
+end
+
+---@param buf integer
+---@param refresh fun()
+local function start_reply(buf, refresh)
+	local pr = detail.current_pr
+	local entry = state.active_entry()
+	local comments = detail.provider and detail.provider.capabilities.comments
+	if not pr or not entry or entry.kind ~= "comment" or not comments or not comments.add_comment then
+		return
+	end
+	---@type PullsComment
+	local comment = entry.entity
+	if comment.is_task then
+		return
+	end
+
+	local thread_root = find_thread_root(comment)
+
+	local completion = actions.get_completion(pr)
+	local mention = ""
+	if completion and completion.format_mention then
+		mention = completion.format_mention(comment.author) or ""
+	end
+	local seed_text = mention ~= "" and (mention .. " ") or ""
+
+	state.composing = { kind = "reply", parent = thread_root, seed_text = seed_text }
+	refresh()
+	local region = state.regions.composing
+	if not region then
+		state.composing = nil
+		return
+	end
+	-- The composing box always renders at the end of the thread, which can
+	-- be well past the reply being answered and outside the current
+	-- viewport; `relative="win"` floats don't auto-scroll for that.
+	move_cursor_to(region)
+	start_inline_edit(buf, refresh, {
+		region = region,
+		seed_text = seed_text,
+		on_save = function(text, done)
+			actions.reply(pr, thread_root, text, done)
+		end,
+		on_done = function()
+			state.composing = nil
+			refresh_and_follow(refresh)
+		end,
+	})
+end
+
+---@param buf integer
+---@param refresh fun()
+local function start_edit(buf, refresh)
+	local pr = detail.current_pr
+	local entry = state.active_entry()
+	if not pr or not entry then
+		return
+	end
+
+	if entry.kind == "review" then
+		actions.edit_review(pr, entry.entity, refresh)
+		return
+	end
+	if entry.kind == "task" then
+		actions.edit_task(pr, entry.entity, refresh)
+		return
+	end
+
+	---@type PullsComment
+	local comment = entry.entity
+	local comments = detail.provider and detail.provider.capabilities.comments
+	if not comments or not comments.edit_comment or not actions.is_own_comment(comment) then
+		return
+	end
+
+	state.editing_id = tostring(comment.id)
+	refresh()
+	local region = state.regions["comment:" .. tostring(comment.id)]
+	if not region then
+		state.editing_id = nil
+		return
+	end
+	move_cursor_to(region)
+	start_inline_edit(buf, refresh, {
+		region = region,
+		seed_text = tostring(comment.content_raw or ""),
+		on_save = function(text, done)
+			actions.edit_comment(pr, comment, text, done)
+		end,
+		on_done = function()
+			state.editing_id = nil
+			refresh_and_follow(refresh)
+		end,
+	})
+end
+
+---@param refresh fun()
+local function do_delete(refresh)
+	local pr = detail.current_pr
+	local entry = state.active_entry()
+	if not pr or not entry or entry.kind == "review" then
+		return
+	end
+	---@type PullsComment
+	local comment = entry.entity
+	if entry.kind == "comment" and not actions.is_own_comment(comment) then
+		return
+	end
+	actions.delete(pr, comment, refresh)
+end
+
+---@param refresh fun()
+local function do_react(refresh)
+	local pr = detail.current_pr
+	local entry = state.active_entry()
+	if not pr or not entry or entry.kind ~= "comment" then
+		return
+	end
+	actions.react(pr, entry.entity, refresh)
+end
+
+---@param refresh fun()
+local function do_toggle_task(refresh)
+	local pr = detail.current_pr
+	local entry = state.active_entry()
+	if not pr or not entry or entry.kind ~= "task" then
+		return
+	end
+	actions.toggle_task(pr, entry.entity, refresh)
 end
 
 ---@param refresh fun()
 local function toggle_fold(refresh)
-	local entry = cursor_entry()
+	local entry = state.active_entry()
 	if not entry then
 		return
 	end
-	if entry.run_id ~= nil then
-		state.toggle_run(entry.run_id)
+	if entry.kind == "task" then
+		if state.toggle_comment(entry.entity) then
+			refresh()
+		end
+		return
+	end
+	if entry.kind ~= "comment" then
+		return
+	end
+	---@type PullsComment
+	local comment = entry.entity
+	if state.toggle_comment(comment) then
 		refresh()
 		return
 	end
-
-	local comment = entry.comment
-	local kind = tostring(entry.kind or "")
-	local content_line = kind:find("content", 1, true) ~= nil
-	local standalone_root = entry.thread_has_replies ~= true
-	if comment and (content_line or standalone_root) and state.toggle_comment(comment) then
-		refresh()
-		return
+	for _, node in ipairs(review_threads.group_comments(state.comments(false))) do
+		if tostring(node.comment.id) == tostring(comment.id) and #node.children > 0 then
+			state.toggle(node.comment.id)
+			refresh()
+			return
+		end
 	end
-
-	local root = entry.thread_root or entry.comment
-	if not root then
-		return
-	end
-	if root.is_task or entry.thread_has_replies ~= true then
-		return
-	end
-	state.toggle(root.id)
-	refresh()
 end
 
 ---@param buf integer
@@ -95,7 +290,7 @@ function M.setup(buf, refresh)
 			hint_desc = "Add",
 			opts = { nowait = true, silent = true },
 			callback = function()
-				dispatch_simple(refresh, actions.add)
+				start_add(buf, refresh)
 			end,
 		})
 	)
@@ -106,18 +301,18 @@ function M.setup(buf, refresh)
 			hint_desc = "Reply",
 			opts = { nowait = true, silent = true },
 			callback = function()
-				dispatch_with_entry(refresh, actions.reply)
+				start_reply(buf, refresh)
 			end,
 		})
 	)
 	utils.insert_if(
 		items,
 		resolver.item("ui.comments.edit", {
-			desc = has_tasks and "Edit comment / task" or "Edit comment",
+			desc = has_tasks and "Edit comment / task / review" or "Edit comment",
 			hint_desc = "Edit",
 			opts = { nowait = true, silent = true },
 			callback = function()
-				dispatch_with_entry(refresh, actions.edit)
+				start_edit(buf, refresh)
 			end,
 		})
 	)
@@ -128,7 +323,7 @@ function M.setup(buf, refresh)
 			hint_desc = "Delete",
 			opts = { nowait = true, silent = true },
 			callback = function()
-				dispatch_with_entry(refresh, actions.delete)
+				do_delete(refresh)
 			end,
 		})
 	)
@@ -139,7 +334,31 @@ function M.setup(buf, refresh)
 			hint = false,
 			opts = { nowait = true, silent = true },
 			callback = function()
-				dispatch_with_entry(refresh, actions.react)
+				do_react(refresh)
+			end,
+		})
+	)
+	utils.insert_if(
+		items,
+		resolver.item("ui.next_item", {
+			desc = "Next item",
+			hint = false,
+			opts = { nowait = true, silent = true },
+			callback = function()
+				state.move_active(1)
+				refresh_and_follow(refresh)
+			end,
+		})
+	)
+	utils.insert_if(
+		items,
+		resolver.item("ui.previous_item", {
+			desc = "Previous item",
+			hint = false,
+			opts = { nowait = true, silent = true },
+			callback = function()
+				state.move_active(-1)
+				refresh_and_follow(refresh)
 			end,
 		})
 	)
@@ -149,7 +368,7 @@ function M.setup(buf, refresh)
 			hint = false,
 			opts = { nowait = true, silent = true },
 			callback = function()
-				dispatch_with_entry(refresh, actions.toggle_task)
+				do_toggle_task(refresh)
 			end,
 		})
 		if toggle_task then
@@ -189,7 +408,7 @@ end
 ---@param buf integer
 function M.teardown(buf)
 	local items = {}
-	for _, action_id in ipairs(COMMENT_ACTIONS) do
+	for _, action_id in ipairs(ACTIONS) do
 		utils.insert_if(items, resolver.item(action_id, {}))
 	end
 	local fold_keys = resolver.resolve("ui.toggle_fold")

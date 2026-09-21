@@ -11,6 +11,7 @@ local spinner = require("atlas.ui.components.spinner")
 local presentation = require("atlas.pulls.ui.presentation")
 local detail_ui = require("atlas.ui.detail")
 local inline_edit = require("atlas.ui.inline_edit")
+local inline_field_edit = require("atlas.ui.inline_field_edit")
 
 local ns = vim.api.nvim_create_namespace("atlas.provider_detail")
 local header_ns = vim.api.nvim_create_namespace("atlas.provider_detail.header")
@@ -244,6 +245,19 @@ local function content_border_hl()
 	return description_editable() and "AtlasFieldBoxBorderEditable" or "AtlasBorder"
 end
 
+--- Whether the Activity tab's "[gA] - Add" footer hint should show: only on
+--- that tab, only when the provider supports adding a top-level comment, and
+--- not while a comment is already being inline-edited/composed (that box
+--- already shows its own Save/Cancel hint on its own border).
+---@return boolean
+local function conversation_addable()
+	local comments = state.provider and state.provider.capabilities.comments
+	return state.current_tab == "conversation"
+		and comments ~= nil
+		and comments.add_comment ~= nil
+		and not inline_field_edit.is_active()
+end
+
 ---@param tab_items PullsDetailTab[]
 ---@param active_tab string
 ---@return { [1]: string, [2]: string }[]
@@ -302,6 +316,11 @@ function M.render(tab_items, get_tab_module)
 		footer_chunks = {
 			{ "─ ", hl },
 			{ utils.field_hint_label("ui.edit_description", "Edit", true), hl },
+		}
+	elseif conversation_addable() then
+		footer_chunks = {
+			{ "─ ", content_border_hl() },
+			{ utils.field_hint_label("ui.comments.add", "Add", true), "AtlasFooterInfo" },
 		}
 	end
 	detail_ui.set_content_footer(footer_chunks)

@@ -3,6 +3,16 @@ local utils = require("atlas.ui.shared.utils")
 
 local MAX_COMMENT_LINES = 8
 
+---@class PullsConversationComposing
+---@field kind "add"|"reply"
+---@field parent PullsComment|nil
+---@field seed_text string
+
+---@class PullsConversationNavigableEntry
+---@field id string
+---@field kind "comment"|"task"|"review"
+---@field entity PullsComment|PullsReviewHistoryEntry
+
 ---@class PullsConversationState
 ---@field items PullsConversationItem[]|"loading"|nil
 ---@field error string|nil
@@ -11,6 +21,11 @@ local MAX_COMMENT_LINES = 8
 ---@field expanded_runs table<string, boolean>
 ---@field requests AtlasRequestScope
 ---@field current_pr PullRequest|nil
+---@field active_id string|nil Currently active/selected entry id (not cursor-bound).
+---@field editing_id string|nil Comment id currently being inline-edited, if any.
+---@field composing PullsConversationComposing|nil In-progress inline add/reply, if any.
+---@field regions table<string, AtlasFieldBoxRegion> Interior regions from the last render, keyed by navigable id (or "composing").
+---@field navigable PullsConversationNavigableEntry[] Flattened, in-order list of every visible entry from the last render.
 local M = {
 	items = nil,
 	error = nil,
@@ -19,6 +34,11 @@ local M = {
 	expanded_runs = {},
 	requests = request_scope.new(),
 	current_pr = nil,
+	active_id = nil,
+	editing_id = nil,
+	composing = nil,
+	regions = {},
+	navigable = {},
 }
 
 function M.reset()
@@ -30,6 +50,11 @@ function M.reset()
 	M.collapsed = {}
 	M.expanded_comments = {}
 	M.expanded_runs = {}
+	M.active_id = nil
+	M.editing_id = nil
+	M.composing = nil
+	M.regions = {}
+	M.navigable = {}
 end
 
 ---@param pr PullRequest
@@ -42,6 +67,50 @@ function M.deactivate()
 	M.current_pr = nil
 	M.requests.cancel()
 	M.requests = request_scope.new()
+end
+
+---@return PullsConversationNavigableEntry|nil
+function M.active_entry()
+	for _, entry in ipairs(M.navigable) do
+		if entry.id == M.active_id then
+			return entry
+		end
+	end
+	return nil
+end
+
+--- Rebuilds the navigable list from the last render, and defaults `active_id`
+--- to the first entry whenever it's unset or no longer present (first render
+--- after data loads, or after the active entry was deleted).
+---@param navigable PullsConversationNavigableEntry[]
+function M.set_navigable(navigable)
+	M.navigable = navigable
+	if M.active_id ~= nil then
+		for _, entry in ipairs(navigable) do
+			if entry.id == M.active_id then
+				return
+			end
+		end
+	end
+	M.active_id = navigable[1] and navigable[1].id or nil
+end
+
+--- Moves the active entry by `step` (1 = next, -1 = previous), clamped at
+--- the ends of the navigable list (no wraparound, matching plain j/k).
+---@param step 1|-1
+function M.move_active(step)
+	if #M.navigable == 0 then
+		return
+	end
+	local index = 1
+	for i, entry in ipairs(M.navigable) do
+		if entry.id == M.active_id then
+			index = i
+			break
+		end
+	end
+	index = math.max(1, math.min(#M.navigable, index + step))
+	M.active_id = M.navigable[index].id
 end
 
 ---@param pr PullRequest

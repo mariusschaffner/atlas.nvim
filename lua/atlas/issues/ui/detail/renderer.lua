@@ -225,10 +225,9 @@ function M.render(tab_items, get_tab_module)
 			{ utils.field_hint_label("ui.edit_description", "Edit", true), hl },
 		}
 	elseif conversation_addable() then
-		local hl = content_border_hl()
 		footer_chunks = {
-			{ "─ ", hl },
-			{ utils.field_hint_label("issues.add_comment", "Add", true), hl },
+			{ "─ ", content_border_hl() },
+			{ utils.field_hint_label("issues.add_comment", "Add", true), "AtlasFooterInfo" },
 		}
 	end
 	detail_ui.set_content_footer(footer_chunks)

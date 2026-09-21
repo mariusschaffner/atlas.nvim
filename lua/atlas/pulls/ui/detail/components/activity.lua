@@ -2,7 +2,7 @@ local M = {}
 
 local utils = require("atlas.ui.shared.utils")
 local icons = require("atlas.ui.shared.icons")
-local threads = require("atlas.ui.components.threadsv2")
+local highlights = require("atlas.ui.shared.highlights")
 
 local COLLAPSE_KEEP = 3
 local COLLAPSE_THRESHOLD = 5
@@ -20,6 +20,16 @@ local function actor_name(actor)
 		return actor.name
 	end
 	return "Unknown"
+end
+
+---@param name string|nil
+---@return string
+local function person_hl(name)
+	local normalized = name and vim.trim(name):lower() or ""
+	if normalized == "" or normalized == "unknown" or normalized == "none" then
+		return "AtlasTextMutedItalic"
+	end
+	return highlights.dynamic_for(normalized) or "AtlasTextMuted"
 end
 
 local EVENT = {
@@ -47,7 +57,7 @@ local EVENT = {
 }
 
 ---@param entry PullsActivityEntry
----@return { icon: string, icon_hl: string|nil, additional: string|nil, content: string|nil }
+---@return { icon: string, icon_hl: string|nil, additional: string|nil }
 function M.classify(entry)
 	local icon = EVENT[entry.kind] or icons.pulls("activity")
 	local icon_hl = "AtlasTextMuted"
@@ -57,88 +67,21 @@ function M.classify(entry)
 		icon_hl = "AtlasTextWarning"
 	end
 	local label = tostring(entry.label or "")
-	local body = entry.body
-	if entry.kind == "comment" and entry.deleted == true then
-		body = "(deleted comment)"
-	end
 	return {
 		icon = icon,
 		icon_hl = icon_hl,
 		additional = label ~= "" and label or entry.kind,
-		content = body,
 	}
-end
-
----@param entries PullsActivityEntry[]
----@param run_id string|nil
----@return AtlasThreadV2Item[]
-local function to_thread_items(entries, run_id)
-	local items = {}
-	for _, e in ipairs(entries) do
-		local classified = M.classify(e)
-		items[#items + 1] = {
-			icon = classified.icon,
-			icon_hl = classified.icon_hl,
-			author = actor_name(e.actor),
-			right_text = utils.relative_time(e.date),
-			additional = classified.additional,
-			content = classified.content,
-			line_map = {
-				kind = "activity",
-				activity_entry = e,
-				activity_actor = e.actor,
-				run_id = run_id,
-			},
-		}
-	end
-	return items
-end
-
----@param item AtlasThreadV2Item
----@param _text string
----@return string|nil
-local function additional_hl(item, _text)
-	local entry = item.line_map and item.line_map.activity_entry
-	if entry == nil then
-		return "AtlasTextMuted"
-	end
-	if entry.kind == "approval" then
-		return "AtlasTextPositive"
-	end
-	if entry.kind == "unapproval" or entry.kind == "changes_requested" then
-		return "AtlasTextWarning"
-	end
-	return "AtlasTextMuted"
-end
-
----@param item AtlasThreadV2Item
----@param row string
----@param _row_index integer
----@return table[]|nil
-local function content_hl(item, row, _row_index)
-	local entry = item.line_map and item.line_map.activity_entry
-	if entry == nil then
-		return nil
-	end
-
-	if entry.kind == "comment" and entry.deleted == true then
-		return {
-			{ start_col = 0, end_col = #row, hl_group = "AtlasTextMutedStrikethrough" },
-		}
-	end
-
-	return nil
 end
 
 ---Render a list of activities.
 ---@param entries PullsActivityEntry[]
 ---@param width integer
----@param opts { padding_x: integer|nil, content_max_lines: integer|nil, squash: boolean|nil, run_id: string|nil, has_next: boolean|nil }|nil
+---@param opts { padding_x: integer|nil, squash: boolean|nil, run_id: string|nil, has_next: boolean|nil }|nil
 ---@return string[] lines, table[] spans, table<integer, table>|nil line_map
 function M.render(entries, width, opts)
 	opts = opts or {}
 	local padding_x = opts.padding_x or 1
-	local content_max_lines = opts.content_max_lines or 3
 
 	local lines, spans, line_map = {}, {}, {}
 
@@ -161,21 +104,53 @@ function M.render(entries, width, opts)
 			return
 		end
 		local line = string.rep(" ", padding_x) .. "│"
-		append(
-			{ line },
-			{ { line = 0, start_col = padding_x, end_col = padding_x + #"│", hl_group = "AtlasTextMuted" } }
-		)
+		append({ line }, { { line = 0, start_col = padding_x, end_col = padding_x + #"│", hl_group = "AtlasTextMuted" } })
 	end
 
+	--- "<icon> <name> - <timestamp> - <action>".
+	---@param entry PullsActivityEntry
+	---@param has_next boolean
 	local function render_entry(entry, has_next)
 		separator()
-		append(threads.render(to_thread_items({ entry }, opts.run_id), width, {
-			padding_x = padding_x,
-			content_max_lines = content_max_lines,
-			content_prefix = has_next and "│  " or "   ",
-			additional_hl = additional_hl,
-			content_hl = content_hl,
-		}))
+
+		local prefix = string.rep(" ", padding_x) .. (has_next and "│  " or "   ")
+		local classified = M.classify(entry)
+		local name = actor_name(entry.actor)
+		local timestamp = utils.format_datetime(entry.date)
+		local action = classified.additional or ""
+
+		local parts, entry_spans, cursor = {}, {}, 0
+		local function add(text, hl)
+			if hl then
+				table.insert(entry_spans, { start_col = cursor, end_col = cursor + #text, hl_group = hl })
+			end
+			table.insert(parts, text)
+			cursor = cursor + #text
+		end
+
+		add(classified.icon .. " ", classified.icon_hl)
+		add(name, person_hl(name))
+		add(" - ")
+		if timestamp ~= "" then
+			add(timestamp, "AtlasLogInfo")
+			add(" - ")
+		end
+		add(action, "AtlasTextMuted")
+
+		local line = prefix .. table.concat(parts)
+		local line_spans = {}
+		for _, span in ipairs(entry_spans) do
+			table.insert(line_spans, {
+				line = 0,
+				start_col = #prefix + span.start_col,
+				end_col = #prefix + span.end_col,
+				hl_group = span.hl_group,
+			})
+		end
+
+		append({ line }, line_spans, {
+			[1] = { kind = "activity", activity_entry = entry, activity_actor = entry.actor, run_id = opts.run_id },
+		})
 	end
 
 	local function render_gap(count)

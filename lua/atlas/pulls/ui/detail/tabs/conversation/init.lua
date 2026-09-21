@@ -69,27 +69,20 @@ end
 
 M.render = renderer.render
 
----@param _lnum integer
----@param entry table
-function M.is_selectable_line(_lnum, entry)
-	return entry.conversation_item ~= nil or entry.kind == "activity_gap"
-end
-
 ---@param _pr PullRequest
 ---@param entry table
 function M.on_enter(_pr, entry)
-	local item = entry and entry.conversation_item or nil
-	if not item then
+	if not entry then
 		return
 	end
 	local url
-	if item.kind == "comment" then
-		---@type PullsComment
-		local comment = item.entity
-		url = comment.html_url or comment.url
-	elseif item.kind == "review" then
+	if entry.entity_kind == "comment" or entry.entity_kind == "task" then
+		---@type PullsComment|nil
+		local comment = entry.comment
+		url = comment and (comment.html_url or comment.url)
+	elseif entry.conversation_item and entry.conversation_item.kind == "review" then
 		---@type PullsReviewHistoryEntry
-		local review_entry = item.entity
+		local review_entry = entry.conversation_item.entity
 		url = review_entry.url
 	end
 	if url and url ~= "" then
