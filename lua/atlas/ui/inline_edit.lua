@@ -60,6 +60,7 @@ function M.start(opts)
 		{ utils.field_hint_label("ui.submit", "Save", true), hl },
 		{ " ── ", hl },
 		{ utils.field_hint_label("ui.field_edit.close", "Cancel", true), hl },
+		{ " ", hl },
 	})
 	local win = vim.fn.bufwinid(buf)
 	if win ~= -1 then
