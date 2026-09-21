@@ -87,7 +87,7 @@ function M.render(entries, width, opts)
 		add(name, presentation.person_hl(name))
 		add(" - ")
 		if timestamp ~= "" then
-			add(timestamp, "AtlasTextMuted")
+			add(timestamp, "AtlasLogInfo")
 			add(" - ")
 		end
 		add(action, "AtlasTextMuted")

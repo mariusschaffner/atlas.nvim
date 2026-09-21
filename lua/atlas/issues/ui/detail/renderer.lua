@@ -193,15 +193,19 @@ function M.render(tab_items, get_tab_module)
 
 	detail_ui.set_content_title(M.title_chunks(tab_items, state.current_tab))
 
+	-- Leading "─ " mirrors the top title's own border-dash prefix
+	-- (tabs.title_chunks), so the hint aligns with the title above it.
 	local footer_chunks
-	if description_editable() then
-		-- Matches the border color exactly, in both states (editable-blue while
-		-- viewing, editing-orange once `gE`/"i" opens the inline editor) --
-		-- inline_edit.lua sets the border directly while editing, bypassing
-		-- content_border_hl(), so that state has to be checked here too.
-		local hl = inline_edit.is_active(buf) and "AtlasFieldBoxBorderEditing" or content_border_hl()
-		-- Leading "─ " mirrors the top title's own border-dash prefix
-		-- (tabs.title_chunks), so the hint aligns with the title above it.
+	if inline_edit.is_active(buf) then
+		local hl = "AtlasFieldBoxBorderEditing"
+		footer_chunks = {
+			{ "─ ", hl },
+			{ utils.field_hint_label("ui.submit", "Save", true), hl },
+			{ " ── ", hl },
+			{ utils.field_hint_label("ui.field_edit.close", "Cancel", true), hl },
+		}
+	elseif description_editable() then
+		local hl = content_border_hl()
 		footer_chunks = {
 			{ "─ ", hl },
 			{ utils.field_hint_label("ui.edit_description", "Edit", true), hl },
