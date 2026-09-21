@@ -100,7 +100,18 @@ function M.list_issues(project_path, milestone_id, on_done)
 			on_done(nil, err)
 			return
 		end
-		on_done(issues_mapper.to_issues_list(result), nil)
+		local issues = issues_mapper.to_issues_list(result)
+		-- This endpoint is project-scoped, so every returned issue
+		-- unambiguously belongs to `project_path` -- enforce the key from it
+		-- directly rather than trusting `to_issue`'s `references.full`/
+		-- `web_url` derivation, which this REST payload doesn't reliably
+		-- populate (surfaced as "Invalid issue key" when opening one from
+		-- the milestone's Work Items tab).
+		for _, issue in ipairs(issues) do
+			issue.project_path = project_path
+			issue.key = string.format("%s#%d", project_path, issue.iid)
+		end
+		on_done(issues, nil)
 	end, {
 		action = "Fetch milestone issues",
 		project = project_path,

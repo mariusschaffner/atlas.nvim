@@ -289,7 +289,8 @@ end
 --- Same styled, columned table as the main issue dashboard (icon/name/
 --- assignee/labels/status), just a flat list -- Work Items are always
 --- issues linked to this milestone, never sub-milestones, so there's no
---- tree grouping to do.
+--- tree grouping to do, and no "Child Items" column (that's only ever
+--- populated for a milestone-group row, which never appears here).
 ---@param issues Issue[]
 ---@param width integer
 ---@return string[] lines
@@ -297,7 +298,9 @@ end
 ---@return table<integer, table> line_map
 local function render_work_items_table(issues, width)
 	local display = dashboard_providers.get(state.provider and state.provider.id)
-	local columns = display.columns("plain")
+	local columns = vim.tbl_filter(function(c)
+		return c.key ~= "children_count"
+	end, display.columns("plain"))
 	local label_width = max_key_label_width(issues)
 	local rows = {}
 	for _, issue in ipairs(issues) do
@@ -309,8 +312,23 @@ local function render_work_items_table(issues, width)
 		columns = columns,
 		rows = rows,
 		cell_hl = work_item_cell_hl,
+		header_separator = true,
 	})
-	return lines, spans, line_map
+
+	-- A blank line between the window's own title (the tab bar) and the
+	-- table header, matching the gap every other tab's content has below
+	-- the border. Shift the already-1-indexed lines/spans/line_map down by
+	-- one to make room.
+	table.insert(lines, 1, "")
+	for _, span in ipairs(spans) do
+		span.line = span.line + 1
+	end
+	local shifted_map = {}
+	for lnum, row in pairs(line_map) do
+		shifted_map[lnum + 1] = row
+	end
+
+	return lines, spans, shifted_map
 end
 
 ---@param width integer

@@ -285,6 +285,7 @@ end
 ---@field tree? TableTreeTreeOpts
 ---@field cell_hl? fun(row:table, col:table, ctx:{text:string, padded:string, width:integer}):string|table[]|nil
 ---@field align_title? boolean If true and header_align is nil, header uses column align.
+---@field header_separator? boolean Replace the blank line below the header with a dimmed full-width rule.
 
 ---@param opts TableTreeRenderOpts
 ---@return string[] lines
@@ -352,7 +353,18 @@ function M.render(opts)
 			col_start = col_start + #padded + gap_after(i)
 		end
 		table.insert(lines, string.rep(" ", margin) .. join_parts(header_parts))
-		table.insert(lines, "")
+		if opts.header_separator then
+			local sep_line = string.rep(" ", margin) .. string.rep("─", math.max(width - (margin * 2), 1))
+			table.insert(spans, {
+				line = #lines,
+				start_col = margin,
+				end_col = #sep_line,
+				hl_group = "AtlasTextMuted",
+			})
+			table.insert(lines, sep_line)
+		else
+			table.insert(lines, "")
+		end
 	end
 
 	for _, row in ipairs(rows) do
