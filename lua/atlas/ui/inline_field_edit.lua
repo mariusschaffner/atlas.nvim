@@ -297,11 +297,21 @@ function M.start(opts)
 	-- when unscrolled) lands in the right place; callers are expected to have
 	-- already scrolled the target row into view (see conversation/keymaps.lua's
 	-- move_cursor_to) since a still off-screen row can't be drawn at all.
+	--
+	-- The row delta is resolved via `screenpos()`, not a plain buffer-line
+	-- subtraction: the content window renders with `wrap = true`, so any line
+	-- between `topline` and `opts.row` that's wider than the window (e.g. a
+	-- long, unwrapped Activity-tab entry) soft-wraps onto more than one
+	-- screen row, and a line-count delta silently drifts low by exactly that
+	-- many extra rows. `screenpos()` reports the two rows' actual on-screen
+	-- position, so the delta stays correct regardless of wrapping above.
 	local topline = vim.fn.line("w0", opts.anchor_win)
 	local leftcol = vim.api.nvim_win_call(opts.anchor_win, function()
 		return vim.fn.winsaveview().leftcol
 	end)
-	local screen_row = opts.row - (topline - 1)
+	local top_screen_row = vim.fn.screenpos(opts.anchor_win, topline, 1).row
+	local target_screen_row = vim.fn.screenpos(opts.anchor_win, opts.row + 1, 1).row
+	local screen_row = target_screen_row - top_screen_row
 	local screen_col = opts.col - leftcol
 	local win = vim.api.nvim_open_win(buf, true, {
 		relative = "win",

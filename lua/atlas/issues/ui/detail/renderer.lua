@@ -141,22 +141,23 @@ local function description_editable()
 	return state.current_tab == "overview" and core ~= nil and core.update_description ~= nil
 end
 
---- Whether an inline add/reply is in progress on the Activity tab, and what
---- color the panel's global border should take on because of it: blue while
---- composing (a reply, or a not-yet-typing-in top-level add), escalating to
---- orange only once actively typing a new top-level comment. Replies keep
---- their own comment box's border as the "is this actively being edited"
---- signal, so the global border just stays blue for those.
+--- The Activity tab's own border color -- blue by default whenever the tab
+--- supports adding a top-level comment (mirrors the description tab always
+--- being blue while editable), escalating to orange only once actively
+--- typing a new top-level comment. A reply keeps its own comment box's
+--- border as the "is this actively being edited" signal, so the global
+--- border just stays blue for those.
 ---@return string|nil
 local function conversation_border_hl()
 	if state.current_tab ~= "conversation" then
 		return nil
 	end
-	local composing = conversation_state.composing
-	if composing == nil then
+	local comments = state.provider and state.provider.capabilities.comments
+	if comments == nil or comments.add_comment == nil then
 		return nil
 	end
-	if composing.kind == "add" and inline_field_edit.is_active() then
+	local composing = conversation_state.composing
+	if composing ~= nil and composing.kind == "add" and inline_field_edit.is_active() then
 		return "AtlasFieldBoxBorderEditing"
 	end
 	return "AtlasFieldBoxBorderEditable"
@@ -239,6 +240,7 @@ function M.render(tab_items, get_tab_module)
 			{ utils.field_hint_label("ui.submit", "Save", true), hl },
 			{ " ── ", hl },
 			{ utils.field_hint_label("ui.field_edit.close", "Cancel", true), hl },
+			{ " ", hl },
 		}
 	elseif description_editable() then
 		local hl = content_border_hl()
