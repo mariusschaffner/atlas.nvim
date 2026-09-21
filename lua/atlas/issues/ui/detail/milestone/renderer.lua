@@ -278,6 +278,12 @@ function M.render()
 
 	detail_ui.set_content_title(M.title_chunks(state.current_tab))
 
+	local footer_chunks
+	if description_editable() and not inline_edit.is_active(buf) then
+		footer_chunks = { { utils.field_hint_label("ui.edit_description", "Edit", true), "AtlasFooterWarning" } }
+	end
+	detail_ui.set_content_footer(footer_chunks)
+
 	if inline_edit.is_active(buf) then
 		-- Editing owns the border color (AtlasFieldBoxBorderEditing) until it
 		-- finishes, and re-rendering the content here would clobber the

@@ -359,6 +359,20 @@ function M.set_content_title(chunks)
 	})
 end
 
+--- Sets the content float's native footer (bottom border hint) to the given
+--- `{text, hl_group}[]` chunks (see `nvim_open_win`'s `footer`). Pass
+--- `nil`/`{}` to clear it.
+---@param chunks { [1]: string, [2]: string }[]|nil
+function M.set_content_footer(chunks)
+	if state.layout ~= "split" or not utils.window.valid(state.win) then
+		return
+	end
+	pcall(vim.api.nvim_win_set_config, state.win, {
+		footer = (chunks == nil or #chunks == 0) and "" or chunks,
+		footer_pos = "left",
+	})
+end
+
 -- Highlight groups `tabs.title_chunks`'s `border_hl` option may have used to
 -- color the title's non-label characters (leading dash, "-" separators,
 -- trailing space) -- recognized by `set_content_border` below so it can

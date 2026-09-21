@@ -67,7 +67,7 @@ local function to_thread_items(entries, run_id)
 			icon = classified.icon,
 			icon_hl = classified.icon_hl,
 			author = actor_name(e.actor),
-			right_text = utils.format_date(e.date),
+			right_text = utils.format_datetime(e.date),
 			additional = classified.additional,
 			content = classified.content,
 			line_map = {

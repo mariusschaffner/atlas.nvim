@@ -17,6 +17,33 @@ local PADDING = string.rep(" ", PADDING_X)
 local CONTENT_PAD = " "
 local CONNECTOR = "│"
 local INDENT_STEP = 2
+local BOX_WIDTH_RATIO = 0.8
+local MIN_BOX_WIDTH = 20
+
+---@param available_width integer
+---@return integer box_width
+local function comment_box_width(available_width)
+	return math.max(MIN_BOX_WIDTH, math.floor(available_width * BOX_WIDTH_RATIO))
+end
+
+--- Finds "@handle" mentions in a single (already-wrapped) line and colors
+--- them the same way an author's own name is colored (`person_hl`), keyed
+--- off the handle text itself.
+---@param line string
+---@return table[] spans
+local function mention_spans(line)
+	local spans = {}
+	local search_from = 1
+	while true do
+		local s, e, handle = line:find("@([%w_%.%-]+)", search_from)
+		if not s then
+			break
+		end
+		table.insert(spans, { start_col = s - 1, end_col = e, hl_group = presentation.person_hl(handle) })
+		search_from = e + 1
+	end
+	return spans
+end
 
 ---@param lines string[]
 ---@param spans table[]
@@ -71,11 +98,12 @@ end
 
 ---@param comment IssueComment
 ---@param reaction_options IssueReactionOption[]|nil
+---@param wrap_width integer Display width each body line is word-wrapped to.
 ---@return string[] lines
 ---@return table[] highlights
-local function comment_content(comment, reaction_options)
+local function comment_content(comment, reaction_options, wrap_width)
 	local lines, highlights = {}, {}
-	local date_text = utils.format_date(comment.created)
+	local date_text = utils.format_datetime(comment.created)
 	if date_text ~= "" then
 		table.insert(lines, date_text)
 		table.insert(highlights, { line = 0, start_col = 0, end_col = #date_text, hl_group = "AtlasTextMuted" })
@@ -100,7 +128,16 @@ local function comment_content(comment, reaction_options)
 	local truncated = max_lines ~= nil and #body_lines > max_lines
 	local visible_count = truncated and max_lines or #body_lines
 	for i = 1, visible_count do
-		table.insert(lines, body_lines[i])
+		for _, wrapped_line in ipairs(utils.wrap_line(body_lines[i], wrap_width)) do
+			table.insert(lines, wrapped_line)
+			local line_idx = #lines - 1
+			for _, span in ipairs(mention_spans(wrapped_line)) do
+				table.insert(
+					highlights,
+					{ line = line_idx, start_col = span.start_col, end_col = span.end_col, hl_group = span.hl_group }
+				)
+			end
+		end
 	end
 	if truncated then
 		local fold_keys = keymaps.resolve("ui.toggle_fold")
@@ -226,8 +263,13 @@ end
 ---@param extra_content_highlights table[]|nil
 local function render_comment_box(comment, depth, width, lines, spans, line_map, extra_content_lines, extra_content_highlights)
 	local id = tostring(comment.id)
+	local indent = depth * INDENT_STEP
+	local available = math.max(MIN_BOX_WIDTH, width - indent)
+	local box_width = comment_box_width(available)
+	local wrap_width = math.max(1, box_width - 2 - #CONTENT_PAD)
+
 	local reaction_options = detail.provider and detail.provider.capabilities.comments and detail.provider.capabilities.comments.reaction_options
-	local content_lines, content_highlights = comment_content(comment, reaction_options)
+	local content_lines, content_highlights = comment_content(comment, reaction_options, wrap_width)
 	for _, line in ipairs(extra_content_lines or {}) do
 		table.insert(content_lines, line)
 	end
@@ -246,8 +288,6 @@ local function render_comment_box(comment, depth, width, lines, spans, line_map,
 		bottom_hint, bottom_hint_highlights = bottom_hint_for(comment)
 	end
 
-	local indent = depth * INDENT_STEP
-	local box_width = math.max(20, width - indent)
 	local title, title_highlights = title_for(comment)
 	local framed_lines, framed_highlights = frame_content(content_lines, content_highlights)
 
@@ -297,7 +337,8 @@ local function render_composing_box(width, depth, lines, spans)
 	end
 
 	local indent = depth * INDENT_STEP
-	local box_width = math.max(20, width - indent)
+	local available = math.max(MIN_BOX_WIDTH, width - indent)
+	local box_width = comment_box_width(available)
 	local content_lines = { "", "", "" }
 
 	local box_lines, box_highlights = bordered_box.render({

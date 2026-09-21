@@ -352,6 +352,21 @@ function M.format_date(iso)
 	return ""
 end
 
+---@param iso string|nil
+---@return string "" when `iso` doesn't parse
+function M.format_datetime(iso)
+	if type(iso) ~= "string" or iso == "" then
+		return ""
+	end
+
+	local y, mo, d, hh, mm = iso:match("^(%d%d%d%d)%-(%d%d)%-(%d%d)T(%d%d):(%d%d)")
+	if y == nil then
+		return ""
+	end
+
+	return string.format("%s:%s - %s.%s.%s", hh, mm, d, mo, y)
+end
+
 ---@param bytes number|string|nil
 ---@return string
 function M.human_size(bytes)
