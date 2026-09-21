@@ -7,12 +7,14 @@ local bordered_box = require("atlas.ui.components.bordered_box")
 local emojis = require("atlas.ui.shared.emojis")
 local comment_threads = require("atlas.issues.ui.components.comment_threads")
 local activity_component = require("atlas.issues.ui.detail.components.activity")
+local presentation = require("atlas.issues.ui.presentation")
 local detail = require("atlas.issues.ui.detail.state")
 local state = require("atlas.issues.ui.detail.tabs.conversation.state")
 local actions = require("atlas.issues.ui.detail.tabs.conversation.actions")
 
 local PADDING_X = 1
 local PADDING = string.rep(" ", PADDING_X)
+local CONTENT_PAD = " "
 local CONNECTOR = "│"
 local INDENT_STEP = 2
 
@@ -130,7 +132,7 @@ local function bottom_hint_for(comment)
 	---@param hl string
 	local function add_segment(action_id, label, hl)
 		if #parts > 0 then
-			local sep = "── "
+			local sep = " ── "
 			table.insert(parts, sep)
 			cursor = cursor + #sep
 		end
@@ -155,6 +157,41 @@ local function bottom_hint_for(comment)
 		return nil, nil
 	end
 	return table.concat(parts), highlights
+end
+
+---@param comment IssueComment
+---@return string title
+---@return table[] title_highlights Spans relative to `title`, coloring just the author name.
+local function title_for(comment)
+	local name = comment_threads.author_name(comment.author)
+	local timestamp = utils.relative_time(comment.created)
+	local title = string.format("%s · %s", name, timestamp)
+	return title, { { start_col = 0, end_col = #name, hl_group = presentation.person_hl(name) } }
+end
+
+--- Adds a blank line above/below the content and a space of horizontal
+--- padding on every line, so the border isn't flush against the text.
+---@param lines string[]
+---@param highlights table[]
+---@return string[] lines
+---@return table[] highlights
+local function frame_content(lines, highlights)
+	local framed_lines = { "" }
+	for _, line in ipairs(lines) do
+		table.insert(framed_lines, CONTENT_PAD .. line)
+	end
+	table.insert(framed_lines, "")
+
+	local framed_highlights = {}
+	for _, span in ipairs(highlights) do
+		table.insert(framed_highlights, {
+			line = span.line + 1,
+			start_col = span.start_col + #CONTENT_PAD,
+			end_col = span.end_col + #CONTENT_PAD,
+			hl_group = span.hl_group,
+		})
+	end
+	return framed_lines, framed_highlights
 end
 
 ---@param box_lines string[]
@@ -206,13 +243,16 @@ local function render_comment_box(comment, depth, width, lines, spans, line_map,
 
 	local indent = depth * INDENT_STEP
 	local box_width = math.max(20, width - indent)
+	local title, title_highlights = title_for(comment)
+	local framed_lines, framed_highlights = frame_content(content_lines, content_highlights)
 
 	local box_lines, box_highlights = bordered_box.render({
 		width = box_width,
 		box_width = box_width,
-		title = comment_threads.author_name(comment.author),
-		content_lines = content_lines,
-		content_highlights = content_highlights,
+		title = title,
+		title_highlights = title_highlights,
+		content_lines = framed_lines,
+		content_highlights = framed_highlights,
 		border_hl = border_hl,
 		bottom_hint = bottom_hint,
 		bottom_hint_highlights = bottom_hint_highlights,
@@ -220,7 +260,7 @@ local function render_comment_box(comment, depth, width, lines, spans, line_map,
 	apply_indent(box_lines, box_highlights, indent)
 
 	local base = #lines
-	state.regions["comment:" .. id] = { row = base + 1, col = indent + 1, width = box_width - 2, height = #content_lines }
+	state.regions["comment:" .. id] = { row = base + 1, col = indent + 1, width = box_width - 2, height = #framed_lines }
 
 	for _, line in ipairs(box_lines) do
 		table.insert(lines, line)
@@ -244,9 +284,11 @@ local function render_composing_box(width, depth, lines, spans)
 	end
 
 	local title = "New Comment"
+	local title_highlights = nil
 	local current_user = require("atlas.issues.state").current_user
 	if current_user and current_user.display_name and current_user.display_name ~= "" then
 		title = current_user.display_name
+		title_highlights = { { start_col = 0, end_col = #title, hl_group = presentation.person_hl(title) } }
 	end
 
 	local indent = depth * INDENT_STEP
@@ -257,6 +299,7 @@ local function render_composing_box(width, depth, lines, spans)
 		width = box_width,
 		box_width = box_width,
 		title = title,
+		title_highlights = title_highlights,
 		content_lines = content_lines,
 		border_hl = "AtlasFieldBoxBorderEditing",
 	})
