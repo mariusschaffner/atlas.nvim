@@ -178,8 +178,12 @@ end
 ---@param pulls PullRequest[]
 ---@param layout "grouped"|"plain"
 ---@param display table
+---@param row_spacer boolean|nil Whether to insert a blank row between entries (default true).
 ---@return table[]
-local function list_rows(pulls, layout, display)
+local function list_rows(pulls, layout, display, row_spacer)
+	if row_spacer == nil then
+		row_spacer = true
+	end
 	local grouped = layout == "grouped"
 	local groups = group_by_repo(pulls)
 	if not grouped then
@@ -204,7 +208,7 @@ local function list_rows(pulls, layout, display)
 			table.insert(rows, { kind = "spacer" })
 		end
 		for pr_index, pr in ipairs(group.pulls) do
-			if not grouped and #rows > 0 then
+			if not grouped and row_spacer and #rows > 0 then
 				table.insert(rows, { kind = "spacer" })
 			end
 			local repo = group.repo
@@ -239,7 +243,7 @@ end
 ---@param layout "compact"|"grouped"|"plain"
 ---@param width integer
 ---@param display table
----@param opts { header_separator: boolean|nil }|nil
+---@param opts { header_separator: boolean|nil, row_spacer: boolean|nil }|nil
 ---@return string[], table[], table<integer, table>
 function M.render_table(pulls, layout, width, display, opts)
 	local compact = layout ~= "grouped" and layout ~= "plain"
@@ -247,7 +251,7 @@ function M.render_table(pulls, layout, width, display, opts)
 		width = width,
 		margin = 1,
 		columns = compact and display.columns.compact or display.columns.list,
-		rows = compact and compact_rows(pulls, display) or list_rows(pulls, layout, display),
+		rows = compact and compact_rows(pulls, display) or list_rows(pulls, layout, display, opts and opts.row_spacer),
 		cell_hl = function(row, col, ctx)
 			return cell_hl(row, col, ctx, display)
 		end,

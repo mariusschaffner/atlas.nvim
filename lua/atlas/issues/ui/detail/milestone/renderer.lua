@@ -340,8 +340,9 @@ end
 --- Same styled, columned table as the main pulls dashboard (title/comments/
 --- reviewer/dates), just a flat "plain" list -- Merge Requests are always
 --- linked to this milestone's own project, so there's no repo grouping to
---- do (the "plain" layout's blank line between rows is the pulls table's
---- own native styling, not something added here).
+--- do. Unlike the main pulls dashboard's own "plain" view, rows are kept
+--- back-to-back with no blank line between them (`row_spacer = false`), to
+--- keep this secondary list compact.
 ---@param pulls PullRequest[]
 ---@param width integer
 ---@return string[] lines
@@ -349,8 +350,13 @@ end
 ---@return table<integer, table> line_map
 local function render_merge_requests_table(pulls, width)
 	local display = pulls_dashboard_providers.get(state.provider and state.provider.id)
-	local lines, spans, line_map =
-		pulls_dashboard_renderer.render_table(pulls, "plain", width, display, { header_separator = true })
+	local lines, spans, line_map = pulls_dashboard_renderer.render_table(
+		pulls,
+		"plain",
+		width,
+		display,
+		{ header_separator = true, row_spacer = false }
+	)
 	return prepend_header_gap(lines, spans, line_map)
 end
 
@@ -422,6 +428,13 @@ function M.render()
 		footer_chunks = {
 			{ "─ ", hl },
 			{ utils.field_hint_label("ui.edit_description", "Edit", true), hl },
+			{ " ", hl },
+		}
+	elseif state.current_tab == "work_items" or state.current_tab == "merge_requests" then
+		local hl = content_border_hl()
+		footer_chunks = {
+			{ "─ ", hl },
+			{ utils.field_hint_label("ui.inspect", "Inspect", true), hl },
 			{ " ", hl },
 		}
 	end

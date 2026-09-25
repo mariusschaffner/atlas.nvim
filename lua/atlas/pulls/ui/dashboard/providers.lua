@@ -14,7 +14,10 @@ local function columns(conversation, before_reviewer, after_reviewer)
 				header_hl = "AtlasColumnHeader",
 			})
 		end
-		table.insert(result, { key = title_key, name = "Title", min_width = 42, header_hl = "AtlasColumnHeader" })
+		table.insert(
+			result,
+			{ key = title_key, name = "Merge Request", min_width = 42, header_hl = "AtlasColumnHeader" }
+		)
 		table.insert(result, {
 			key = "conversation",
 			name = string.format("%s Comments", conversation),
