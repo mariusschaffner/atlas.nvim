@@ -70,6 +70,10 @@ local function draft_action(draft)
 	return {
 		id = id,
 		label = label,
+		-- "Convert to draft" is hidden from the action picker (no other
+		-- binding exists for it currently); "Mark as ready for review" stays
+		-- listed.
+		hidden = draft,
 		is_available = function(context)
 			if not context.pr then
 				return false, "No PR selected"
@@ -165,6 +169,8 @@ end
 M.edit_title = {
 	id = "edit_title",
 	label = "Edit title",
+	-- Reachable via the title field's own "gt" hint; redundant in the picker.
+	hidden = true,
 	is_available = is_open_or_draft,
 	run = function(context, done)
 		local pr = assert(context.pr)
@@ -214,6 +220,8 @@ M.edit_title = {
 M.edit_description = {
 	id = "edit_description",
 	label = "Edit description",
+	-- Reachable via the Description tab's own "i" hint; redundant in the picker.
+	hidden = true,
 	is_available = function(context)
 		if not has_pr(context) then
 			return false, "No PR selected"
@@ -331,6 +339,8 @@ M.decline = {
 M.edit_reviewers = {
 	id = "edit_reviewers",
 	label = "Edit reviewers",
+	-- Reachable via the Reviewers field's own "gr" hint; redundant in the picker.
+	hidden = true,
 	is_available = is_open_or_draft,
 	run = function(context, done)
 		local pr = assert(context.pr)
@@ -450,6 +460,8 @@ M.edit_reviewers = {
 M.open_diff = {
 	id = "open_diff",
 	label = "Open diff",
+	-- Reachable via the Target Branch field's own "gd" hint; redundant in the picker.
+	hidden = true,
 	is_available = has_pr,
 	run = function(context, done)
 		require("atlas.pulls.diff").open_pr({

@@ -248,7 +248,7 @@ function M.setup(buf, refresh)
 		items,
 		resolver.item("ui.comments.reply", {
 			desc = "Reply to comment",
-			hint_desc = "Reply",
+			hint = false, -- shown on the active comment/composing box's own bottom border instead
 			opts = { nowait = true, silent = true },
 			callback = function()
 				start_reply(buf, refresh)
@@ -259,7 +259,7 @@ function M.setup(buf, refresh)
 		items,
 		resolver.item("ui.comments.edit", {
 			desc = edit_description,
-			hint_desc = "Edit",
+			hint = false, -- shown on the active comment box's own bottom border instead
 			opts = { nowait = true, silent = true },
 			callback = function()
 				start_edit(buf, refresh)
@@ -286,7 +286,7 @@ function M.setup(buf, refresh)
 		items,
 		resolver.item("ui.delete", {
 			desc = delete_description,
-			hint_desc = "Delete",
+			hint = false, -- shown on the active comment box's own bottom border instead
 			opts = { nowait = true, silent = true },
 			callback = function()
 				do_delete(refresh)
@@ -297,7 +297,7 @@ function M.setup(buf, refresh)
 		items,
 		resolver.item("pulls.review.diff.toggle_resolved", {
 			desc = "Toggle resolved",
-			hint_desc = "Resolve",
+			hint = false, -- shown on the active comment box's own bottom border instead
 			opts = { nowait = true, silent = true },
 			callback = function()
 				do_toggle_resolved(refresh)
@@ -308,7 +308,7 @@ function M.setup(buf, refresh)
 		items,
 		resolver.item("ui.toggle_fold", {
 			desc = "Toggle review block / thread fold",
-			hint_desc = "Toggle",
+			hint = false, -- shown on the active block/comment box's own bottom border instead
 			opts = { nowait = true, silent = true },
 			callback = function()
 				do_toggle_fold(refresh)

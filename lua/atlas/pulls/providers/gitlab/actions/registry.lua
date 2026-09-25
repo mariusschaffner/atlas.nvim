@@ -510,6 +510,8 @@ register({
 register({
 	id = actions.request_changes.id,
 	label = actions.request_changes.label,
+	-- Reachable via the standalone diff viewer's own binding; redundant here.
+	hidden = true,
 	is_available = review_available,
 	run = actions.request_changes.run,
 })
@@ -540,6 +542,8 @@ register(actions.edit_reviewers)
 register({
 	id = "edit_assignees",
 	label = "Edit assignees",
+	-- Reachable via the Assignee field's own "ga" hint; redundant in the picker.
+	hidden = true,
 	is_available = edit_assignees_available,
 	run = edit_assignees,
 })
@@ -547,6 +551,8 @@ register({
 register({
 	id = "edit_labels",
 	label = "Edit labels",
+	-- Reachable via the Labels field's own "gl" hint; redundant in the picker.
+	hidden = true,
 	-- Unlike the other edit_* actions, labels stay editable regardless of PR
 	-- state (open, draft, merged, or declined) -- only requires a PR to exist.
 	is_available = has_pr,

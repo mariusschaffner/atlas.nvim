@@ -418,7 +418,8 @@ local function emit_file_with_comments(lines, spans, line_map, width, file_path,
 			comment_box.build_hint({ { action_id = "ui.toggle_fold", label = "Toggle", hl = "AtlasFooterInfo" } })
 	end
 
-	local box_width = comment_box.box_width(width)
+	local available = math.max(1, width - PADDING_X)
+	local box_width = comment_box.box_width(available)
 	local body_lines, body_spans, body_line_map = {}, {}, {}
 	if not state.is_file_collapsed(file_path) then
 		local interior_width = math.max(1, box_width - 2)
@@ -436,8 +437,19 @@ local function emit_file_with_comments(lines, spans, line_map, width, file_path,
 		bottom_hint_highlights = bottom_hint_highlights,
 	})
 
+	-- Left-indent the whole block by PADDING_X, matching the comment boxes'
+	-- own left margin.
+	local pad = string.rep(" ", PADDING_X)
+	for i, line in ipairs(box_lines) do
+		box_lines[i] = pad .. line
+	end
+	for _, span in ipairs(box_highlights) do
+		span.start_col = span.start_col + PADDING_X
+		span.end_col = span.end_col + PADDING_X
+	end
+
 	local base = #lines
-	state.regions[block_id] = { row = base, col = 1, width = box_width - 2, height = 1 }
+	state.regions[block_id] = { row = base, col = 1 + PADDING_X, width = box_width - 2, height = 1 }
 
 	for _, line in ipairs(box_lines) do
 		table.insert(lines, line)

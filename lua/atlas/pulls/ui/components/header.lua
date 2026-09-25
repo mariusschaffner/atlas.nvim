@@ -152,7 +152,7 @@ function M.target_branch_field(dst)
 	local value = string.format("%s %s", branch_icon, dst)
 	local dst_start = #branch_icon + 1
 	return {
-		label = "Target Branch",
+		label = utils.field_hint_label("pulls.open_diff", "Target Branch", true),
 		value = value,
 		hl = { { start_col = dst_start, end_col = dst_start + #dst, hl_group = highlights.dynamic_for(dst) or "AtlasTextMuted" } },
 	}
