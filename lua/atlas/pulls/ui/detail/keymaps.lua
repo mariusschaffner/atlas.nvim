@@ -6,6 +6,7 @@ local utils = require("atlas.ui.shared.utils")
 local state = require("atlas.pulls.ui.detail.state")
 local actions = require("atlas.pulls.actions")
 local notify = require("atlas.core.notify")
+local presentation = require("atlas.pulls.ui.presentation")
 
 ---@param pr PullRequest
 ---@return boolean
@@ -301,6 +302,10 @@ function M.register(buf, opts)
 				callback = function()
 					local pr = state.current_pr
 					if pr == nil then
+						return
+					end
+					if not presentation.is_open_or_draft(pr) then
+						notify.warn("PR is not open")
 						return
 					end
 					local next_value = not (pr.remove_source_branch == true)

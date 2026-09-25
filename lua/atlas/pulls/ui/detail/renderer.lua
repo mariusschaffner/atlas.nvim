@@ -72,7 +72,7 @@ local function reviewers_field()
 	if state.reviewers == nil then
 		return nil
 	end
-	local editable = supports_action("edit_reviewers")
+	local editable = supports_action("edit_reviewers") and presentation.is_open_or_draft(state.current_pr)
 	local label = utils.field_hint_label("pulls.edit_reviewers", "Reviewers", editable)
 	if state.reviewers == "loading" then
 		return {
@@ -200,7 +200,7 @@ local function render_header(pr, tab_items, width)
 	local field_lines, field_spans, field_regions =
 		field_box.render_columns({ left_fields, middle_fields, branch_fields, readiness_fields }, {
 			width = width,
-			top_field = header.title_field(pr, supports_action("edit_title")),
+			top_field = header.title_field(pr, supports_action("edit_title") and presentation.is_open_or_draft(pr)),
 		})
 	utils.append_block(lines, spans, { lines = field_lines, highlights = field_spans })
 
@@ -221,10 +221,15 @@ end
 --- Whether the description field (the "overview" tab's content) can be
 --- edited right now -- drives the content box's editable border color, same
 --- signal the overview tab module's `edit_description_keys()` uses to decide
---- whether "i" does anything.
+--- whether "i" does anything. Like the header fields (title, assignee,
+--- reviewers, delete-source-branch), editing is only available while the PR
+--- is open or a draft.
 ---@return boolean
 local function description_editable()
 	if state.current_tab ~= "overview" then
+		return false
+	end
+	if not presentation.is_open_or_draft(state.current_pr) then
 		return false
 	end
 	local provider = state.provider

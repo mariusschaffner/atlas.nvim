@@ -13,6 +13,7 @@ local inline_field_edit = require("atlas.ui.inline_field_edit")
 local users_completion = require("atlas.providers.gitlab.completion.users")
 local labels_completion = require("atlas.providers.gitlab.completion.labels")
 local detail_state = require("atlas.pulls.ui.detail.state")
+local presentation = require("atlas.pulls.ui.presentation")
 
 ---@param ctx AtlasPullActionContext
 ---@return boolean
@@ -33,7 +34,7 @@ end
 ---@param ctx AtlasPullActionContext
 ---@return boolean
 local function is_open_or_draft(ctx)
-	return has_pr(ctx) and (ctx.pr.state == "open" or ctx.pr.state == "draft")
+	return has_pr(ctx) and presentation.is_open_or_draft(ctx.pr)
 end
 
 ---@param ctx AtlasPullActionContext
@@ -546,7 +547,9 @@ register({
 register({
 	id = "edit_labels",
 	label = "Edit labels",
-	is_available = edit_assignees_available,
+	-- Unlike the other edit_* actions, labels stay editable regardless of PR
+	-- state (open, draft, merged, or declined) -- only requires a PR to exist.
+	is_available = has_pr,
 	run = edit_labels,
 })
 

@@ -85,6 +85,18 @@ function M.pr_state_fg_hl(pr_state)
 	return "AtlasTextMuted"
 end
 
+--- Whether a PR is still actionable (open or draft) -- the shared gate for
+--- every header field that stops being editable once a PR is merged or
+--- declined (title, reviewers, assignees, delete-source-branch). Labels are
+--- deliberately excluded from this everywhere it's used -- editing labels
+--- stays available regardless of PR state.
+---@param pr PullRequest|nil
+---@return boolean
+function M.is_open_or_draft(pr)
+	local state = pr and tostring(pr.state or ""):lower() or ""
+	return state == "open" or state == "draft"
+end
+
 ---@param pr PullRequest
 ---@return PullsRepo
 function M.repo(pr)

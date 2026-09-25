@@ -7,6 +7,7 @@ local highlights = require("atlas.ui.shared.highlights")
 local spinner = require("atlas.ui.components.spinner")
 local actions = require("atlas.pulls.providers.gitlab.actions")
 local utils = require("atlas.ui.shared.utils")
+local presentation = require("atlas.pulls.ui.presentation")
 
 ---@param action_id string
 ---@return boolean
@@ -27,7 +28,7 @@ local function remove_source_branch_field(pr)
 		label = "Delete source branch",
 		kind = "toggle",
 		enabled = pr.remove_source_branch == true,
-		editable = true,
+		editable = presentation.is_open_or_draft(pr),
 	}
 end
 
@@ -87,7 +88,7 @@ function M.header_fields(pr, details, loading)
 	end
 
 	local assignee_field = header.assignee_field(logins)
-	assignee_field.editable = supports("edit_assignees")
+	assignee_field.editable = supports("edit_assignees") and presentation.is_open_or_draft(pr)
 	assignee_field.label = utils.field_hint_label("pulls.edit_assignees", assignee_field.label, assignee_field.editable)
 
 	return {

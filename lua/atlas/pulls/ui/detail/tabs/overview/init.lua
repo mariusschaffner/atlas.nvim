@@ -7,6 +7,7 @@ local help = require("atlas.ui.popups.help")
 local keymaps = require("atlas.core.keymaps")
 local notify = require("atlas.core.notify")
 local inline_edit = require("atlas.ui.inline_edit")
+local presentation = require("atlas.pulls.ui.presentation")
 
 ---@return string|string[]|nil
 local function edit_description_keys()
@@ -90,6 +91,10 @@ local function register_edit_keymap(buf, refresh)
 				local details = detail.current_details
 				local provider = detail.provider
 				if pr == nil or details == nil or provider == nil or inline_edit.is_active(buf) then
+					return
+				end
+				if not presentation.is_open_or_draft(pr) then
+					notify.warn("PR is not open")
 					return
 				end
 

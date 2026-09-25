@@ -8,9 +8,22 @@ local core_utils = require("atlas.core.utils")
 local inline_edit = require("atlas.ui.inline_edit")
 local inline_field_edit = require("atlas.ui.inline_field_edit")
 local detail_state = require("atlas.pulls.ui.detail.state")
+local presentation = require("atlas.pulls.ui.presentation")
 
 local has_pr = utils.has_pr
 local notify = utils.notify
+
+---@param context AtlasPullActionContext
+---@return boolean, string|nil
+local function is_open_or_draft(context)
+	if not has_pr(context) then
+		return false, "No PR selected"
+	end
+	if not presentation.is_open_or_draft(context.pr) then
+		return false, "PR is not open"
+	end
+	return true
+end
 
 ---@class PullsActionResult
 ---@field changed_pr boolean
@@ -152,7 +165,7 @@ end
 M.edit_title = {
 	id = "edit_title",
 	label = "Edit title",
-	is_available = has_pr,
+	is_available = is_open_or_draft,
 	run = function(context, done)
 		local pr = assert(context.pr)
 		local header_win = detail_state.header_win
@@ -318,13 +331,7 @@ M.decline = {
 M.edit_reviewers = {
 	id = "edit_reviewers",
 	label = "Edit reviewers",
-	is_available = function(context)
-		if not context.pr then
-			return false, "No PR selected"
-		end
-		local state = context.pr.state
-		return state == "open" or state == "draft", "PR is not open"
-	end,
+	is_available = is_open_or_draft,
 	run = function(context, done)
 		local pr = assert(context.pr)
 		local core = context.provider.capabilities.core
