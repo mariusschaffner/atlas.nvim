@@ -14,17 +14,13 @@ local TRUNK = "│"
 local MIN_BOX_WIDTH = 20
 local BOX_WIDTH_RATIO = 0.8
 
----@alias PullsCommitStats "loading"|"unknown"|{ additions: integer, deletions: integer }
-
 ---@class PullsCommitsTabState
 ---@field current_pr PullRequest|nil
 ---@field commits PullsCommit[]|"loading"|string|nil
----@field stats_by_hash table<string, PullsCommitStats>
 ---@field requests AtlasRequestScope
 local state = {
 	current_pr = nil,
 	commits = nil,
-	stats_by_hash = {},
 	requests = request_scope.new(),
 }
 
@@ -37,7 +33,6 @@ function M.reset()
 	reset_requests()
 	state.current_pr = nil
 	state.commits = nil
-	state.stats_by_hash = {}
 end
 
 ---@param pr PullRequest
@@ -60,26 +55,6 @@ local function display_author(commit)
 		return name
 	end
 	return "Unknown"
-end
-
----@param stats PullsCommitStats|nil
----@return string text
----@return table[] highlights Spans {start_col, end_col, hl_group} relative to `text`.
-local function stats_display(stats)
-	if stats == nil or stats == "loading" then
-		return "...", { { start_col = 0, end_col = 3, hl_group = "AtlasTextMuted" } }
-	end
-	if stats == "unknown" then
-		return "", {}
-	end
-	local plus = "+" .. tostring(stats.additions or 0)
-	local minus = "-" .. tostring(stats.deletions or 0)
-	local text = plus .. "/" .. minus
-	return text,
-		{
-			{ start_col = 0, end_col = #plus, hl_group = "AtlasTextPositive" },
-			{ start_col = #plus + 1, end_col = #plus + 1 + #minus, hl_group = "AtlasLogError" },
-		}
 end
 
 --- Lays `left` and `right` out on one row, `right` flush to the row's right
@@ -177,9 +152,7 @@ local function render_card(commit, width)
 	local title_highlights = { { start_col = 0, end_col = #title, hl_group = author_hl } }
 
 	local date_text = utils.format_datetime(commit.date)
-	local stats = state.stats_by_hash[tostring(commit.hash or "")]
-	local stats_text, stats_spans = stats_display(stats)
-	local row1, row1_spans = build_row(date_text, "AtlasTextMuted", stats_text, stats_spans, interior_width)
+	local row1, row1_spans = build_row(date_text, "AtlasTextMuted", "", nil, interior_width)
 
 	local message = tostring(commit.message or ""):gsub("\r\n", "\n")
 	message = message:match("([^\n]+)") or message
@@ -258,29 +231,6 @@ function M.on_select(pr, refresh, opts)
 
 		state.commits = commits or {}
 		notify.success(string.format("Commits loaded for #%s", pr_id), { timeout = 1200 })
-
-		if core.fetch_commit_stats and type(state.commits) == "table" then
-			for _, commit in ipairs(state.commits) do
-				local hash = tostring(commit.hash or "")
-				if hash ~= "" then
-					state.stats_by_hash[hash] = "loading"
-					state.requests.run(function(done)
-						return core.fetch_commit_stats(pr, commit, opts, done)
-					end, function(additions, deletions, stats_err)
-						if not is_current(pr) then
-							return
-						end
-						if stats_err or (additions == nil and deletions == nil) then
-							state.stats_by_hash[hash] = "unknown"
-						else
-							state.stats_by_hash[hash] = { additions = additions or 0, deletions = deletions or 0 }
-						end
-						refresh()
-					end)
-				end
-			end
-		end
-
 		refresh()
 	end)
 end
@@ -335,15 +285,7 @@ end
 
 ---@return boolean
 function M.is_loading()
-	if state.commits == "loading" then
-		return true
-	end
-	for _, stats in pairs(state.stats_by_hash) do
-		if stats == "loading" then
-			return true
-		end
-	end
-	return false
+	return state.commits == "loading"
 end
 
 function M.deactivate()

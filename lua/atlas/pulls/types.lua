@@ -296,8 +296,6 @@
 ---@field date string
 ---@field html_url string|nil
 ---@field statuses_url string|nil
----@field additions integer|nil
----@field deletions integer|nil
 
 --------------------------------------------------------------------------------
 -- Detail UI

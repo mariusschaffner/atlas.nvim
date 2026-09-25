@@ -248,7 +248,6 @@ return {
 			fetch_merge_checks = checks_api.fetch,
 			fetch_diffstat = changes_api.fetch_diffstat,
 			fetch_commits = changes_api.fetch_commits,
-			fetch_commit_stats = changes_api.fetch_commit_stats,
 			fetch_diff = changes_api.fetch_diff,
 		},
 		comments = {
