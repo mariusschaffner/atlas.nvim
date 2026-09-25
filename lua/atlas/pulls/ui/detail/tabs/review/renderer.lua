@@ -2,10 +2,12 @@ local M = {}
 
 local utils = require("atlas.ui.shared.utils")
 local spinner = require("atlas.ui.components.spinner")
-local box = require("atlas.ui.components.box")
+local bordered_box = require("atlas.ui.components.bordered_box")
+local comment_box = require("atlas.pulls.ui.components.comment_box")
 local diff = require("atlas.ui.components.diff_hunks")
 local keymaps = require("atlas.core.keymaps")
 local review_threads = require("atlas.pulls.ui.components.review_threads")
+local presentation = require("atlas.pulls.ui.presentation")
 local state = require("atlas.pulls.ui.detail.tabs.review.state")
 local detail = require("atlas.pulls.ui.detail.state")
 
@@ -42,32 +44,168 @@ local function emit_task(lines, spans, line_map, task, width)
 	end
 end
 
+---@param comment PullsComment
+---@return boolean
+local function is_own_comment(comment)
+	local current_user = require("atlas.pulls.state").current_user
+	if not current_user or not comment or not comment.author then
+		return false
+	end
+	return tostring(current_user.id) == tostring(comment.author.id)
+end
+
+--- Same box style, content layout, and bottom-hint convention as the
+--- Activity tab's own comment boxes (`comment_box.lua`) -- only the set of
+--- available actions differs, reflecting this tab's own keymaps (reply /
+--- edit / delete / toggle-resolved) rather than Activity's (reply / edit /
+--- delete). Always grey (`AtlasFieldBoxBorder`): unlike Activity, this tab
+--- has no "currently active comment" concept to turn a border blue for.
+---@param comment PullsComment
+---@param is_root boolean
+---@return string|nil text
+---@return table[]|nil highlights
+local function bottom_hint_for(comment, is_root)
+	local provider = detail.provider
+	local comments = provider and provider.capabilities.comments
+	if not comments or not presentation.is_open_or_draft(detail.current_pr) then
+		return nil, nil
+	end
+
+	local segments = {}
+	if comments.add_comment then
+		table.insert(segments, { action_id = "ui.comments.reply", label = "Reply", hl = "AtlasFooterInfo" })
+	end
+	local own = is_own_comment(comment)
+	if own and comments.edit_comment then
+		table.insert(segments, { action_id = "ui.comments.edit", label = "Edit", hl = "AtlasFooterWarning" })
+	end
+	if own and comments.delete_comment then
+		table.insert(segments, { action_id = "ui.delete", label = "Delete", hl = "AtlasFooterError" })
+	end
+	if is_root then
+		table.insert(segments, {
+			action_id = "pulls.review.diff.toggle_resolved",
+			label = comment.state == "RESOLVED" and "Reopen" or "Resolve",
+			hl = "AtlasFooterInfo",
+		})
+	end
+	return comment_box.build_hint(segments)
+end
+
+---@param lines string[]
+---@param spans table[]
+---@param indent integer
+local function append_connector(lines, spans, indent)
+	local connector_line = string.rep(" ", indent) .. "│"
+	table.insert(lines, connector_line)
+	table.insert(spans, { line = #lines - 1, start_col = indent, end_col = indent + 1, hl_group = "AtlasTextMuted" })
+end
+
+---@param node AtlasReviewThreadNode
+---@return integer
+local function descendant_count(node)
+	local count = #node.children
+	for _, child in ipairs(node.children) do
+		count = count + descendant_count(child)
+	end
+	return count
+end
+
+---@param node AtlasReviewThreadNode
+---@param root PullsComment
+---@param depth integer
+---@param width integer
+---@param lines string[]
+---@param spans table[]
+---@param line_map table<integer, table>
+local function render_comment_tree(node, root, depth, width, lines, spans, line_map)
+	local comment = node.comment
+
+	if comment.is_task then
+		if #lines > 0 then
+			append_connector(lines, spans, PADDING_X)
+		end
+		emit_task(lines, spans, line_map, comment, width)
+		return
+	end
+
+	local is_root = depth == 0
+	local has_children = #node.children > 0
+	local collapsed = is_root and has_children and not state.is_thread_expanded(comment)
+
+	local extra_lines, extra_highlights
+	if collapsed then
+		local count = descendant_count(node)
+		local fold_keys = keymaps.resolve("ui.toggle_fold")
+		local key = fold_keys and fold_keys[1]
+		local suffix = key and string.format(" (%s to expand)", key) or ""
+		local text = string.format("%d %s%s", count, count == 1 and "reply" or "replies", suffix)
+		extra_lines = { text }
+		extra_highlights = { { line = 0, start_col = 0, end_col = #text, hl_group = "AtlasLogInfo" } }
+	end
+
+	if depth > 0 then
+		append_connector(lines, spans, PADDING_X + depth * 2)
+	end
+
+	local provider = detail.provider
+	local comments_capability = provider and provider.capabilities.comments
+	local reaction_options = comments_capability and comments_capability.reaction_options
+	local bottom_hint, bottom_hint_highlights = bottom_hint_for(comment, is_root)
+	local box_lines, box_highlights = comment_box.render({
+		comment = comment,
+		depth = depth,
+		padding_x = PADDING_X,
+		width = width,
+		reaction_options = reaction_options,
+		border_hl = "AtlasFieldBoxBorder",
+		bottom_hint = bottom_hint,
+		bottom_hint_highlights = bottom_hint_highlights,
+		extra_content_lines = extra_lines,
+		extra_content_highlights = extra_highlights,
+	})
+
+	local base = #lines
+	for _, line in ipairs(box_lines) do
+		table.insert(lines, line)
+	end
+	for _, span in ipairs(box_highlights) do
+		table.insert(spans, {
+			line = base + span.line,
+			start_col = span.start_col,
+			end_col = span.end_col,
+			hl_group = span.hl_group,
+		})
+	end
+	for i = 1, #box_lines do
+		line_map[base + i] = {
+			kind = depth > 0 and "thread_content" or "content",
+			comment = comment,
+			entity_kind = "comment",
+			thread_root = root,
+			thread_has_replies = has_children,
+		}
+	end
+
+	if not collapsed then
+		for _, child in ipairs(node.children) do
+			render_comment_tree(child, root, depth + 1, width, lines, spans, line_map)
+		end
+	end
+end
+
 ---@param lines string[]
 ---@param spans table[]
 ---@param line_map table<integer, table>
 ---@param nodes AtlasReviewThreadNode[]
 ---@param width integer
 local function emit_thread_box(lines, spans, line_map, nodes, width)
-	local inner = math.max(1, width - 4)
-	local toggle_keys = keymaps.resolve("pulls.review.diff.toggle_resolved")
-	local provider = detail.provider
-	local comments = provider and provider.capabilities.comments
-	local thread_lines, thread_spans, thread_map = review_threads.render(nodes, inner, {
-		expanded = function(root)
-			return state.is_thread_expanded(root)
-		end,
-		padding_x = 0,
-		toggle_resolved_key = toggle_keys and table.concat(toggle_keys, " / ") or nil,
-		reaction_options = comments and comments.reaction_options,
-	})
-	local mark_line = #lines
-	local result = box.render({ { lines = thread_lines, spans = thread_spans, line_map = thread_map } }, {
-		width = width,
-		padding_x = 0,
-		line_map = line_map,
-		line_offset = mark_line,
-	})
-	utils.append_block(lines, spans, { lines = result.lines, highlights = result.highlights })
+	for _, node in ipairs(nodes) do
+		if #lines > 0 then
+			append_connector(lines, spans, PADDING_X)
+		end
+		render_comment_tree(node, node.comment, 0, width, lines, spans, line_map)
+	end
 end
 
 ---@class CommentsHunkBucket
@@ -86,14 +224,16 @@ local function hunk_key(hunk)
 	return string.format("%s|%s", tostring(hunk.new_start or 0), tostring(hunk.old_start or 0))
 end
 
----@param lines string[]
----@param spans table[]
----@param line_map table<integer, table>
 ---@param width integer
 ---@param file_path string
 ---@param file_threads AtlasReviewThreadNode[]
 ---@param buckets CommentsHunkBucket[]
-local function emit_file_with_comments(lines, spans, line_map, width, file_path, file_threads, buckets)
+---@return string[] lines
+---@return table[] spans
+---@return table<integer, table> line_map
+local function render_file_body(width, file_path, file_threads, buckets)
+	local lines, spans, line_map = {}, {}, {}
+
 	local file = { path = file_path, status = "modified", hunks = {} }
 	local buckets_by_key = {}
 	for _, bucket in ipairs(buckets) do
@@ -105,6 +245,7 @@ local function emit_file_with_comments(lines, spans, line_map, width, file_path,
 		max_width = width,
 		padding_x = PADDING_X,
 		show_line_numbers = false,
+		show_file_header = false,
 	})
 
 	---@type table<integer, table[]>
@@ -158,6 +299,49 @@ local function emit_file_with_comments(lines, spans, line_map, width, file_path,
 		for _, anchor in pairs(bucket.threads_by_anchor) do
 			emit_thread_box(lines, spans, line_map, anchor.threads, width)
 		end
+	end
+
+	return lines, spans, line_map
+end
+
+--- Wraps a file's diff hunks + inline comment boxes in one outer bordered
+--- box, titled with the file path -- grey border and title (`AtlasFieldBoxBorder`),
+--- matching every other non-editable bordered box in the plugin.
+---@param lines string[]
+---@param spans table[]
+---@param line_map table<integer, table>
+---@param width integer
+---@param file_path string
+---@param file_threads AtlasReviewThreadNode[]
+---@param buckets CommentsHunkBucket[]
+local function emit_file_with_comments(lines, spans, line_map, width, file_path, file_threads, buckets)
+	local interior_width = math.max(1, width - 2)
+	local body_lines, body_spans, body_line_map = render_file_body(interior_width, file_path, file_threads, buckets)
+
+	local box_lines, box_highlights = bordered_box.render({
+		width = width,
+		box_width = width,
+		title = file_path,
+		content_lines = body_lines,
+		content_highlights = body_spans,
+		border_hl = "AtlasFieldBoxBorder",
+	})
+
+	local base = #lines
+	for _, line in ipairs(box_lines) do
+		table.insert(lines, line)
+	end
+	for _, span in ipairs(box_highlights) do
+		table.insert(spans, {
+			line = base + span.line,
+			start_col = span.start_col,
+			end_col = span.end_col,
+			hl_group = span.hl_group,
+		})
+	end
+	-- +1 for the box's own top border row.
+	for lnum, entry in pairs(body_line_map) do
+		line_map[base + 1 + lnum] = entry
 	end
 end
 
@@ -265,8 +449,6 @@ function M.render(width, comments, tasks, hunks_by_comment)
 	end
 
 	if #file_order > 0 then
-		utils.push(lines, spans, "Changes", "AtlasColumnHeader", PADDING_X)
-
 		for _, path in ipairs(file_order) do
 			local file = file_buckets[path]
 			local buckets = {}

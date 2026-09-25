@@ -102,18 +102,6 @@ function M.setup(buf, refresh)
 	)
 	utils.insert_if(
 		items,
-		resolver.item("ui.show_details", {
-			desc = "Show details",
-			hint_desc = "Details",
-			opts = { nowait = true, silent = true },
-			callback = function()
-				tab.show_details(cursor_entry(), buf)
-			end,
-		})
-	)
-
-	utils.insert_if(
-		items,
 		resolver.item("ui.toggle_fold", {
 			desc = "Toggle thread fold",
 			hint = false,
@@ -217,7 +205,6 @@ function M.teardown(buf)
 	utils.insert_if(items, resolver.remove_item("ui.toggle_all_folds"))
 	utils.insert_if(items, resolver.remove_item("pulls.review.diff.next_hunk"))
 	utils.insert_if(items, resolver.remove_item("pulls.review.diff.previous_hunk"))
-	utils.insert_if(items, resolver.remove_item("ui.show_details"))
 	help.remove("Detail", items, { buffer = buf })
 end
 

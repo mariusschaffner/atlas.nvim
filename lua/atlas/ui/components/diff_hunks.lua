@@ -7,6 +7,8 @@ local utils = require("atlas.ui.shared.utils")
 ---@field max_width integer
 ---@field padding_x integer|nil                       default 1
 ---@field show_line_numbers boolean|nil
+---@field show_file_header boolean|nil                 default true; false when the caller already shows
+--- the path elsewhere (e.g. as a bordered box's own title)
 
 local DEFAULT_PADDING = 1
 
@@ -159,7 +161,9 @@ function M.hunks(files, opts)
 	local line_map = {}
 
 	for fi, file in ipairs(files) do
-		emit_file_header(lines, spans, file, padding_x, opts.max_width)
+		if opts.show_file_header ~= false then
+			emit_file_header(lines, spans, file, padding_x, opts.max_width)
+		end
 
 		for hi, hunk in ipairs(file.hunks) do
 			if hi > 1 then

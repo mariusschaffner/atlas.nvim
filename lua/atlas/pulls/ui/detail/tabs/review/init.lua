@@ -209,34 +209,6 @@ function M.on_enter(_pr, entry)
 	end
 end
 
----@param entry table|nil
----@param buf integer
-function M.show_details(entry, buf)
-	local task = entry and entry.entity_kind == "task" and entry.comment or nil
-	if task == nil then
-		return
-	end
-
-	local utils = require("atlas.ui.shared.utils")
-	local content = utils.task_text(task.content_display or task.content_raw)
-	local empty = string.format("(empty %s)", (task.task_label or "task"):lower())
-	local lines = vim.split(content ~= "" and content or empty, "\n", { plain = true })
-	lines[1] = (task.state == "RESOLVED" and "[x] " or "[ ] ") .. lines[1]
-
-	local author = task.author
-	local author_name = "Unknown"
-	if author then
-		if author.nickname and author.nickname ~= "" then
-			author_name = author.nickname
-		elseif author.name and author.name ~= "" then
-			author_name = author.name
-		end
-	end
-	table.insert(lines, "")
-	table.insert(lines, string.format("by @%s  %s", author_name, utils.relative_time(task.created_on)))
-	require("atlas.ui.popups.info").show({ lines = lines, source_buf = buf })
-end
-
 ---@return boolean
 function M.is_loading()
 	return state.status == "loading"

@@ -167,15 +167,22 @@ function M.render(opts)
 		local body_len = #body
 		for _, span in ipairs((opts.content_highlights or {})) do
 			if span.line == i - 1 then
-				local sc = math.min(span.start_col, body_len)
-				local ec = math.min(span.end_col, body_len)
-				if ec > sc then
-					table.insert(highlights, {
-						line = line_idx,
-						start_col = #V + sc,
-						end_col = #V + ec,
-						hl_group = span.hl_group,
-					})
+				if span.line_hl_group then
+					table.insert(
+						highlights,
+						{ line = line_idx, start_col = #V, end_col = #V + body_len, hl_group = span.line_hl_group }
+					)
+				else
+					local sc = math.min(span.start_col, body_len)
+					local ec = math.min(span.end_col, body_len)
+					if ec > sc then
+						table.insert(highlights, {
+							line = line_idx,
+							start_col = #V + sc,
+							end_col = #V + ec,
+							hl_group = span.hl_group,
+						})
+					end
 				end
 			end
 		end

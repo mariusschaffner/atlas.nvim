@@ -4,7 +4,7 @@ local keymaps = require("atlas.core.keymaps")
 local utils = require("atlas.ui.shared.utils")
 local spinner = require("atlas.ui.components.spinner")
 local bordered_box = require("atlas.ui.components.bordered_box")
-local emojis = require("atlas.ui.shared.emojis")
+local comment_box = require("atlas.pulls.ui.components.comment_box")
 local icons = require("atlas.ui.shared.icons")
 local highlights = require("atlas.ui.shared.highlights")
 local threads = require("atlas.ui.components.threadsv2")
@@ -17,10 +17,8 @@ local presentation = require("atlas.pulls.ui.presentation")
 
 local PADDING_X = 1
 local PADDING = string.rep(" ", PADDING_X)
-local CONTENT_PAD = " "
 local CONNECTOR = "│"
 local INDENT_STEP = 2
-local BOX_WIDTH_RATIO = 0.8
 local MIN_BOX_WIDTH = 20
 
 ---@param name string|nil
@@ -31,28 +29,6 @@ local function author_hl(name)
 		return "AtlasTextMutedItalic"
 	end
 	return highlights.dynamic_for(normalized) or "AtlasTextMuted"
-end
-
----@param available_width integer
----@return integer box_width
-local function comment_box_width(available_width)
-	return math.max(MIN_BOX_WIDTH, math.floor(available_width * BOX_WIDTH_RATIO))
-end
-
----@param line string
----@return table[] spans
-local function mention_spans(line)
-	local spans = {}
-	local search_from = 1
-	while true do
-		local s, e, handle = line:find("@([%w_%.%-]+)", search_from)
-		if not s then
-			break
-		end
-		table.insert(spans, { start_col = s - 1, end_col = e, hl_group = author_hl(handle) })
-		search_from = e + 1
-	end
-	return spans
 end
 
 ---@param lines string[]
@@ -110,100 +86,7 @@ local function collect_navigable(node, depth, out)
 	end
 end
 
----@param comment PullsComment
----@param reaction_options PullsReactionOption[]|nil
----@param wrap_width integer
----@return string[] lines
----@return table[] highlights
----@return integer body_start
----@return integer body_line_count
-local function comment_content(comment, reaction_options, wrap_width)
-	local lines, out_highlights = {}, {}
-	local date_text = utils.format_datetime(comment.created_on)
-	if date_text ~= "" then
-		table.insert(lines, date_text)
-		table.insert(out_highlights, { line = 0, start_col = 0, end_col = #date_text, hl_group = "AtlasTextMuted" })
-	end
-	local body_start = #lines
-
-	if comment.state == "DELETED" then
-		local text = "(deleted comment)"
-		table.insert(lines, text)
-		table.insert(
-			out_highlights,
-			{ line = #lines - 1, start_col = 0, end_col = #text, hl_group = "AtlasTextMutedItalic" }
-		)
-		return lines, out_highlights, body_start, 0
-	end
-
-	local body_lines = utils.sanitize_lines(utils.strip_markup(comment.content_display or comment.content_raw or ""))
-	while #body_lines > 0 and vim.trim(body_lines[#body_lines]) == "" do
-		table.remove(body_lines)
-	end
-	if #body_lines == 0 then
-		body_lines = { "(empty comment)" }
-	end
-
-	local max_lines = state.comment_max_lines(comment)
-	local truncated = max_lines ~= nil and #body_lines > max_lines
-	local visible_count = truncated and max_lines or #body_lines
-	for i = 1, visible_count do
-		for _, wrapped_line in ipairs(utils.wrap_line(body_lines[i], wrap_width)) do
-			table.insert(lines, wrapped_line)
-			local line_idx = #lines - 1
-			for _, span in ipairs(mention_spans(wrapped_line)) do
-				table.insert(
-					out_highlights,
-					{ line = line_idx, start_col = span.start_col, end_col = span.end_col, hl_group = span.hl_group }
-				)
-			end
-		end
-	end
-	local body_line_count = #lines - body_start
-	if truncated then
-		local fold_keys = keymaps.resolve("ui.toggle_fold")
-		local key = fold_keys and fold_keys[1]
-		local text = key and string.format("... (%s to expand)", key) or "..."
-		table.insert(lines, text)
-		table.insert(out_highlights, { line = #lines - 1, start_col = 0, end_col = #text, hl_group = "AtlasTextMuted" })
-	end
-
-	local reactions_text, reaction_highlights = emojis.format(comment.reactions, reaction_options)
-	if reactions_text ~= "" then
-		table.insert(lines, reactions_text)
-		local line_idx = #lines - 1
-		for _, span in ipairs(reaction_highlights) do
-			table.insert(
-				out_highlights,
-				{ line = line_idx, start_col = span.start_col, end_col = span.end_col, hl_group = span.hl_group }
-			)
-		end
-	end
-
-	return lines, out_highlights, body_start, body_line_count
-end
-
----@param segments { action_id: string, label: string, hl: string }[]
----@return string|nil text
----@return table[]|nil highlights
-local function build_hint(segments)
-	local parts, out_highlights, cursor = {}, {}, 0
-	for _, seg in ipairs(segments) do
-		if #parts > 0 then
-			local sep = " ── "
-			table.insert(parts, sep)
-			cursor = cursor + #sep
-		end
-		local segment = utils.field_hint_label(seg.action_id, seg.label, true)
-		table.insert(out_highlights, { start_col = cursor, end_col = cursor + #segment, hl_group = seg.hl })
-		table.insert(parts, segment)
-		cursor = cursor + #segment
-	end
-	if #parts == 0 then
-		return nil, nil
-	end
-	return table.concat(parts), out_highlights
-end
+local build_hint = comment_box.build_hint
 
 ---@param comment PullsComment
 ---@return string|nil text
@@ -238,35 +121,6 @@ local function editing_hint()
 		{ action_id = "ui.submit", label = "Save", hl = hl },
 		{ action_id = "ui.field_edit.close", label = "Cancel", hl = hl },
 	})
-end
-
----@param comment PullsComment
----@return string title
----@return table[] title_highlights
-local function title_for(comment)
-	local name = review_threads.author_name(comment.author)
-	return name, { { start_col = 0, end_col = #name, hl_group = author_hl(name) } }
-end
-
----@param lines string[]
----@param in_highlights table[]
----@return string[] lines
----@return table[] highlights
-local function frame_content(lines, in_highlights)
-	local framed_lines = {}
-	for _, line in ipairs(lines) do
-		table.insert(framed_lines, CONTENT_PAD .. line)
-	end
-	local framed_highlights = {}
-	for _, span in ipairs(in_highlights) do
-		table.insert(framed_highlights, {
-			line = span.line,
-			start_col = span.start_col + #CONTENT_PAD,
-			end_col = span.end_col + #CONTENT_PAD,
-			hl_group = span.hl_group,
-		})
-	end
-	return framed_lines, framed_highlights
 end
 
 ---@param box_lines string[]
@@ -305,22 +159,10 @@ local function render_comment_box(
 	extra_content_highlights
 )
 	local id = tostring(comment.id)
-	local indent = PADDING_X + depth * INDENT_STEP
-	local available = math.max(MIN_BOX_WIDTH, width - indent)
-	local box_width = comment_box_width(available)
-	local wrap_width = math.max(1, box_width - 2 - #CONTENT_PAD)
 
 	local reaction_options = detail.provider
 		and detail.provider.capabilities.comments
 		and detail.provider.capabilities.comments.reaction_options
-	local content_lines, content_highlights, body_start, body_line_count =
-		comment_content(comment, reaction_options, wrap_width)
-	for _, line in ipairs(extra_content_lines or {}) do
-		table.insert(content_lines, line)
-	end
-	for _, span in ipairs(extra_content_highlights or {}) do
-		table.insert(content_highlights, span)
-	end
 
 	local is_editing = state.editing_id == id
 	local is_active = state.composing == nil and state.active_id == ("comment:" .. id)
@@ -335,31 +177,31 @@ local function render_comment_box(
 		bottom_hint, bottom_hint_highlights = bottom_hint_for(comment)
 	end
 
-	local title, title_highlights = title_for(comment)
-	local framed_lines, framed_highlights = frame_content(content_lines, content_highlights)
-
-	local box_lines, box_highlights = bordered_box.render({
-		width = box_width,
-		box_width = box_width,
-		title = title,
-		title_highlights = title_highlights,
-		content_lines = framed_lines,
-		content_highlights = framed_highlights,
+	local fold_keys = keymaps.resolve("ui.toggle_fold")
+	local box_lines, box_highlights, region = comment_box.render({
+		comment = comment,
+		depth = depth,
+		padding_x = PADDING_X,
+		width = width,
+		reaction_options = reaction_options,
+		max_lines = state.comment_max_lines(comment),
+		fold_key = fold_keys and fold_keys[1],
 		border_hl = border_hl,
 		bottom_hint = bottom_hint,
 		bottom_hint_highlights = bottom_hint_highlights,
+		extra_content_lines = extra_content_lines,
+		extra_content_highlights = extra_content_highlights,
 	})
-	apply_indent(box_lines, box_highlights, indent)
 
 	local base = #lines
 	-- Points at just the raw editable body (skipping the date line above it
 	-- and any truncation-indicator/reactions rows below it), so the inline
 	-- edit overlay lands exactly on the body text.
 	state.regions["comment:" .. id] = {
-		row = base + 1 + body_start,
-		col = indent + 1,
-		width = box_width - 2,
-		height = math.max(1, body_line_count),
+		row = base + region.row,
+		col = region.col,
+		width = region.width,
+		height = region.height,
 	}
 
 	for _, line in ipairs(box_lines) do
@@ -396,7 +238,7 @@ local function render_composing_box(width, depth, lines, spans)
 
 	local indent = PADDING_X + depth * INDENT_STEP
 	local available = math.max(MIN_BOX_WIDTH, width - indent)
-	local box_width = comment_box_width(available)
+	local box_width = comment_box.box_width(available)
 	local content_lines = { "", "", "" }
 	local bottom_hint, bottom_hint_highlights = editing_hint()
 
