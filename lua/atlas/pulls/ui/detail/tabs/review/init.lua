@@ -12,9 +12,6 @@ local keymaps = require("atlas.pulls.ui.detail.tabs.review.keymaps")
 local review = require("atlas.pulls.actions.review")
 
 local THREAD_ACTIONS = {
-	add_comment = function(context, comment, on_done)
-		return review.add_comment(context, { parent = comment }, on_done)
-	end,
 	edit = review.edit_comment,
 	delete = review.delete_comment,
 	toggle_task = review.toggle_task,
@@ -167,6 +164,16 @@ function M.on_select(pr, refresh, opts)
 	end)
 end
 
+---@param width integer
+---@return string[], table[], table<integer, table>
+local function do_render(width)
+	if state.status then
+		return renderer.render(width, state.status, nil)
+	end
+	local data = state.data
+	return renderer.render(width, data and data.comments or nil, data and data.tasks or nil, state.hunks_by_comment)
+end
+
 ---@param _pr PullRequest
 ---@param _details PullRequestDetails|nil
 ---@param width integer
@@ -176,11 +183,16 @@ function M.render(_pr, _details, width)
 	if completion and completion.resolve_items then
 		completion.resolve_items()
 	end
-	if state.status then
-		return renderer.render(width, state.status, nil)
+	local lines, spans, line_map = do_render(width)
+	-- First render after data loads: default the active entry to the very
+	-- first navigable one (a file block, or a general comment if there are
+	-- no files) -- `renderer.render` only populates `state.navigable` as a
+	-- side effect, so the default can't be known until after this first pass.
+	if state.active_id == nil and #state.navigable > 0 then
+		state.active_id = state.navigable[1].id
+		lines, spans, line_map = do_render(width)
 	end
-	local data = state.data
-	return renderer.render(width, data and data.comments or nil, data and data.tasks or nil, state.hunks_by_comment)
+	return lines, spans, line_map
 end
 
 ---@param _lnum integer
@@ -281,18 +293,100 @@ local function run_comment_action(action, pr, entry, refresh)
 	end
 end
 
+-- Inline (no-popup) text flow for regular comments: reply / edit -- mirrors
+-- atlas.pulls.ui.detail.tabs.conversation.actions' M.reply/M.edit_comment
+-- exactly, just upserting into this tab's own `state.data.comments` instead
+-- of conversation's flat item list. Tasks and reviews keep going through
+-- `atlas.pulls.actions.review`'s existing popup-based editors (see
+-- M.edit_task below) -- out of scope for the inline box redesign, same as
+-- on the Activity tab.
+
 ---@param pr PullRequest
----@param entry table
----@param refresh fun()
-function M.reply_comment(pr, entry, refresh)
-	run_comment_action("add_comment", pr, entry, refresh)
+---@param parent PullsComment
+---@param text string
+---@param done fun(ok: boolean, err: string|nil)
+function M.reply_comment(pr, parent, text, done)
+	if vim.trim(text) == "" then
+		done(false, "Empty comment")
+		return
+	end
+	local provider = detail.provider
+	local comments = provider and provider.capabilities.comments
+	local add = comments and comments.add_comment
+	if not add then
+		notify.error("Provider does not support comments")
+		done(false, "Provider does not support comments")
+		return
+	end
+	local pending = parent.state == "PENDING"
+	notify.loading("Sending reply...")
+	add(pr, text, { parent = parent, pending = pending }, function(created, err)
+		if not is_current(pr) then
+			done(true)
+			return
+		end
+		if err then
+			notify.error("Reply failed: " .. tostring(err))
+			done(false, err)
+			return
+		end
+		local data = state.data
+		if created and data then
+			table.insert(data.comments, created)
+		end
+		notify.success("Reply added", { timeout = 1200 })
+		done(true, nil)
+	end)
 end
 
 ---@param pr PullRequest
----@param entry table
+---@param comment PullsComment
+---@param text string
+---@param done fun(ok: boolean, err: string|nil)
+function M.edit_comment(pr, comment, text, done)
+	if vim.trim(text) == "" then
+		done(false, "Empty comment")
+		return
+	end
+	local provider = detail.provider
+	local comments = provider and provider.capabilities.comments
+	local update = comments and comments.edit_comment
+	if not update then
+		notify.error("Provider does not support editing this item")
+		done(false, "Provider does not support editing this item")
+		return
+	end
+	notify.loading("Editing comment...")
+	local desired = vim.tbl_extend("force", {}, comment, { content_raw = text })
+	update(pr, desired, function(updated, err)
+		if not is_current(pr) then
+			done(true)
+			return
+		end
+		if err then
+			notify.error("Edit failed: " .. tostring(err))
+			done(false, err)
+			return
+		end
+		local data = state.data
+		if updated and data and data.comments then
+			for i, existing in ipairs(data.comments) do
+				if tostring(existing.id) == tostring(comment.id) then
+					data.comments[i] = updated
+					break
+				end
+			end
+		end
+		notify.success("Comment updated", { timeout = 1200 })
+		done(true, nil)
+	end)
+end
+
+---@param pr PullRequest
+---@param task PullsComment
 ---@param refresh fun()
-function M.edit_comment(pr, entry, refresh)
-	run_comment_action("edit", pr, entry, refresh)
+function M.edit_task(pr, task, refresh)
+	run_comment_action("edit", pr, { comment = task }, refresh)
 end
 
 ---@param pr PullRequest

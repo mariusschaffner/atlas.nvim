@@ -243,4 +243,49 @@ function M.render(opts)
 	return box_lines, box_highlights, region
 end
 
+---@class AtlasComposingBoxOpts
+---@field title string
+---@field title_highlights table[]|nil
+---@field depth integer|nil Indent level (0 = top-level); default 0.
+---@field padding_x integer|nil Left padding before the box; default 1.
+---@field width integer Available width to lay the box out in.
+---@field content_height integer|nil Blank content rows reserved for typing; default 3.
+---@field bottom_hint string|nil
+---@field bottom_hint_highlights table[]|nil
+
+--- An empty, orange-bordered box ("New Comment" while composing) -- the
+--- placeholder an inline-edit overlay gets anchored onto while adding a new
+--- top-level comment or reply.
+---@param opts AtlasComposingBoxOpts
+---@return string[] lines
+---@return table[] highlights
+---@return AtlasFieldBoxRegion region
+function M.render_composing(opts)
+	local depth = opts.depth or 0
+	local padding_x = opts.padding_x or 1
+	local indent = padding_x + depth * 2
+	local available = math.max(MIN_BOX_WIDTH, opts.width - indent)
+	local box_width = M.box_width(available)
+
+	local content_lines = {}
+	for _ = 1, (opts.content_height or 3) do
+		table.insert(content_lines, "")
+	end
+
+	local box_lines, box_highlights = bordered_box.render({
+		width = box_width,
+		box_width = box_width,
+		title = opts.title,
+		title_highlights = opts.title_highlights,
+		content_lines = content_lines,
+		border_hl = "AtlasFieldBoxBorderEditing",
+		bottom_hint = opts.bottom_hint,
+		bottom_hint_highlights = opts.bottom_hint_highlights,
+	})
+	apply_indent(box_lines, box_highlights, indent)
+
+	local region = { row = 1, col = indent + 1, width = box_width - 2, height = #content_lines }
+	return box_lines, box_highlights, region
+end
+
 return M

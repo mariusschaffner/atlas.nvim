@@ -3,7 +3,6 @@ local M = {}
 local keymaps = require("atlas.core.keymaps")
 local utils = require("atlas.ui.shared.utils")
 local spinner = require("atlas.ui.components.spinner")
-local bordered_box = require("atlas.ui.components.bordered_box")
 local comment_box = require("atlas.pulls.ui.components.comment_box")
 local icons = require("atlas.ui.shared.icons")
 local highlights = require("atlas.ui.shared.highlights")
@@ -18,8 +17,6 @@ local presentation = require("atlas.pulls.ui.presentation")
 local PADDING_X = 1
 local PADDING = string.rep(" ", PADDING_X)
 local CONNECTOR = "│"
-local INDENT_STEP = 2
-local MIN_BOX_WIDTH = 20
 
 ---@param name string|nil
 ---@return string
@@ -123,23 +120,6 @@ local function editing_hint()
 	})
 end
 
----@param box_lines string[]
----@param box_highlights table[]
----@param indent integer
-local function apply_indent(box_lines, box_highlights, indent)
-	if indent <= 0 then
-		return
-	end
-	local pad = string.rep(" ", indent)
-	for i, line in ipairs(box_lines) do
-		box_lines[i] = pad .. line
-	end
-	for _, span in ipairs(box_highlights) do
-		span.start_col = span.start_col + indent
-		span.end_col = span.end_col + indent
-	end
-end
-
 ---@param comment PullsComment
 ---@param depth integer
 ---@param width integer
@@ -236,26 +216,19 @@ local function render_composing_box(width, depth, lines, spans)
 		title_highlights = { { start_col = 0, end_col = #title, hl_group = author_hl(title) } }
 	end
 
-	local indent = PADDING_X + depth * INDENT_STEP
-	local available = math.max(MIN_BOX_WIDTH, width - indent)
-	local box_width = comment_box.box_width(available)
-	local content_lines = { "", "", "" }
 	local bottom_hint, bottom_hint_highlights = editing_hint()
-
-	local box_lines, box_highlights = bordered_box.render({
-		width = box_width,
-		box_width = box_width,
+	local box_lines, box_highlights, region = comment_box.render_composing({
 		title = title,
 		title_highlights = title_highlights,
-		content_lines = content_lines,
-		border_hl = "AtlasFieldBoxBorderEditing",
+		depth = depth,
+		padding_x = PADDING_X,
+		width = width,
 		bottom_hint = bottom_hint,
 		bottom_hint_highlights = bottom_hint_highlights,
 	})
-	apply_indent(box_lines, box_highlights, indent)
 
 	local base = #lines
-	state.regions.composing = { row = base + 1, col = indent + 1, width = box_width - 2, height = #content_lines }
+	state.regions.composing = { row = base + region.row, col = region.col, width = region.width, height = region.height }
 
 	for _, line in ipairs(box_lines) do
 		table.insert(lines, line)

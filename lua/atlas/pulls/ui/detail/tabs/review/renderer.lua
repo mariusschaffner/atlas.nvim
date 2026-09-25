@@ -5,7 +5,6 @@ local spinner = require("atlas.ui.components.spinner")
 local bordered_box = require("atlas.ui.components.bordered_box")
 local comment_box = require("atlas.pulls.ui.components.comment_box")
 local diff = require("atlas.ui.components.diff_hunks")
-local keymaps = require("atlas.core.keymaps")
 local review_threads = require("atlas.pulls.ui.components.review_threads")
 local presentation = require("atlas.pulls.ui.presentation")
 local state = require("atlas.pulls.ui.detail.tabs.review.state")
@@ -23,12 +22,20 @@ local function task_heading(tasks)
 	return label:sub(-1):lower() == "s" and label or (label .. "s")
 end
 
+--- Tasks aren't part of the active-comment/inline-editing redesign (same
+--- scoping as the Activity tab: tasks keep their existing popup-based
+--- editor). They're still registered as navigable so j/k can pass through
+--- them rather than stranding the whole task section, with a plain
+--- CursorLine highlight -- no border/hint -- marking the active one.
 ---@param lines string[]
 ---@param spans table[]
 ---@param line_map table<integer, table>
 ---@param task PullsComment
 ---@param width integer
 local function emit_task(lines, spans, line_map, task, width)
+	local id = "task:" .. tostring(task.id)
+	table.insert(state.navigable, { id = id, kind = "task", comment = task })
+
 	local task_lines, task_spans, task_map = review_threads.render_task_compact(
 		{ comment = task, children = {} },
 		width,
@@ -38,9 +45,16 @@ local function emit_task(lines, spans, line_map, task, width)
 		}
 	)
 	local offset = #lines
+	state.regions[id] =
+		{ row = offset, col = PADDING_X, width = math.max(1, width - PADDING_X * 2), height = math.max(1, #task_lines) }
 	utils.append_block(lines, spans, { lines = task_lines, highlights = task_spans })
 	for line, entry in pairs(task_map) do
 		line_map[offset + line] = entry
+	end
+	if state.active_id == id then
+		for i = 0, #task_lines - 1 do
+			table.insert(spans, { line = offset + i, line_hl_group = "CursorLine" })
+		end
 	end
 end
 
@@ -92,6 +106,16 @@ local function bottom_hint_for(comment, is_root)
 	return comment_box.build_hint(segments)
 end
 
+---@return string text
+---@return table[] highlights
+local function editing_hint()
+	local hl = "AtlasFieldBoxBorderEditing"
+	return comment_box.build_hint({
+		{ action_id = "ui.submit", label = "Save", hl = hl },
+		{ action_id = "ui.field_edit.close", label = "Cancel", hl = hl },
+	})
+end
+
 ---@param lines string[]
 ---@param spans table[]
 ---@param indent integer
@@ -109,6 +133,51 @@ local function descendant_count(node)
 		count = count + descendant_count(child)
 	end
 	return count
+end
+
+---@param width integer
+---@param depth integer
+---@param lines string[]
+---@param spans table[]
+local function render_composing_box(width, depth, lines, spans)
+	local composing = state.composing
+	if not composing then
+		return
+	end
+
+	local title = "New Comment"
+	local title_highlights = nil
+	local current_user = require("atlas.pulls.state").current_user
+	if current_user and current_user.name and current_user.name ~= "" then
+		title = current_user.name
+		title_highlights = { { start_col = 0, end_col = #title, hl_group = presentation.author_hl(title) } }
+	end
+
+	local bottom_hint, bottom_hint_highlights = editing_hint()
+	local box_lines, box_highlights, region = comment_box.render_composing({
+		title = title,
+		title_highlights = title_highlights,
+		depth = depth,
+		padding_x = PADDING_X,
+		width = width,
+		bottom_hint = bottom_hint,
+		bottom_hint_highlights = bottom_hint_highlights,
+	})
+
+	local base = #lines
+	state.regions.composing = { row = base + region.row, col = region.col, width = region.width, height = region.height }
+
+	for _, line in ipairs(box_lines) do
+		table.insert(lines, line)
+	end
+	for _, span in ipairs(box_highlights) do
+		table.insert(spans, {
+			line = base + span.line,
+			start_col = span.start_col,
+			end_col = span.end_col,
+			hl_group = span.hl_group,
+		})
+	end
 end
 
 ---@param node AtlasReviewThreadNode
@@ -129,36 +198,48 @@ local function render_comment_tree(node, root, depth, width, lines, spans, line_
 		return
 	end
 
+	local id = "comment:" .. tostring(comment.id)
 	local is_root = depth == 0
 	local has_children = #node.children > 0
 	local collapsed = is_root and has_children and not state.is_thread_expanded(comment)
 
+	table.insert(state.navigable, { id = id, kind = "comment", comment = comment, root = root })
+
 	local extra_lines, extra_highlights
 	if collapsed then
 		local count = descendant_count(node)
-		local fold_keys = keymaps.resolve("ui.toggle_fold")
-		local key = fold_keys and fold_keys[1]
-		local suffix = key and string.format(" (%s to expand)", key) or ""
-		local text = string.format("%d %s%s", count, count == 1 and "reply" or "replies", suffix)
+		local text = string.format("%d %s", count, count == 1 and "Reply" or "Replies")
 		extra_lines = { text }
-		extra_highlights = { { line = 0, start_col = 0, end_col = #text, hl_group = "AtlasLogInfo" } }
+		extra_highlights = { { line = 0, start_col = 0, end_col = #text, hl_group = "AtlasTextMuted" } }
 	end
 
 	if depth > 0 then
 		append_connector(lines, spans, PADDING_X + depth * 2)
 	end
 
+	local is_editing = state.editing_id == id
+	local is_active = state.composing == nil and state.active_id == id
+	local border_hl = is_editing and "AtlasFieldBoxBorderEditing"
+		or (is_active and "AtlasFieldBoxBorderEditable")
+		or "AtlasFieldBoxBorder"
+
+	local bottom_hint, bottom_hint_highlights
+	if is_editing then
+		bottom_hint, bottom_hint_highlights = editing_hint()
+	elseif is_active then
+		bottom_hint, bottom_hint_highlights = bottom_hint_for(comment, is_root)
+	end
+
 	local provider = detail.provider
 	local comments_capability = provider and provider.capabilities.comments
 	local reaction_options = comments_capability and comments_capability.reaction_options
-	local bottom_hint, bottom_hint_highlights = bottom_hint_for(comment, is_root)
-	local box_lines, box_highlights = comment_box.render({
+	local box_lines, box_highlights, region = comment_box.render({
 		comment = comment,
 		depth = depth,
 		padding_x = PADDING_X,
 		width = width,
 		reaction_options = reaction_options,
-		border_hl = "AtlasFieldBoxBorder",
+		border_hl = border_hl,
 		bottom_hint = bottom_hint,
 		bottom_hint_highlights = bottom_hint_highlights,
 		extra_content_lines = extra_lines,
@@ -166,6 +247,8 @@ local function render_comment_tree(node, root, depth, width, lines, spans, line_
 	})
 
 	local base = #lines
+	state.regions[id] = { row = base + region.row, col = region.col, width = region.width, height = region.height }
+
 	for _, line in ipairs(box_lines) do
 		table.insert(lines, line)
 	end
@@ -190,6 +273,12 @@ local function render_comment_tree(node, root, depth, width, lines, spans, line_
 	if not collapsed then
 		for _, child in ipairs(node.children) do
 			render_comment_tree(child, root, depth + 1, width, lines, spans, line_map)
+		end
+
+		local composing = state.composing
+		if composing and composing.parent and tostring(composing.parent.id) == tostring(comment.id) then
+			append_connector(lines, spans, PADDING_X + (depth + 1) * 2)
+			render_composing_box(width, depth + 1, lines, spans)
 		end
 	end
 end
@@ -305,8 +394,11 @@ local function render_file_body(width, file_path, file_threads, buckets)
 end
 
 --- Wraps a file's diff hunks + inline comment boxes in one outer bordered
---- box, titled with the file path -- grey border and title (`AtlasFieldBoxBorder`),
---- matching every other non-editable bordered box in the plugin.
+--- box, titled with the file path -- 80% width like every comment box
+--- (`comment_box.box_width`), and active/inactive styled the same way too:
+--- blue border + a "[za] - Toggle" hint while this block is the active
+--- navigable entry, grey (`AtlasFieldBoxBorder`) otherwise. "Toggle"
+--- collapses the whole block down to just its title bar.
 ---@param lines string[]
 ---@param spans table[]
 ---@param line_map table<integer, table>
@@ -315,19 +407,38 @@ end
 ---@param file_threads AtlasReviewThreadNode[]
 ---@param buckets CommentsHunkBucket[]
 local function emit_file_with_comments(lines, spans, line_map, width, file_path, file_threads, buckets)
-	local interior_width = math.max(1, width - 2)
-	local body_lines, body_spans, body_line_map = render_file_body(interior_width, file_path, file_threads, buckets)
+	local block_id = "block:" .. file_path
+	table.insert(state.navigable, { id = block_id, kind = "block", path = file_path })
+
+	local is_active = state.active_id == block_id
+	local border_hl = is_active and "AtlasFieldBoxBorderEditable" or "AtlasFieldBoxBorder"
+	local bottom_hint, bottom_hint_highlights
+	if is_active then
+		bottom_hint, bottom_hint_highlights =
+			comment_box.build_hint({ { action_id = "ui.toggle_fold", label = "Toggle", hl = "AtlasFooterInfo" } })
+	end
+
+	local box_width = comment_box.box_width(width)
+	local body_lines, body_spans, body_line_map = {}, {}, {}
+	if not state.is_file_collapsed(file_path) then
+		local interior_width = math.max(1, box_width - 2)
+		body_lines, body_spans, body_line_map = render_file_body(interior_width, file_path, file_threads, buckets)
+	end
 
 	local box_lines, box_highlights = bordered_box.render({
-		width = width,
-		box_width = width,
+		width = box_width,
+		box_width = box_width,
 		title = file_path,
 		content_lines = body_lines,
 		content_highlights = body_spans,
-		border_hl = "AtlasFieldBoxBorder",
+		border_hl = border_hl,
+		bottom_hint = bottom_hint,
+		bottom_hint_highlights = bottom_hint_highlights,
 	})
 
 	local base = #lines
+	state.regions[block_id] = { row = base, col = 1, width = box_width - 2, height = 1 }
+
 	for _, line in ipairs(box_lines) do
 		table.insert(lines, line)
 	end
@@ -356,6 +467,8 @@ function M.render(width, comments, tasks, hunks_by_comment)
 	local line_map = {}
 	local max_width = math.max(1, width)
 	hunks_by_comment = hunks_by_comment or {}
+	state.navigable = {}
+	state.regions = {}
 
 	if tasks == "loading" then
 		utils.push(lines, spans, spinner.with_text("Loading tasks..."), "AtlasTextMuted", PADDING_X)
