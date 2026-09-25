@@ -4,6 +4,7 @@ local utils = require("atlas.ui.shared.utils")
 local spinner = require("atlas.ui.components.spinner")
 local bordered_box = require("atlas.ui.components.bordered_box")
 local presentation = require("atlas.pulls.ui.presentation")
+local icons = require("atlas.ui.shared.icons")
 local notify = require("atlas.core.notify")
 local request_scope = require("atlas.core.requests")
 local detail = require("atlas.pulls.ui.detail.state")
@@ -116,36 +117,45 @@ end
 
 --- Prefixes every box line with a padding + trunk-line column ("│ "),
 --- connecting cards into one continuous vertical strand, and offsets the
---- box's own highlight spans to match.
+--- box's own highlight spans to match. On `marker_line` (0-indexed within
+--- `box_lines`), the trunk character is replaced by `marker_icon` -- a
+--- graph-node marker sitting outside the box, on the commit's own row.
 ---@param box_lines string[]
 ---@param box_highlights table[]
 ---@param padding_x integer
+---@param marker_line integer
+---@param marker_icon string
+---@param marker_icon_hl string
 ---@return string[] lines
 ---@return table[] highlights
-local function apply_trunk(box_lines, box_highlights, padding_x)
+local function apply_trunk(box_lines, box_highlights, padding_x, marker_line, marker_icon, marker_icon_hl)
 	local pad = string.rep(" ", padding_x)
-	local prefix = pad .. TRUNK .. " "
 
 	local lines = {}
+	local prefix_lens = {}
+	local highlights = {}
 	for i, line in ipairs(box_lines) do
+		local is_marker = (i - 1) == marker_line
+		local glyph = is_marker and marker_icon or TRUNK
+		local glyph_hl = is_marker and marker_icon_hl or "AtlasTextMuted"
+		local prefix = pad .. glyph .. " "
 		lines[i] = prefix .. line
+		prefix_lens[i - 1] = #prefix
+		table.insert(highlights, { line = i - 1, start_col = #pad, end_col = #pad + #glyph, hl_group = glyph_hl })
 	end
 
-	local highlights = {}
 	for _, span in ipairs(box_highlights) do
 		if span.line_hl_group then
 			table.insert(highlights, span)
 		else
+			local plen = prefix_lens[span.line] or (#pad + #TRUNK + 1)
 			table.insert(highlights, {
 				line = span.line,
-				start_col = span.start_col + #prefix,
-				end_col = span.end_col + #prefix,
+				start_col = span.start_col + plen,
+				end_col = span.end_col + plen,
 				hl_group = span.hl_group,
 			})
 		end
-	end
-	for i = 1, #lines do
-		table.insert(highlights, { line = i - 1, start_col = #pad, end_col = #pad + #TRUNK, hl_group = "AtlasTextMuted" })
 	end
 
 	return lines, highlights
@@ -163,6 +173,8 @@ local function render_card(commit, width)
 
 	local author = display_author(commit)
 	local author_hl = presentation.author_hl(author)
+	local title = author
+	local title_highlights = { { start_col = 0, end_col = #title, hl_group = author_hl } }
 
 	local date_text = utils.format_datetime(commit.date)
 	local stats = state.stats_by_hash[tostring(commit.hash or "")]
@@ -192,14 +204,15 @@ local function render_card(commit, width)
 	local box_lines, box_highlights = bordered_box.render({
 		width = box_width,
 		box_width = box_width,
-		title = author,
-		title_highlights = { { start_col = 0, end_col = #author, hl_group = author_hl } },
+		title = title,
+		title_highlights = title_highlights,
 		content_lines = { row1, row2 },
 		content_highlights = content_highlights,
 		border_hl = "AtlasBorder",
 	})
 
-	return apply_trunk(box_lines, box_highlights, PADDING_X)
+	local commit_icon, commit_icon_hl = icons.pulls("commit")
+	return apply_trunk(box_lines, box_highlights, PADDING_X, 1, commit_icon, commit_icon_hl)
 end
 
 ---@param pr PullRequest
