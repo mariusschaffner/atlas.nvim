@@ -8,6 +8,18 @@ local inline_field_edit = require("atlas.ui.inline_field_edit")
 local actions = require("atlas.pulls.ui.detail.tabs.conversation.actions")
 local detail = require("atlas.pulls.ui.detail.state")
 local state = require("atlas.pulls.ui.detail.tabs.conversation.state")
+local presentation = require("atlas.pulls.ui.presentation")
+local notify = require("atlas.core.notify")
+
+---@param pr PullRequest|nil
+---@return boolean
+local function guard_open(pr)
+	if presentation.is_open_or_draft(pr) then
+		return true
+	end
+	notify.warn("PR is not open")
+	return false
+end
 
 local ACTIONS = {
 	"ui.comments.add",
@@ -70,6 +82,9 @@ local function start_add(buf, refresh)
 	if not pr or not comments or not comments.add_comment then
 		return
 	end
+	if not guard_open(pr) then
+		return
+	end
 	state.composing = { kind = "add", seed_text = "" }
 	refresh()
 	local region = state.regions.composing
@@ -126,6 +141,9 @@ local function start_reply(buf, refresh)
 	if not pr or not entry or entry.kind ~= "comment" or not comments or not comments.add_comment then
 		return
 	end
+	if not guard_open(pr) then
+		return
+	end
 	---@type PullsComment
 	local comment = entry.entity
 	if comment.is_task then
@@ -173,6 +191,9 @@ local function start_edit(buf, refresh)
 	if not pr or not entry then
 		return
 	end
+	if not guard_open(pr) then
+		return
+	end
 
 	if entry.kind == "review" then
 		actions.edit_review(pr, entry.entity, refresh)
@@ -218,6 +239,9 @@ local function do_delete(refresh)
 	if not pr or not entry or entry.kind == "review" then
 		return
 	end
+	if not guard_open(pr) then
+		return
+	end
 	---@type PullsComment
 	local comment = entry.entity
 	if entry.kind == "comment" and not actions.is_own_comment(comment) then
@@ -233,6 +257,9 @@ local function do_react(refresh)
 	if not pr or not entry or entry.kind ~= "comment" then
 		return
 	end
+	if not guard_open(pr) then
+		return
+	end
 	actions.react(pr, entry.entity, refresh)
 end
 
@@ -241,6 +268,9 @@ local function do_toggle_task(refresh)
 	local pr = detail.current_pr
 	local entry = state.active_entry()
 	if not pr or not entry or entry.kind ~= "task" then
+		return
+	end
+	if not guard_open(pr) then
 		return
 	end
 	actions.toggle_task(pr, entry.entity, refresh)

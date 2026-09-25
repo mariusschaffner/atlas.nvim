@@ -257,6 +257,9 @@ local function conversation_border_hl()
 	if comments == nil or comments.add_comment == nil then
 		return nil
 	end
+	if not presentation.is_open_or_draft(state.current_pr) then
+		return nil
+	end
 	local composing = conversation_state.composing
 	if composing ~= nil and composing.kind == "add" and inline_field_edit.is_active() then
 		return "AtlasFieldBoxBorderEditing"
@@ -283,6 +286,7 @@ local function conversation_addable()
 	return state.current_tab == "conversation"
 		and comments ~= nil
 		and comments.add_comment ~= nil
+		and presentation.is_open_or_draft(state.current_pr)
 		and not inline_field_edit.is_active()
 end
 

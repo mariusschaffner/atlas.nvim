@@ -13,6 +13,7 @@ local activity_component = require("atlas.pulls.ui.detail.components.activity")
 local state = require("atlas.pulls.ui.detail.tabs.conversation.state")
 local detail = require("atlas.pulls.ui.detail.state")
 local actions = require("atlas.pulls.ui.detail.tabs.conversation.actions")
+local presentation = require("atlas.pulls.ui.presentation")
 
 local PADDING_X = 1
 local PADDING = string.rep(" ", PADDING_X)
@@ -209,7 +210,7 @@ end
 ---@return table[]|nil highlights
 local function bottom_hint_for(comment)
 	local comments = detail.provider and detail.provider.capabilities.comments
-	if not comments then
+	if not comments or not presentation.is_open_or_draft(detail.current_pr) then
 		return nil, nil
 	end
 
