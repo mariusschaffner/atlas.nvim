@@ -5,6 +5,7 @@ local renderer = require("atlas.issues.ui.detail.renderer")
 local notify = require("atlas.core.notify")
 local request_scope = require("atlas.core.requests")
 local state = require("atlas.issues.ui.detail.state")
+local inline_field_edit = require("atlas.ui.inline_field_edit")
 
 local SPINNER_INTERVAL_MS = 100
 
@@ -46,7 +47,7 @@ local function is_loading()
 	if state.issue_loading or state.details_loading then
 		return true
 	end
-	if state.linked_merge_requests == "loading" or state.linked_branches == "loading" then
+	if state.linked_merge_requests == "loading" or state.linked_branches == "loading" or state.dates == "loading" then
 		return true
 	end
 	if state.current_issue == nil then
@@ -221,6 +222,20 @@ local function load_linked(issue, force_refresh)
 			render_if_open()
 		end)
 	end
+
+	if core.fetch_issue_dates then
+		state.dates = "loading"
+		state.requests.run(function(done)
+			return core.fetch_issue_dates(issue, { force_load = force_refresh }, done)
+		end, function(dates, err)
+			if not same_ref(state.current_issue, issue) then
+				return
+			end
+			state.dates = err and tostring(err) or dates
+			update_spinner()
+			render_if_open()
+		end)
+	end
 end
 
 local function clear_issue()
@@ -234,6 +249,7 @@ local function clear_issue()
 	state.issue_loading = false
 	state.linked_merge_requests = nil
 	state.linked_branches = nil
+	state.dates = nil
 	state.line_map = {}
 end
 
@@ -417,6 +433,111 @@ function M.refresh(ref)
 		update_spinner()
 		render_if_open()
 	end)
+end
+
+--- Edit the issue's start date or due date inline. No-op when the provider
+--- doesn't support it, the dates haven't loaded yet, or the field isn't
+--- currently visible. Both dates are always sent together on save (the
+--- underlying widget mutation replaces the whole start/due pair), so the
+--- untouched date is carried over from `state.dates` unchanged.
+---@param field "start_date"|"due_date"
+---@param label string
+function M.edit_date(field, label)
+	local issue = state.current_issue
+	local buf = state.buf
+	if issue == nil or buf == nil or not vim.api.nvim_buf_is_valid(buf) then
+		return
+	end
+	local dates = state.dates
+	if dates == "loading" then
+		notify.warn("Dates still loading")
+		return
+	end
+	if type(dates) == "string" then
+		notify.error(dates)
+		return
+	end
+	if type(dates) ~= "table" then
+		return
+	end
+	local core = state.provider and state.provider.capabilities.core
+	local update = core and core.update_issue_dates
+	if not update then
+		notify.warn("Provider does not support editing issue dates")
+		return
+	end
+
+	local header_win = state.header_win
+	local region = state.header_regions and state.header_regions[field]
+	if header_win == nil or not vim.api.nvim_win_is_valid(header_win) or region == nil then
+		notify.warn(label .. " field is not visible")
+		return
+	end
+	if inline_field_edit.is_active() then
+		return
+	end
+
+	local current = tostring(dates[field] or "")
+	local work_item_id = dates.work_item_id
+	local keymaps = require("atlas.issues.ui.detail.keymaps")
+
+	keymaps.remove(buf)
+	inline_field_edit.start({
+		anchor_win = header_win,
+		row = region.row,
+		col = region.col,
+		width = region.width,
+		height = region.height,
+		seed_text = current,
+		seed_resolved = current ~= "" and { current } or {},
+		on_save = function(text, done)
+			local updated = vim.trim(text)
+			if updated == current then
+				done(true)
+				return
+			end
+			notify.loading("Updating " .. label:lower() .. "...")
+			local payload = { start_date = dates.start_date, due_date = dates.due_date }
+			payload[field] = updated
+			update(issue, work_item_id, payload, function(ok, err)
+				if not same_ref(state.current_issue, issue) then
+					done(true)
+					return
+				end
+				if not ok then
+					notify.error(label .. " update failed: " .. tostring(err or "Unknown error"))
+					done(false, err)
+					return
+				end
+				if type(state.dates) == "table" then
+					state.dates[field] = updated ~= "" and updated or nil
+				end
+				notify.success(label .. " updated", { timeout = 1200 })
+				done(true)
+			end)
+		end,
+		on_cancel = function()
+			notify.info(label .. " unchanged", { timeout = 1200 })
+		end,
+		on_done = function()
+			if buf and vim.api.nvim_buf_is_valid(buf) then
+				keymaps.register(buf)
+			end
+			render_if_open()
+		end,
+	})
+end
+
+--- Edit the issue's start date inline. No-op when the provider doesn't
+--- support it, or while already editing.
+function M.edit_start_date()
+	M.edit_date("start_date", "Start date")
+end
+
+--- Edit the issue's due date inline. No-op when the provider doesn't
+--- support it, or while already editing.
+function M.edit_due_date()
+	M.edit_date("due_date", "Due date")
 end
 
 ---@param step 1|-1

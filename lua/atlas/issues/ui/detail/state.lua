@@ -18,6 +18,7 @@ local request_scope = require("atlas.core.requests")
 ---@field issue_loading boolean
 ---@field linked_merge_requests IssueLinkedMergeRequest[]|"loading"|string|nil
 ---@field linked_branches IssueLinkedBranch[]|"loading"|string|nil
+---@field dates IssueDates|"loading"|string|nil
 ---@field requests AtlasRequestScope
 ---@field spinner_timer uv.uv_timer_t|nil
 local M = {
@@ -38,6 +39,7 @@ local M = {
 	issue_loading = false,
 	linked_merge_requests = nil,
 	linked_branches = nil,
+	dates = nil,
 	requests = request_scope.new(),
 	spinner_timer = nil,
 }
@@ -60,6 +62,7 @@ function M.reset()
 	M.issue_loading = false
 	M.linked_merge_requests = nil
 	M.linked_branches = nil
+	M.dates = nil
 	M.requests.cancel()
 	M.requests = request_scope.new()
 	M.spinner_timer = nil

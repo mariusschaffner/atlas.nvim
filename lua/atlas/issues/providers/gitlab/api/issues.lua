@@ -26,6 +26,40 @@ query($path: ID!, $iid: String!) {
 }
 ]]
 
+-- Issues never had a REST-editable "start date" (only "due_date"); both
+-- dates live on the GitLab "Work Item" model backing the issue instead (same
+-- underlying DB row, different GraphQL type), so they're read/written
+-- through `namespace(fullPath).workItem(iid)` and its
+-- `WorkItemWidgetStartAndDueDate` widget rather than `project.issue`/REST --
+-- mirrors what GitLab's own issue sidebar calls.
+local ISSUE_DATES_GQL = [[
+query($path: ID!, $iid: String!) {
+  namespace(fullPath: $path) {
+    workItem(iid: $iid) {
+      id
+      widgets {
+        ... on WorkItemWidgetStartAndDueDate {
+          startDate
+          dueDate
+        }
+      }
+    }
+  }
+}
+]]
+
+-- Both dates are always sent together (even when only one changed) since the
+-- widget mutation replaces the whole start/due pair -- omitting one would
+-- clear it. Sent as JSON via `$input` rather than typed `$startDate`/`$dueDate`
+-- variables, so the exact GraphQL scalar name doesn't need to be known here.
+local ISSUE_DATES_UPDATE_GQL = [[
+mutation($input: WorkItemUpdateInput!) {
+  workItemUpdate(input: $input) {
+    errors
+  }
+}
+]]
+
 local ISSUE_DETAILS_GQL = [[
 query($path: ID!, $iid: String!) {
   project(fullPath: $path) {
@@ -679,6 +713,115 @@ function M.create_branch(issue, branch_name, source_ref, on_done)
 		path = path,
 		branch = name,
 		ref = ref,
+	})
+end
+
+---@param issue Issue
+---@param opts { force_load?: boolean }|nil
+---@param on_done fun(dates: IssueDates|nil, err: string|nil)
+---@return { cancel: fun() }|nil
+function M.fetch_issue_dates(issue, opts, on_done)
+	opts = opts or {}
+	local path, iid = normalizer.parse_key(tostring(issue.key or ""))
+	if path == "" or iid == nil then
+		on_done(nil, "Invalid issue key")
+		return nil
+	end
+
+	local cache_key = string.format("gitlab:issue-dates:%s#%d", path, iid)
+	if not opts.force_load then
+		local cached, ok = service.get_memory_cache(cache_key)
+		if ok then
+			on_done(cached, nil)
+			return nil
+		end
+	end
+
+	return service.graphql(ISSUE_DATES_GQL, { path = path, iid = tostring(iid) }, function(data, err)
+		if err then
+			on_done(nil, err)
+			return
+		end
+		local namespace = json.safe_table(data).namespace
+		local work_item = json.nilify(json.safe_table(namespace).workItem)
+		local work_item_id = json.safe_str(json.safe_table(work_item).id)
+		if work_item == nil or work_item_id == nil then
+			on_done(nil, "Work item not found")
+			return
+		end
+
+		-- The `widgets` list mixes every widget type the issue has; only the
+		-- one matching the `... on WorkItemWidgetStartAndDueDate` fragment
+		-- decodes with any keys at all (others come back as `{}`).
+		local dates_widget = nil
+		for _, widget in ipairs(json.safe_table(json.safe_table(work_item).widgets)) do
+			if next(json.safe_table(widget)) ~= nil then
+				dates_widget = widget
+				break
+			end
+		end
+
+		local dates = {
+			work_item_id = work_item_id,
+			start_date = dates_widget and json.safe_str(dates_widget.startDate) or nil,
+			due_date = dates_widget and json.safe_str(dates_widget.dueDate) or nil,
+		}
+		service.set_memory_cache(cache_key, dates)
+		on_done(dates, nil)
+	end, {
+		action = "Fetch issue dates",
+		path = path,
+		iid = iid,
+		transport = "graphql",
+	})
+end
+
+---@param issue Issue
+---@param work_item_id string
+---@param dates { start_date: string|nil, due_date: string|nil } Empty string clears a date.
+---@param on_done fun(ok: boolean, err: string|nil)
+---@return { cancel: fun() }|nil
+function M.update_issue_dates(issue, work_item_id, dates, on_done)
+	if work_item_id == "" then
+		on_done(false, "Missing work item id")
+		return nil
+	end
+
+	---@param value string|nil
+	---@return string|vim.NIL
+	local function gql_date(value)
+		if value == nil or value == "" then
+			return vim.NIL
+		end
+		return value
+	end
+
+	return service.graphql(ISSUE_DATES_UPDATE_GQL, {
+		input = {
+			id = work_item_id,
+			startAndDueDateWidget = {
+				startDate = gql_date(dates.start_date),
+				dueDate = gql_date(dates.due_date),
+			},
+		},
+	}, function(data, err)
+		if err then
+			on_done(false, err)
+			return
+		end
+		local errors = json.safe_table(json.safe_table(data).workItemUpdate).errors
+		if type(errors) == "table" and #errors > 0 then
+			on_done(false, tostring(errors[1]))
+			return
+		end
+		local path, iid = normalizer.parse_key(tostring(issue.key or ""))
+		if path ~= "" and iid ~= nil then
+			service.delete_memory_cache(string.format("gitlab:issue-dates:%s#%d", path, iid))
+		end
+		on_done(true, nil)
+	end, {
+		action = "Update issue dates",
+		id = work_item_id,
 	})
 end
 

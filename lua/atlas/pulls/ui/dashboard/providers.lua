@@ -34,18 +34,6 @@ local function columns(conversation, before_reviewer, after_reviewer)
 			header_hl = "AtlasColumnHeader",
 		})
 		vim.list_extend(result, after_reviewer)
-		table.insert(result, {
-			key = "created",
-			name = string.format("%s Created", icons.general("created")),
-			can_grow = false,
-			header_hl = "AtlasColumnHeader",
-		})
-		table.insert(result, {
-			key = "updated",
-			name = string.format("%s Updated", icons.general("updated")),
-			can_grow = false,
-			header_hl = "AtlasColumnHeader",
-		})
 		return result
 	end
 

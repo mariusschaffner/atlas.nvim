@@ -41,6 +41,15 @@
 ---@field milestone IssueMilestone|nil
 
 --------------------------------------------------------------------------------
+-- Dates
+--------------------------------------------------------------------------------
+
+---@class IssueDates
+---@field work_item_id string GraphQL global ID used to write dates back (e.g. "gid://gitlab/WorkItem/123").
+---@field start_date string|nil
+---@field due_date string|nil
+
+--------------------------------------------------------------------------------
 -- Label
 --------------------------------------------------------------------------------
 

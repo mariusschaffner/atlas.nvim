@@ -216,6 +216,31 @@ function M.register(buf, opts)
 
 	local core = provider.capabilities.core
 
+	if core.update_issue_dates then
+		utils.insert_if(
+			items,
+			resolver.item("issues.change_start_date", {
+				desc = "Edit start date",
+				hint = false,
+				opts = { nowait = true, silent = true },
+				callback = function()
+					require("atlas.issues.ui.detail").edit_start_date()
+				end,
+			})
+		)
+		utils.insert_if(
+			items,
+			resolver.item("issues.change_due_date", {
+				desc = "Edit due date",
+				hint = false,
+				opts = { nowait = true, silent = true },
+				callback = function()
+					require("atlas.issues.ui.detail").edit_due_date()
+				end,
+			})
+		)
+	end
+
 	if core.create_branch and core.fetch_project_branches then
 		utils.insert_if(
 			items,
@@ -437,6 +462,8 @@ function M.remove(buf)
 	utils.insert_if(general, resolver.remove_item("issues.change_assignee"))
 	utils.insert_if(general, resolver.remove_item("issues.change_label"))
 	utils.insert_if(general, resolver.remove_item("issues.change_milestone"))
+	utils.insert_if(general, resolver.remove_item("issues.change_start_date"))
+	utils.insert_if(general, resolver.remove_item("issues.change_due_date"))
 	utils.insert_if(general, resolver.remove_item("issues.create_branch"))
 	utils.insert_if(general, resolver.remove_item("issues.go_to_pull"))
 	utils.insert_if(general, resolver.remove_item("issues.go_to_milestone"))

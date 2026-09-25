@@ -56,6 +56,8 @@
 ---@field update_title (fun(issue: Issue, title: string, on_done: fun(ok: boolean, err: string|nil)): { cancel: fun() }|nil)|nil
 ---@field fetch_linked_merge_requests (fun(issue: Issue, opts: { force_load: boolean|nil }|nil, on_done: fun(items: IssueLinkedMergeRequest[]|nil, err: string|nil)): { cancel: fun() }|nil)|nil
 ---@field fetch_linked_branches (fun(issue: Issue, opts: { force_load: boolean|nil }|nil, on_done: fun(items: IssueLinkedBranch[]|nil, err: string|nil)): { cancel: fun() }|nil)|nil
+---@field fetch_issue_dates (fun(issue: Issue, opts: { force_load: boolean|nil }|nil, on_done: fun(dates: IssueDates|nil, err: string|nil)): { cancel: fun() }|nil)|nil
+---@field update_issue_dates (fun(issue: Issue, work_item_id: string, dates: { start_date: string|nil, due_date: string|nil }, on_done: fun(ok: boolean, err: string|nil)): { cancel: fun() }|nil)|nil
 ---@field fetch_project_branches (fun(issue: Issue, opts: { force_load: boolean|nil }|nil, on_done: fun(items: IssueProjectBranch[]|nil, err: string|nil)): { cancel: fun() }|nil)|nil
 ---@field create_branch (fun(issue: Issue, branch_name: string, source_ref: string, on_done: fun(branch: IssueLinkedBranch|nil, err: string|nil)): { cancel: fun() }|nil)|nil
 ---@field fetch_milestones (fun(project_path: string, on_done: fun(milestones: IssueMilestone[]|nil, err: string|nil)): { cancel: fun() }|nil)|nil

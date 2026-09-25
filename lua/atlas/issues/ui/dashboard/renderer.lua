@@ -163,6 +163,7 @@ local function render_issue_table(opts, issue_groups)
 		margin = 1,
 		columns = columns,
 		rows = rows,
+		header_separator = true,
 		tree = {
 			column_key = "icon",
 			children_key = "children",
@@ -251,6 +252,7 @@ local function render_compact_table(opts, issues)
 		margin = 1,
 		columns = columns,
 		rows = rows,
+		header_separator = true,
 		cell_hl = cell_hl,
 	})
 end

@@ -101,9 +101,6 @@ local function cell_hl(row, col, ctx, display)
 		local hl = row.kind == "pr" and (row._pr_reloading and "AtlasTextMuted" or row._pr_icon_hl) or "AtlasTextMuted"
 		return { { start_col = 0, end_col = #ctx.padded, hl_group = hl } }
 	end
-	if col.key == "created" or col.key == "updated" then
-		return { { start_col = 0, end_col = #ctx.padded, hl_group = "AtlasTextMuted" } }
-	end
 	if col.key == "reviewer" then
 		return {
 			{
@@ -165,8 +162,6 @@ local function compact_rows(pulls, display)
 			conversation = tostring(pr.comments_count or 0),
 			reviewer = string.format("%s %s", REVIEW_ICON, utils.shorten_name(reviewer, 20)),
 			reviewer_hl = reviewer_hl,
-			created = utils.relative_time(pr.created_on),
-			updated = utils.relative_time(pr.updated_on),
 			_item = { kind = "pr", id = pr.id, repo = repo, pr = pr },
 		}
 		add_values(row, display.values(pr))
@@ -225,8 +220,6 @@ local function list_rows(pulls, layout, display, row_spacer)
 				conversation = tostring(pr.comments_count or 0),
 				reviewer = string.format("%s %s", REVIEW_ICON, utils.shorten_name(reviewer, 20)),
 				reviewer_hl = reviewer_hl,
-				created = utils.relative_time(pr.created_on),
-				updated = utils.relative_time(pr.updated_on),
 				_item = { kind = "pr", id = pr.id, repo = repo, pr = pr },
 			}
 			add_values(row, display.values(pr))
@@ -305,7 +298,8 @@ function M.render(opts)
 		append_centered_loading(lines, loading, opts.width, opts.height)
 	else
 		local layout = state.active_view and state.active_view.layout or "compact"
-		local body_lines, body_spans, body_map = M.render_table(pulls, layout, opts.width, display)
+		local body_lines, body_spans, body_map =
+			M.render_table(pulls, layout, opts.width, display, { header_separator = true })
 		local base = #lines
 		utils.append_block(lines, spans, { lines = body_lines, highlights = body_spans })
 		for lnum, item in pairs(body_map) do

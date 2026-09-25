@@ -96,6 +96,39 @@ local function linked_branches_field()
 	return { label = "Linked Branches", value = table.concat(parts, ", "), hl = spans }
 end
 
+local DATE_FIELD_ACTIONS = {
+	start_date = "issues.change_start_date",
+	due_date = "issues.change_due_date",
+}
+
+---@param field "start_date"|"due_date"
+---@param label string
+---@return IssuesDetailHeaderField|nil
+local function date_field(field, label)
+	local dates = state.dates
+	if dates == nil then
+		return nil
+	end
+	if dates == "loading" then
+		return { id = field, label = label, value = spinner.with_text("Loading..."), hl = "AtlasTextMuted" }
+	end
+	if type(dates) == "string" then
+		return { id = field, label = label, value = dates, hl = "AtlasLogError" }
+	end
+
+	local core = state.provider and state.provider.capabilities.core
+	local can_edit = core and core.update_issue_dates ~= nil
+	local value = tostring(dates[field] or "")
+
+	return {
+		id = field,
+		label = utils.field_hint_label(DATE_FIELD_ACTIONS[field], label, can_edit),
+		value = value ~= "" and value or "None",
+		hl = "AtlasTextMuted",
+		editable = can_edit,
+	}
+end
+
 ---@param issue Issue
 ---@param tab_items IssuesDetailTabDefinition[]
 ---@param width integer
@@ -112,7 +145,8 @@ local function render_header(issue, tab_items, width)
 		or {}
 	local status_badge = provider_detail and provider_detail.title_status and provider_detail.title_status(issue) or nil
 
-	-- Three columns: Author/Assignee, Labels/Milestone, Linked MR/Linked Branches.
+	-- Four columns: Author/Assignee, Labels/Milestone, Start/Due Date,
+	-- Linked MR/Linked Branches.
 	local left_fields = {}
 	utils.insert_if(left_fields, provider_fields.author)
 	utils.insert_if(left_fields, provider_fields.assignee)
@@ -121,12 +155,16 @@ local function render_header(issue, tab_items, width)
 	utils.insert_if(middle_fields, provider_fields.labels)
 	utils.insert_if(middle_fields, provider_fields.milestone)
 
+	local dates_fields = {}
+	utils.insert_if(dates_fields, date_field("start_date", "Start Date"))
+	utils.insert_if(dates_fields, date_field("due_date", "Due Date"))
+
 	local right_fields = {}
 	utils.insert_if(right_fields, linked_mr_field())
 	utils.insert_if(right_fields, linked_branches_field())
 
 	local header_lines, header_spans, header_regions =
-		header.render(issue, width, left_fields, middle_fields, right_fields, status_badge)
+		header.render(issue, width, left_fields, middle_fields, dates_fields, right_fields, status_badge)
 	utils.append_block(lines, spans, { lines = header_lines, highlights = header_spans })
 
 	return lines, spans, header_regions or {}

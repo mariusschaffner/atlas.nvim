@@ -112,6 +112,8 @@ local M = {}
 ---@field change_milestone_title? AtlasKeymapValue
 ---@field change_milestone_start_date? AtlasKeymapValue
 ---@field change_milestone_due_date? AtlasKeymapValue
+---@field change_start_date? AtlasKeymapValue
+---@field change_due_date? AtlasKeymapValue
 ---@field edit_issue? AtlasKeymapValue
 ---@field create_issue? AtlasKeymapValue
 ---@field toggle_description_mode? AtlasKeymapValue
@@ -214,6 +216,8 @@ local M = {}
 ---| "issues.change_milestone_title"
 ---| "issues.change_milestone_start_date"
 ---| "issues.change_milestone_due_date"
+---| "issues.change_start_date"
+---| "issues.change_due_date"
 ---| "issues.edit_issue"
 ---| "issues.create_issue"
 ---| "issues.toggle_description_mode"
@@ -375,10 +379,15 @@ function M.validate()
 		-- (the standalone native diff viewer, a separate buffer) never apply
 		-- to the same buffer, so sharing "gc" is safe.
 		{ "ui.comments.reply", "pulls.review.diff.toggle_compact" },
-		-- change_milestone_start_date (milestone detail buffer) and
-		-- transition_issue (declared, not yet wired to any keymap) can't
-		-- collide in practice.
-		{ "issues.change_milestone_start_date", "issues.transition_issue" },
+		-- change_milestone_start_date (milestone detail buffer),
+		-- change_start_date (issue detail buffer) and transition_issue
+		-- (declared, not yet wired to any keymap) never apply to the same
+		-- buffer, so sharing "gs" is safe.
+		{ "issues.change_milestone_start_date", "issues.change_start_date", "issues.transition_issue" },
+		-- change_milestone_due_date (milestone detail buffer) and
+		-- change_due_date (issue detail buffer) are separate panels that are
+		-- never open at once, so sharing "gd" is safe.
+		{ "issues.change_milestone_due_date", "issues.change_due_date" },
 		-- change_milestone_title (milestone detail buffer) and edit_issue
 		-- (issue detail buffer) are separate panels that are never open at
 		-- once, so sharing "gt" is safe.
