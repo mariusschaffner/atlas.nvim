@@ -29,6 +29,7 @@ query($path:ID!,$iid:String!){
           status
           path
           totalJobs
+          duration
           stages(first:100){
             nodes{
               name
@@ -120,6 +121,7 @@ function M.fetch(pr, opts, on_done)
 				url = web_url(item.path),
 				id = tostring(id or ""),
 				job_count = tonumber(json.nilify(item.totalJobs)),
+				duration = tonumber(json.nilify(item.duration)),
 				stages = stages,
 			})
 		end
@@ -144,6 +146,7 @@ local function with_job_details(pipeline, job_details)
 		provider_state = pipeline.provider_state,
 		url = pipeline.url,
 		job_count = pipeline.job_count,
+		duration = pipeline.duration,
 		stages = {},
 	}
 	local stages_by_name = {}

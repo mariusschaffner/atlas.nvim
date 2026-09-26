@@ -1,86 +1,16 @@
 local M = {}
 
 local utils = require("atlas.ui.shared.utils")
-local icons = require("atlas.ui.shared.icons")
 local spinner = require("atlas.ui.components.spinner")
-local table_tree = require("atlas.ui.components.table_tree")
-local pipeline_logs = require("atlas.pulls.ui.pipelines.logs")
+local renderer = require("atlas.pulls.ui.detail.tabs.pipelines.renderer")
 local keymaps = require("atlas.pulls.ui.detail.tabs.pipelines.keymaps")
 local state = require("atlas.pulls.ui.detail.tabs.pipelines.state")
 local detail = require("atlas.pulls.ui.detail.state")
 
 local PADDING_X = 1
-local MAX_LOG_LINES = 400
 
 ---@type fun()|nil
 local current_refresh = nil
-
-local PIPELINE_HL = {
-	SUCCESSFUL = "AtlasPipelineLinkSuccess",
-	FAILED = "AtlasPipelineLinkFailed",
-	INPROGRESS = "AtlasPipelineLinkInProgress",
-	STOPPED = "AtlasPipelineLinkMuted",
-}
-
-local PIPELINE_STATUS_LABEL = {
-	SUCCESSFUL = "Passed",
-	FAILED = "Failed",
-	INPROGRESS = "Running",
-	STOPPED = "Stopped",
-}
-
-local PIPELINE_STATUS_PRIORITY = {
-	FAILED = 1,
-	INPROGRESS = 2,
-	STOPPED = 3,
-	UNKNOWN = 4,
-	SUCCESSFUL = 5,
-}
-
----@param status string
----@return string
-local function status_label(status)
-	return PIPELINE_STATUS_LABEL[tostring(status or ""):upper()] or "Unknown"
-end
-
----@generic T: { state: string }
----@param items T[]
----@return T[]
-local function sort_by_status(items)
-	local indexed = {}
-	for index, item in ipairs(items) do
-		table.insert(indexed, { item = item, index = index })
-	end
-	table.sort(indexed, function(a, b)
-		local a_state = tostring(a.item.state or "UNKNOWN"):upper()
-		local b_state = tostring(b.item.state or "UNKNOWN"):upper()
-		local a_priority = PIPELINE_STATUS_PRIORITY[a_state] or PIPELINE_STATUS_PRIORITY.UNKNOWN
-		local b_priority = PIPELINE_STATUS_PRIORITY[b_state] or PIPELINE_STATUS_PRIORITY.UNKNOWN
-		if a_priority == b_priority then
-			return a.index < b.index
-		end
-		return a_priority < b_priority
-	end)
-
-	local sorted = {}
-	for _, entry in ipairs(indexed) do
-		table.insert(sorted, entry.item)
-	end
-	return sorted
-end
-
----@param seconds number|nil
----@return string
-local function duration_text(seconds)
-	local value = tonumber(seconds)
-	if value == nil then
-		return ""
-	end
-	if value < 60 then
-		return string.format("%ds", math.floor(value))
-	end
-	return utils.human_duration(value)
-end
 
 ---@param pr PullRequest
 ---@param pipeline PullsPipeline
@@ -137,223 +67,44 @@ local function ensure_job_log(pr, pipeline, job)
 	end)
 end
 
----@param pr PullRequest
----@param pipeline PullsPipeline
----@param job PullsPipelineJob
----@param stage PullsPipelineStage|nil
----@return table
-local function build_job_row(pr, pipeline, job, stage)
-	local job_id = tostring(job.id)
-	local job_state = tostring(job.state or "UNKNOWN"):upper()
-	local job_icon = icons.pulls_status(job_state:lower())
-	local expanded = state.is_job_expanded(job_id)
+-- Exported so keymaps.lua can lazily require this module and drive the same
+-- lazy-fetch caches (avoids a circular top-level require between the two).
+M.ensure_pipeline_details = ensure_pipeline_details
+M.ensure_job_log = ensure_job_log
 
-	local job_row = {
-		label = string.format("%s %s", job_icon, job.name),
-		status = duration_text(job.duration),
-		status_icon = job_icon,
-		status_hl = PIPELINE_HL[job_state] or "AtlasPipelineLinkMuted",
-		kind = "job",
-		job_id = job_id,
-		_item = { kind = "job", job = job, stage = stage, pipeline = pipeline },
-		children = { { label = "", kind = "placeholder" } },
-	}
-
-	if expanded then
-		ensure_job_log(pr, pipeline, job)
-		local log_entry = state.log_by_job_id[job_id]
-		local children = {}
-		if log_entry == nil or log_entry.status == "loading" then
-			table.insert(children, { label = spinner.with_text("Loading log..."), kind = "log_status", job_id = job_id })
-		elseif log_entry.status == "error" then
-			table.insert(children, { label = log_entry.text, kind = "log_error", job_id = job_id })
-		else
-			local log_lines = pipeline_logs.split_log_lines(log_entry.text)
-			local shown = log_lines
-			if #log_lines > MAX_LOG_LINES then
-				local truncated = #log_lines - MAX_LOG_LINES
-				shown = vim.list_slice(log_lines, truncated + 1, #log_lines)
-				table.insert(children, {
-					label = string.format("... %d earlier line%s truncated ...", truncated, truncated == 1 and "" or "s"),
-					kind = "log_status",
-					job_id = job_id,
-				})
-			end
-			if #shown == 0 then
-				table.insert(children, { label = "(empty log)", kind = "log_status", job_id = job_id })
-			end
-			for _, line in ipairs(shown) do
-				table.insert(children, {
-					label = line ~= "" and line or " ",
-					kind = "log_line",
-					log_hl = pipeline_logs.classify_log_line(line),
-					job_id = job_id,
-				})
-			end
+---@param pipeline_id string
+---@return PullsPipelinesNavigableEntry|nil
+local function first_job_entry(pipeline_id)
+	for _, entry in ipairs(state.navigable) do
+		if entry.kind == "job" and tostring(entry.pipeline.id) == pipeline_id then
+			return entry
 		end
-		job_row.children = children
 	end
+	return nil
+end
 
-	return job_row
+--- Focuses the first job of a just-expanded pipeline: marks it active and
+--- expanded, kicks off its log fetch, and re-renders. Called either
+--- synchronously from keymaps.lua's `za` handler (when job details were
+--- already cached) or from here once a pending fetch completes.
+---@param pr PullRequest
+---@param pipeline_id string
+---@return boolean focused
+function M.focus_first_job(pr, pipeline_id)
+	local entry = first_job_entry(pipeline_id)
+	if entry == nil then
+		return false
+	end
+	state.active_id = entry.id
+	state.expanded_jobs[tostring(entry.job.id)] = true
+	ensure_job_log(pr, entry.pipeline, entry.job)
+	return true
 end
 
 ---@param pr PullRequest
----@param pipeline PullsPipeline
----@param detailed PullsPipeline
----@return table[]
-local function build_stage_rows(pr, pipeline, detailed)
-	local rows = {}
-	for _, stage in ipairs(sort_by_status(detailed.stages)) do
-		if #stage.jobs > 0 then
-			local stage_state = tostring(stage.state or "UNKNOWN"):upper()
-			local stage_icon = icons.pulls_status(stage_state:lower())
-			local stage_row = {
-				label = string.format("%s %s", stage_icon, stage.name or "Stage"),
-				status = "",
-				status_icon = stage_icon,
-				status_hl = PIPELINE_HL[stage_state] or "AtlasPipelineLinkMuted",
-				kind = "stage",
-				children = {},
-			}
-			for _, job in ipairs(sort_by_status(stage.jobs)) do
-				table.insert(stage_row.children, build_job_row(pr, pipeline, job, stage))
-			end
-			table.insert(rows, stage_row)
-		end
-	end
-	return rows
-end
-
-local STAGE_ICON_SEPARATOR = " -- "
-local STAGE_ICON_MIN_GAP = 2
-
----@param pr PullRequest
----@param pipeline PullsPipeline
 ---@param width integer
----@return table
-local function build_pipeline_row(pr, pipeline, width)
-	local id = tostring(pipeline.id)
-	local state_value = tostring(pipeline.state or "UNKNOWN"):upper()
-	local icon = icons.pulls_status(state_value:lower())
-	local job_count = tonumber(pipeline.job_count)
-	local expanded = state.is_pipeline_expanded(id)
-
-	-- Small per-stage status icons on the pipeline's own row, so its shape
-	-- (which stages passed/failed/are running) is visible before expanding.
-	-- Joined with "--" and centered on the row, like a tiny pipeline graph.
-	local stage_icons = {}
-	for _, stage in ipairs(pipeline.stages or {}) do
-		local stage_state = tostring(stage.state or "UNKNOWN"):upper()
-		table.insert(stage_icons, {
-			icon = icons.pulls_status(stage_state:lower()),
-			hl = PIPELINE_HL[stage_state] or "AtlasPipelineLinkMuted",
-		})
-	end
-	local stage_icons_text = {}
-	for _, s in ipairs(stage_icons) do
-		table.insert(stage_icons_text, s.icon)
-	end
-
-	local label = string.format("%s %s", icon, pipeline.name)
-	if #stage_icons_text > 0 then
-		local stage_block = table.concat(stage_icons_text, STAGE_ICON_SEPARATOR)
-		local center_start = math.floor((width - vim.fn.strdisplaywidth(stage_block)) / 2)
-		local gap = math.max(center_start - vim.fn.strdisplaywidth(label), STAGE_ICON_MIN_GAP)
-		label = label .. string.rep(" ", gap) .. stage_block
-	end
-
-	local pipeline_row = {
-		label = label,
-		status = string.format("%s %s", icon, status_label(state_value)),
-		status_icon = icon,
-		status_hl = PIPELINE_HL[state_value] or "AtlasPipelineLinkMuted",
-		stage_icons = stage_icons,
-		jobs = job_count and string.format("%d %s", job_count, job_count == 1 and "job" or "jobs") or "",
-		kind = "pipeline",
-		pipeline_id = id,
-		_item = { kind = "pipeline", pipeline = pipeline },
-		children = { { label = "", kind = "placeholder" } },
-	}
-
-	if expanded then
-		ensure_pipeline_details(pr, pipeline)
-		local detailed = state.details_by_id[id]
-		local children = {}
-		if detailed == nil or detailed == "loading" then
-			table.insert(children, { label = spinner.with_text("Loading jobs..."), kind = "log_status" })
-		elseif type(detailed) == "string" then
-			table.insert(children, { label = detailed, kind = "log_error" })
-		else
-			children = build_stage_rows(pr, pipeline, detailed)
-			if #children == 0 then
-				table.insert(children, { label = "No jobs found.", kind = "log_status" })
-			end
-		end
-		pipeline_row.children = children
-	end
-
-	return pipeline_row
-end
-
----@param row table
----@param column table
----@param ctx { text: string, padded: string, width: integer }
----@return table[]|nil
-local function cell_hl(row, column, ctx)
-	if column.key == "label" then
-		if row.kind == "pipeline" or row.kind == "job" or row.kind == "stage" then
-			local spans = {}
-			if row.status_icon then
-				local start_col = ctx.text:find(row.status_icon, 1, true)
-				if start_col then
-					table.insert(
-						spans,
-						{ start_col = start_col - 1, end_col = start_col - 1 + #row.status_icon, hl_group = row.status_hl }
-					)
-				end
-			end
-			if row.stage_icons then
-				local cursor = 1
-				for _, s in ipairs(row.stage_icons) do
-					local start_col = ctx.text:find(s.icon, cursor, true)
-					if start_col then
-						table.insert(spans, { start_col = start_col - 1, end_col = start_col - 1 + #s.icon, hl_group = s.hl })
-						cursor = start_col + #s.icon
-					end
-				end
-			end
-			return #spans > 0 and spans or nil
-		end
-		if row.kind == "log_line" then
-			return row.log_hl and { { start_col = 0, end_col = #ctx.padded, hl_group = row.log_hl } } or nil
-		end
-		if row.kind == "log_error" then
-			return { { start_col = 0, end_col = #ctx.padded, hl_group = "AtlasLogError" } }
-		end
-		if row.kind == "log_status" or row.kind == "placeholder" then
-			return { { start_col = 0, end_col = #ctx.padded, hl_group = "AtlasTextMuted" } }
-		end
-		return nil
-	end
-	if column.key == "status" then
-		if row.kind == "pipeline" then
-			return { { start_col = 0, end_col = #ctx.padded, hl_group = row.status_hl } }
-		end
-		if row.kind == "job" then
-			return { { start_col = 0, end_col = #ctx.padded, hl_group = "AtlasTextMuted" } }
-		end
-		return nil
-	end
-	if column.key == "jobs" then
-		return { { start_col = 0, end_col = #ctx.padded, hl_group = "AtlasTextMuted" } }
-	end
-end
-
----@param pr PullRequest
----@param _details PullRequestDetails|nil
----@param width integer
----@return string[], table[], table<integer, table>|nil
-function M.render(pr, _details, width)
+---@return string[], table[], table<integer, table>
+local function do_render(pr, width)
 	local lines, spans, line_map = {}, {}, {}
 
 	if detail.pipelines == nil or detail.pipelines == "loading" then
@@ -366,53 +117,52 @@ function M.render(pr, _details, width)
 	end
 
 	-- Pipelines are already newest-first (see the GitLab provider's fetch());
-	-- keep that order rather than regrouping by status like the stage/job
-	-- rows below, so it matches the GitLab web UI's pipeline list.
+	-- keep that order so it matches the GitLab web UI's pipeline list.
 	local entries = detail.pipelines
 	if #entries == 0 then
 		utils.push(lines, spans, "No pipelines found.", "AtlasTextMuted", PADDING_X)
 		return lines, spans, line_map
 	end
 
-	local rows = {}
-	for _, pipeline in ipairs(entries) do
-		table.insert(rows, build_pipeline_row(pr, pipeline, width))
+	return renderer.render(pr, entries, width, ensure_pipeline_details, ensure_job_log)
+end
+
+---@param pr PullRequest
+---@param _details PullRequestDetails|nil
+---@param width integer
+---@return string[], table[], table<integer, table>|nil
+function M.render(pr, _details, width)
+	local lines, spans, line_map = do_render(pr, width)
+
+	-- First render after data loads: default the active entry to the first
+	-- pipeline -- `renderer.render` only populates `state.navigable` as a
+	-- side effect, so the default can't be known until after this first pass.
+	-- Same pattern as the Review tab's `M.render`.
+	if state.active_id == nil and #state.navigable > 0 then
+		state.active_id = state.navigable[1].id
+		lines, spans, line_map = do_render(pr, width)
 	end
 
-	local tbl_lines, tbl_map, tbl_spans = table_tree.render({
-		width = width,
-		margin = PADDING_X,
-		columns = {
-			{ key = "label", name = "Pipeline", can_grow = true, header_hl = "AtlasColumnHeader" },
-			{ key = "status", name = "Status", can_grow = false, header_hl = "AtlasColumnHeader" },
-			{ key = "jobs", name = "Jobs", can_grow = false, header_hl = "AtlasColumnHeader" },
-		},
-		rows = rows,
-		tree = {
-			column_key = "label",
-			children_key = "children",
-			-- Rendered after a pipeline's expanded stages/jobs (see flatten()),
-			-- so it separates one pipeline's whole block from the next rather
-			-- than sitting between the header and its own expanded content.
-			separator = "─",
-			separator_padding = false,
-			is_expanded = function(row)
-				if row.kind == "pipeline" then
-					return state.is_pipeline_expanded(row.pipeline_id)
+	-- A `za` on a pipeline whose job details hadn't loaded yet left a pending
+	-- focus request; once those details have arrived (now reflected in
+	-- `state.navigable`), jump active to its first job and render once more.
+	local pending = state.pending_focus_pipeline_id
+	if pending ~= nil then
+		local detailed = state.details_by_id[pending]
+		if detailed ~= nil and detailed ~= "loading" and type(detailed) ~= "string" then
+			state.pending_focus_pipeline_id = nil
+			if M.focus_first_job(pr, pending) then
+				lines, spans, line_map = do_render(pr, width)
+				-- This resolution happens inside the async data-load callback
+				-- chain, not a keymap handler, so nothing else moves the
+				-- window cursor onto the newly-focused job -- do it here.
+				local region = state.regions[state.active_id]
+				local win = detail.win
+				if region and win and vim.api.nvim_win_is_valid(win) then
+					pcall(vim.api.nvim_win_set_cursor, win, { region.row + 1, 0 })
 				end
-				if row.kind == "job" then
-					return state.is_job_expanded(row.job_id)
-				end
-				return true
-			end,
-		},
-		cell_hl = cell_hl,
-	})
-
-	local offset = #lines
-	utils.append_block(lines, spans, { lines = tbl_lines, highlights = tbl_spans })
-	for lnum, entry in pairs(tbl_map) do
-		line_map[offset + lnum] = entry
+			end
+		end
 	end
 
 	return lines, spans, line_map
@@ -440,51 +190,22 @@ function M.on_select(pr, refresh, opts)
 end
 
 ---@param _lnum integer
----@param entry table
+---@param _entry table
 ---@return boolean
-function M.is_selectable_line(_lnum, entry)
-	-- Every row in the tree (stages, jobs, log lines, ...) is meaningful content,
-	-- so navigation should step through them one at a time rather than snapping
-	-- to the next pipeline/job row and skipping expanded content in between.
-	-- The separator line between pipelines is the one exception.
-	return not entry._tv2_separator
+function M.is_selectable_line(_lnum, _entry)
+	-- Defensive fallback only: this tab's own `ui.next_item`/`ui.previous_item`
+	-- (keymaps.lua) fully replace generic line-by-line navigation while it's
+	-- active, same as the Review tab.
+	return true
 end
 
 ---@param pr PullRequest
----@param entry table
+---@param _entry table
 ---@return boolean|nil
-function M.on_enter(pr, entry)
-	if entry.kind == "pipeline" and entry.pipeline then
-		local id = tostring(entry.pipeline.id)
-		state.toggle_pipeline(id)
-		if state.is_pipeline_expanded(id) then
-			ensure_pipeline_details(pr, entry.pipeline)
-		end
-		if current_refresh then
-			current_refresh()
-		end
-		return true
-	end
-	if entry.kind == "job" and entry.job then
-		local id = tostring(entry.job.id)
-		state.toggle_job(id)
-		if state.is_job_expanded(id) then
-			ensure_job_log(pr, entry.pipeline, entry.job)
-		end
-		if current_refresh then
-			current_refresh()
-		end
-		return true
-	end
-	if (entry.kind == "log_line" or entry.kind == "log_status" or entry.kind == "log_error") and entry.job_id then
-		-- These rows only render while their job is expanded, so Enter here
-		-- always means "collapse the job I'm looking at".
-		state.toggle_job(entry.job_id)
-		if current_refresh then
-			current_refresh()
-		end
-		return true
-	end
+function M.on_enter(pr, _entry)
+	-- `<CR>` aliases to the same toggle as `za`, acting on whatever is
+	-- currently `state.active_entry()` rather than the literal cursor line.
+	return keymaps.toggle_fold(pr, current_refresh)
 end
 
 ---@return boolean

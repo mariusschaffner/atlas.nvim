@@ -146,6 +146,7 @@
 ---@field provider_state string|nil
 ---@field url string|nil
 ---@field job_count integer|nil
+---@field duration number|nil Seconds
 ---@field stages PullsPipelineStage[]
 
 ---@class PullsPipelineStage
