@@ -4,7 +4,6 @@ local utils = require("atlas.ui.shared.utils")
 local state = require("atlas.pulls.ui.detail.state")
 local header = require("atlas.pulls.ui.components.header")
 local field_box = require("atlas.ui.components.field_box")
-local chips = require("atlas.pulls.ui.components.chips")
 local detail_tabs = require("atlas.pulls.ui.components.tabs")
 local icons = require("atlas.ui.shared.icons")
 local spinner = require("atlas.ui.components.spinner")
@@ -203,17 +202,6 @@ local function render_header(pr, tab_items, width)
 			top_field = header.title_field(pr, supports_action("edit_title") and presentation.is_open_or_draft(pr)),
 		})
 	utils.append_block(lines, spans, { lines = field_lines, highlights = field_spans })
-
-	-- Chips
-	local chip_lines, chip_spans = chips.render(pr, {
-		width = width,
-		pipelines = state.pipelines,
-		loading = state.details_loading or state.pipelines == "loading",
-	})
-	if #chip_lines > 0 then
-		table.insert(lines, "")
-		utils.append_block(lines, spans, { lines = chip_lines, highlights = chip_spans })
-	end
 
 	return lines, spans, field_regions or {}
 end

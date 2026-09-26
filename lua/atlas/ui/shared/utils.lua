@@ -367,6 +367,23 @@ function M.format_datetime(iso)
 	return string.format("%s:%s - %s.%s.%s", hh, mm, d, mo, y)
 end
 
+--- Same as `format_datetime` but with a 2-digit year, for compact activity-log
+--- rows: "HH:MM - DD.MM.YY".
+---@param iso string|nil
+---@return string "" when `iso` doesn't parse
+function M.format_datetime_short(iso)
+	if type(iso) ~= "string" or iso == "" then
+		return ""
+	end
+
+	local y, mo, d, hh, mm = iso:match("^(%d%d%d%d)%-(%d%d)%-(%d%d)T(%d%d):(%d%d)")
+	if y == nil then
+		return ""
+	end
+
+	return string.format("%s:%s - %s.%s.%s", hh, mm, d, mo, y:sub(3, 4))
+end
+
 ---@param bytes number|string|nil
 ---@return string
 function M.human_size(bytes)

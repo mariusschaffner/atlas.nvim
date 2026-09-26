@@ -107,17 +107,16 @@ function M.render(entries, width, opts)
 		append({ line }, { { line = 0, start_col = padding_x, end_col = padding_x + #"│", hl_group = "AtlasTextMuted" } })
 	end
 
-	--- "<icon> <name> - <timestamp> - <action>".
+	--- "<timestamp> - <name> - <action>", e.g. "14:05 - 15.03.24 - Jane - approved this merge request".
 	---@param entry PullsActivityEntry
 	---@param has_next boolean
 	local function render_entry(entry, has_next)
 		separator()
 
 		local prefix = string.rep(" ", padding_x) .. (has_next and "│  " or "   ")
-		local classified = M.classify(entry)
 		local name = actor_name(entry.actor)
-		local timestamp = utils.format_datetime(entry.date)
-		local action = classified.additional or ""
+		local timestamp = utils.format_datetime_short(entry.date)
+		local action = M.classify(entry).additional or ""
 
 		local parts, entry_spans, cursor = {}, {}, 0
 		local function add(text, hl)
@@ -128,13 +127,12 @@ function M.render(entries, width, opts)
 			cursor = cursor + #text
 		end
 
-		add(classified.icon .. " ", classified.icon_hl)
-		add(name, person_hl(name))
-		add(" - ")
 		if timestamp ~= "" then
-			add(timestamp, "AtlasLogInfo")
+			add(timestamp, "AtlasTextMuted")
 			add(" - ")
 		end
+		add(name, person_hl(name))
+		add(" - ")
 		add(action, "AtlasTextMuted")
 
 		local line = prefix .. table.concat(parts)

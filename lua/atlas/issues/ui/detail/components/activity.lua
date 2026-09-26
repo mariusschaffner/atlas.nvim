@@ -64,7 +64,7 @@ function M.render(entries, width, opts)
 		)
 	end
 
-	--- "<username> - <timestamp> - <action>", e.g. "Jane - 14:05 - 15.03.2024 - changed the description".
+	--- "<timestamp> - <username> - <action>", e.g. "14:05 - 15.03.24 - Jane - changed the description".
 	---@param entry IssueActivityEntry
 	---@param has_next boolean
 	local function render_entry(entry, has_next)
@@ -72,7 +72,7 @@ function M.render(entries, width, opts)
 
 		local prefix = string.rep(" ", padding_x) .. (has_next and "│  " or "   ")
 		local name = actor_name(entry.actor)
-		local timestamp = utils.format_datetime(entry.date)
+		local timestamp = utils.format_datetime_short(entry.date)
 		local action = M.classify(entry).additional or ""
 
 		local parts, entry_spans, cursor = {}, {}, 0
@@ -84,12 +84,12 @@ function M.render(entries, width, opts)
 			cursor = cursor + #text
 		end
 
-		add(name, presentation.person_hl(name))
-		add(" - ")
 		if timestamp ~= "" then
-			add(timestamp, "AtlasLogInfo")
+			add(timestamp, "AtlasTextMuted")
 			add(" - ")
 		end
+		add(name, presentation.person_hl(name))
+		add(" - ")
 		add(action, "AtlasTextMuted")
 
 		local line = prefix .. table.concat(parts)
