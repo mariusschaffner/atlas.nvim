@@ -13,6 +13,16 @@ local MERGED_PR_ICON, MERGED_PR_ICON_HL = icons.pulls("merged_pr")
 local DECLINED_PR_ICON, DECLINED_PR_ICON_HL = icons.pulls("declined_pr")
 local REVIEW_ICON = icons.pulls("review")
 
+-- Hard cap on rows per page, independent of how many would otherwise fit in
+-- the available height.
+local MAX_PAGE_ROWS = 30
+
+---@param height integer|nil
+---@return integer
+local function page_rows(height)
+	return height and math.min(height, MAX_PAGE_ROWS) or MAX_PAGE_ROWS
+end
+
 ---@param pr PullRequest
 ---@return string display, string|nil hl_key
 local function reviewer_label(pr)
@@ -317,7 +327,7 @@ function M.render(opts)
 		local layout = state.active_view and state.active_view.layout or "compact"
 		local body_lines, body_spans, body_map, tbl_page_info = M.render_table(pulls, layout, opts.width, display, {
 			header_separator = true,
-			max_rows = opts.height,
+			max_rows = page_rows(opts.height),
 			page = state.page,
 		})
 		page_info = tbl_page_info

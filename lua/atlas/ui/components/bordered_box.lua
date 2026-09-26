@@ -68,26 +68,52 @@ end
 ---@param interior_width integer
 ---@param hint string|nil Left-aligned segment near the bottom-left corner (e.g. action hints).
 ---@param hint_highlights table[]|nil Spans {start_col, end_col, hl_group} relative to `hint` itself.
+---@param hint_right string|nil Right-aligned segment near the bottom-right corner (e.g. a page indicator).
+---@param hint_right_highlights table[]|nil Spans {start_col, end_col, hl_group} relative to `hint_right` itself.
 ---@return string bottom
 ---@return table[] highlights Spans {start_col, end_col, hl_group} relative to the returned `bottom` line.
-local function build_bottom(interior_width, hint, hint_highlights)
-	if hint == nil or hint == "" then
+local function build_bottom(interior_width, hint, hint_highlights, hint_right, hint_right_highlights)
+	local has_hint = hint ~= nil and hint ~= ""
+	local has_right = hint_right ~= nil and hint_right ~= ""
+
+	if not has_hint and not has_right then
 		return BL .. string.rep(H, math.max(0, interior_width)) .. BR, {}
 	end
 
-	local label = string.format(" %s ", hint)
-	local label_w = text_width(label)
-	local remaining = math.max(0, interior_width - 1 - label_w)
-	local bottom = BL .. H .. label .. string.rep(H, remaining) .. BR
+	local left_part = has_hint and (H .. string.format(" %s ", hint)) or H
+	local left_w = text_width(left_part)
 
-	local hint_offset = #BL + #H + 1 -- corner + dash + leading space
-	local hint_len = #hint
+	local right_part = has_right and (string.format(" %s ", hint_right) .. H) or ""
+	local right_w = text_width(right_part)
+
+	local fill = math.max(0, interior_width - left_w - right_w)
+	local fill_str = string.rep(H, fill)
+	local bottom = BL .. left_part .. fill_str .. right_part .. BR
+
 	local highlights = {}
-	for _, span in ipairs(hint_highlights or {}) do
-		local sc = math.min(span.start_col, hint_len)
-		local ec = math.min(span.end_col, hint_len)
-		if ec > sc then
-			table.insert(highlights, { start_col = hint_offset + sc, end_col = hint_offset + ec, hl_group = span.hl_group })
+	if has_hint then
+		local hint_offset = #BL + #H + 1 -- corner + dash + leading space
+		local hint_len = #hint
+		for _, span in ipairs(hint_highlights or {}) do
+			local sc = math.min(span.start_col, hint_len)
+			local ec = math.min(span.end_col, hint_len)
+			if ec > sc then
+				table.insert(highlights, { start_col = hint_offset + sc, end_col = hint_offset + ec, hl_group = span.hl_group })
+			end
+		end
+	end
+	if has_right then
+		local right_offset = #BL + #left_part + #fill_str + 1 -- everything before hint_right's own text, +1 for its leading space
+		local right_len = #hint_right
+		for _, span in ipairs(hint_right_highlights or {}) do
+			local sc = math.min(span.start_col, right_len)
+			local ec = math.min(span.end_col, right_len)
+			if ec > sc then
+				table.insert(
+					highlights,
+					{ start_col = right_offset + sc, end_col = right_offset + ec, hl_group = span.hl_group }
+				)
+			end
 		end
 	end
 
@@ -111,6 +137,8 @@ end
 ---  right_content_row: integer|nil,
 ---  bottom_hint: string|nil Left-aligned segment near the bottom-left corner (e.g. action hints).
 ---  bottom_hint_highlights: table[]|nil Spans {start_col, end_col, hl_group} relative to `bottom_hint` itself.
+---  bottom_hint_right: string|nil Right-aligned segment near the bottom-right corner (e.g. a page indicator).
+---  bottom_hint_right_highlights: table[]|nil Spans {start_col, end_col, hl_group} relative to `bottom_hint_right` itself.
 --- }
 ---@return string[] lines
 ---@return table[] highlights
@@ -211,7 +239,13 @@ function M.render(opts)
 		end
 	end
 
-	local bottom, bottom_hint_highlights = build_bottom(interior_width, opts.bottom_hint, opts.bottom_hint_highlights)
+	local bottom, bottom_hint_highlights = build_bottom(
+		interior_width,
+		opts.bottom_hint,
+		opts.bottom_hint_highlights,
+		opts.bottom_hint_right,
+		opts.bottom_hint_right_highlights
+	)
 	local bottom_line_idx = #lines
 	table.insert(lines, bottom)
 	table.insert(highlights, { line = bottom_line_idx, start_col = 0, end_col = #bottom, hl_group = border_hl })

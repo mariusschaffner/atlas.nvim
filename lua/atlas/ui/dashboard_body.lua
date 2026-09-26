@@ -58,19 +58,41 @@ local function table_box_hint(buf)
 	return table.concat(parts, " - ")
 end
 
+--- Builds the "[gp] - [gP]" page-navigation key hint (bindings only, no
+--- descriptions -- those live in the help popup instead), for the page
+--- indicator's own corner rather than the main hint list.
+---@return string
+local function page_nav_hint()
+	local resolver = require("atlas.core.keymaps")
+	local parts = {}
+	for _, action_id in ipairs({ "ui.next_page", "ui.previous_page" }) do
+		local keys = resolver.resolve(action_id)
+		if keys and keys[1] then
+			table.insert(parts, string.format("[%s]", clean_key(keys[1])))
+		end
+	end
+	return table.concat(parts, " - ")
+end
+
 ---@param page_info { page: integer, total_pages: integer }|nil
 ---@return string
 local function page_indicator(page_info)
 	if page_info == nil then
 		return ""
 	end
-	return string.format("(%d/%d)", page_info.page, page_info.total_pages)
+	local text = string.format("(%d/%d)", page_info.page, page_info.total_pages)
+	local nav = page_nav_hint()
+	if nav ~= "" then
+		text = text .. " - " .. nav
+	end
+	return text
 end
 
 --- Renders the filter bar plus a domain-specific body into the dashboard
 --- buffer, the body wrapped in its own bordered box (title "Table", grey
---- non-editable chrome, keybinding hints -- prefixed with a "(page/total)"
---- indicator when the body is paginated -- embedded in the bottom border).
+--- non-editable chrome, keybinding hints in the bottom-left corner and a
+--- "(page/total) - [gp] - [gP]" indicator in the bottom-right corner when
+--- the body is paginated).
 ---@param render_body fun(width: integer, height: integer, bar_lines: integer): string[], table[], table<integer, table>, { page: integer, total_pages: integer }|nil
 function M.render(render_body)
 	local win = dashboard_host.win()
@@ -105,15 +127,6 @@ function M.render(render_body)
 		table.insert(content_lines, "")
 	end
 
-	local indicator = page_indicator(page_info)
-	local hints = table_box_hint(buf)
-	local bottom_hint = indicator
-	if indicator ~= "" and hints ~= "" then
-		bottom_hint = indicator .. "  " .. hints
-	elseif hints ~= "" then
-		bottom_hint = hints
-	end
-
 	local box_lines, box_spans = bordered_box.render({
 		width = width,
 		box_width = width,
@@ -121,7 +134,8 @@ function M.render(render_body)
 		content_lines = content_lines,
 		content_highlights = content_highlights,
 		border_hl = "AtlasBorder",
-		bottom_hint = bottom_hint,
+		bottom_hint = table_box_hint(buf),
+		bottom_hint_right = page_indicator(page_info),
 	})
 
 	local lines = vim.list_extend({}, bar_lines)

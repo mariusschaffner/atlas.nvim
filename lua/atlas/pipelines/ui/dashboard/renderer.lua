@@ -5,6 +5,16 @@ local table_tree = require("atlas.ui.components.table_tree")
 local utils = require("atlas.ui.shared.utils")
 local providers = require("atlas.pipelines.ui.dashboard.providers")
 
+-- Hard cap on rows per page, independent of how many would otherwise fit in
+-- the available height.
+local MAX_PAGE_ROWS = 30
+
+---@param height integer|nil
+---@return integer
+local function page_rows(height)
+	return height and math.min(height, MAX_PAGE_ROWS) or MAX_PAGE_ROWS
+end
+
 ---@param pipeline Pipeline
 ---@return table
 local function pipeline_to_row(pipeline)
@@ -59,7 +69,7 @@ function M.render(opts)
 		columns = providers.columns(),
 		rows = rows,
 		header_separator = true,
-		max_rows = opts.height,
+		max_rows = page_rows(opts.height),
 		page = state.page,
 		cell_hl = cell_hl,
 	})

@@ -6,6 +6,16 @@ local utils = require("atlas.ui.shared.utils")
 local icons = require("atlas.ui.shared.icons")
 local providers = require("atlas.issues.ui.dashboard.providers")
 
+-- Hard cap on rows per page, independent of how many would otherwise fit in
+-- the available height.
+local MAX_PAGE_ROWS = 30
+
+---@param height integer|nil
+---@return integer
+local function page_rows(height)
+	return height and math.min(height, MAX_PAGE_ROWS) or MAX_PAGE_ROWS
+end
+
 ---@param issue Issue
 ---@param opts { depth: integer, is_last: boolean|nil }|nil
 ---@param layout "plain"|"compact"
@@ -175,7 +185,7 @@ local function render_issue_table(opts, issue_groups)
 		columns = columns,
 		rows = rows,
 		header_separator = true,
-		max_rows = opts.height,
+		max_rows = page_rows(opts.height),
 		page = state.page,
 		tree = {
 			column_key = "icon",
@@ -268,7 +278,7 @@ local function render_compact_table(opts, issues)
 		columns = columns,
 		rows = rows,
 		header_separator = true,
-		max_rows = opts.height,
+		max_rows = page_rows(opts.height),
 		page = state.page,
 		cell_hl = cell_hl,
 	})

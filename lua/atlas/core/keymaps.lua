@@ -402,6 +402,14 @@ function M.validate()
 		-- own row-list buffer, a different buffer entirely. All four sharing
 		-- "i" is safe.
 		{ "ui.edit_description", "issues.add_comment", "ui.comments.add", "ui.inspect" },
+		-- next_page (the dashboard's own row-list buffer) and go_to_pull (issue
+		-- detail buffer) are different buffers, never active at once, so
+		-- sharing "gp" is safe.
+		{ "ui.next_page", "issues.go_to_pull" },
+		-- previous_page (dashboard buffer) and review.diff.toggle_detail_panel
+		-- (the standalone diff viewer, a separate buffer) never apply to the
+		-- same buffer, so sharing "gP" is safe.
+		{ "ui.previous_page", "pulls.review.diff.toggle_detail_panel" },
 	}
 
 	local function conflict_allowed(actions)

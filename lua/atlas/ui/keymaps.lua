@@ -62,12 +62,13 @@ function M.register(buf)
 		})
 	)
 
+	-- Hidden from the main hint list -- shown instead next to the page
+	-- indicator itself (bottom-right corner, see dashboard_body.lua).
 	utils.insert_if(
 		items,
 		resolver.item("ui.next_page", {
 			desc = "Next page",
-			hint_desc = "Page+",
-			index = 20,
+			hint = false,
 			callback = function()
 				local dashboard = domain_dashboard()
 				if dashboard and dashboard.next_page then
@@ -81,8 +82,7 @@ function M.register(buf)
 		items,
 		resolver.item("ui.previous_page", {
 			desc = "Previous page",
-			hint_desc = "Page-",
-			index = 20,
+			hint = false,
 			callback = function()
 				local dashboard = domain_dashboard()
 				if dashboard and dashboard.previous_page then
