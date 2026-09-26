@@ -143,12 +143,23 @@ local function should_show_indicator(issue_groups)
 	return false
 end
 
+---@param issue_groups IssuesGroup[]
+---@return boolean
+local function has_milestone_group(issue_groups)
+	for _, group in ipairs(issue_groups) do
+		if group.kind == "milestone" then
+			return true
+		end
+	end
+	return false
+end
+
 ---@param opts { width: integer }
 ---@param issue_groups IssuesGroup[]
 ---@return string[], table<integer, table>, table[]
 local function render_issue_table(opts, issue_groups)
 	local display = providers.get(state.provider and state.provider.id)
-	local columns = display.columns("plain")
+	local columns = display.columns(has_milestone_group(issue_groups))
 	local rows = issues_to_rows(issue_groups)
 	if state.is_loading then
 		table.insert(rows, blank_row(columns))
@@ -210,7 +221,9 @@ end
 ---@return table[], table[]
 local function compact_rows(issues)
 	local display = providers.get(state.provider and state.provider.id)
-	local columns = display.columns("compact")
+	-- Compact rows are a flat issue list with no milestone grouping, so
+	-- "Child Items" (a milestone's child count) never applies here.
+	local columns = display.columns(false)
 	local label_width = max_label_width(issues)
 	local rows = {}
 	for _, issue in ipairs(issues) do

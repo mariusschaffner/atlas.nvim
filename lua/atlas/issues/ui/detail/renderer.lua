@@ -191,11 +191,16 @@ end
 --- being blue while editable), escalating to orange only once actively
 --- typing a new top-level comment. A reply keeps its own comment box's
 --- border as the "is this actively being edited" signal, so the global
---- border just stays blue for those.
+--- border just stays blue for those. Grey on a closed issue -- only this
+--- outer pane border, not individual comment boxes (still blue when
+--- selected/active; see `border_hl` in the conversation renderer).
 ---@return string|nil
 local function conversation_border_hl()
 	if state.current_tab ~= "conversation" then
 		return nil
+	end
+	if not presentation.is_open(state.current_issue) then
+		return "AtlasBorder"
 	end
 	local comments = state.provider and state.provider.capabilities.comments
 	if comments == nil or comments.add_comment == nil then

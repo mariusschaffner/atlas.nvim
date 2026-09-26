@@ -26,8 +26,11 @@ local function tree_prefix(depth, is_last)
 	return indent .. (is_last and "└─ " or "├─ ")
 end
 
-local function columns()
-	return {
+---@param has_milestone boolean|nil Whether the rendered list contains at
+---least one milestone group -- "Child Items" only means anything for a
+---milestone's child count, so it's hidden entirely otherwise.
+local function columns(has_milestone)
+	local cols = {
 		{ key = "icon", name = "", can_grow = false, align = "center" },
 		{ key = "name", name = "Issue" },
 		{
@@ -42,9 +45,12 @@ local function columns()
 			max_width = 22,
 			can_grow = false,
 		},
-		{ key = "children_count", name = "Child Items", can_grow = false, align = "center" },
-		{ key = "status", name = " Status", can_grow = false },
 	}
+	if has_milestone then
+		table.insert(cols, { key = "children_count", name = "Child Items", can_grow = false, align = "center" })
+	end
+	table.insert(cols, { key = "status", name = " Status", can_grow = false })
+	return cols
 end
 
 ---@param issue Issue

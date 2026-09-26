@@ -295,9 +295,7 @@ end
 ---@return table<integer, table> line_map
 local function render_work_items_table(issues, width)
 	local display = dashboard_providers.get(state.provider and state.provider.id)
-	local columns = vim.tbl_filter(function(c)
-		return c.key ~= "children_count"
-	end, display.columns("plain"))
+	local columns = display.columns(false)
 	local label_width = max_key_label_width(issues)
 	local rows = {}
 	for _, issue in ipairs(issues) do
