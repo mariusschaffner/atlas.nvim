@@ -2,7 +2,6 @@ local M = {}
 
 local utils = require("atlas.ui.shared.utils")
 local highlights = require("atlas.ui.shared.highlights")
-local bordered_box = require("atlas.ui.components.bordered_box")
 local ui_utils = require("atlas.ui.utils")
 local spinner = require("atlas.ui.components.spinner")
 local state = require("atlas.pipelines.ui.detail.state")
@@ -40,17 +39,14 @@ local function two_column_row(left, right, interior_width)
 	return row, #row - #right
 end
 
---- Renders the "pipeline box" (Start/End on the left, branch/commit on the
---- right, both inside the same bordered box) that occupies the header
---- window's top part. A second box may join it below in the future.
+--- Renders the Start/End (left) + branch/commit (right) summary rows, as
+--- plain content lines -- these are meant to sit inside the pipeline's own
+--- bordered/titled content window (see M.render), not a box of their own.
 ---@param pipeline Pipeline
----@param width integer Header window width the box should fill.
+---@param width integer
 ---@return string[] lines
 ---@return table[] highlights
-local function render_summary_box(pipeline, width)
-	local box_width = math.max(4, width)
-	local interior_width = box_width - 2
-
+local function render_summary_lines(pipeline, width)
 	local start_text = "Start: " .. format_dt(pipeline.started_at or pipeline.created_at)
 	local end_text = "End: " .. format_dt(pipeline.finished_at)
 	local branch = tostring(pipeline.ref or "")
@@ -58,21 +54,16 @@ local function render_summary_box(pipeline, width)
 	local branch_hl = highlights.dynamic_for(branch) or "Normal"
 	local commit_hl = highlights.dynamic_for(commit) or "Normal"
 
-	local row1, branch_start = two_column_row(start_text, branch, interior_width)
-	local row2, commit_start = two_column_row(end_text, commit, interior_width)
+	local row1, branch_start = two_column_row(start_text, branch, width)
+	local row2, commit_start = two_column_row(end_text, commit, width)
 
-	return bordered_box.render({
-		width = box_width,
-		box_width = box_width,
-		border_hl = "AtlasBorder",
-		content_lines = { row1, row2 },
-		content_highlights = {
+	return { row1, row2 },
+		{
 			{ line = 0, start_col = 0, end_col = #start_text, hl_group = "AtlasTextMuted" },
 			{ line = 0, start_col = branch_start, end_col = branch_start + #branch, hl_group = branch_hl },
 			{ line = 1, start_col = 0, end_col = #end_text, hl_group = "AtlasTextMuted" },
 			{ line = 1, start_col = commit_start, end_col = commit_start + #commit, hl_group = commit_hl },
-		},
-	})
+		}
 end
 
 ---@param pipeline Pipeline
@@ -111,14 +102,13 @@ function M.render()
 	local header_buf = state.header_buf
 	local has_header = utils.window.valid(header_win) and utils.buffer.valid(header_buf)
 
+	-- Everything lives in one box now: the pipeline's own bordered/titled
+	-- content window. The sticky header above it stays, but empty, until
+	-- something else needs that space.
 	if has_header then
-		local header_lines, header_spans = {}, {}
-		if pipeline ~= nil then
-			header_lines, header_spans = render_summary_box(pipeline, vim.api.nvim_win_get_width(header_win))
-		end
-		set_lines(header_buf, header_lines)
-		utils.apply_spans(header_buf, header_ns, header_spans)
-		detail_ui.resize_header(#header_lines)
+		set_lines(header_buf, {})
+		utils.apply_spans(header_buf, header_ns, {})
+		detail_ui.resize_header(0)
 	end
 
 	detail_ui.set_content_title(pipeline and title_chunks(pipeline) or nil)
@@ -129,10 +119,17 @@ function M.render()
 
 	if pipeline == nil then
 		lines = { "", "  Nothing selected..." }
-	elseif state.details_loading and #(pipeline.stages or {}) == 0 then
-		utils.push(lines, spans, spinner.with_text("Loading pipeline..."), "AtlasTextMuted", 2)
 	else
-		lines, spans = graph.render(pipeline, width)
+		local summary_lines, summary_spans = render_summary_lines(pipeline, width)
+		utils.append_block(lines, spans, { lines = summary_lines, highlights = summary_spans })
+		table.insert(lines, "")
+
+		if state.details_loading and #(pipeline.stages or {}) == 0 then
+			utils.push(lines, spans, spinner.with_text("Loading pipeline..."), "AtlasTextMuted", 2)
+		else
+			local graph_lines, graph_spans = graph.render(pipeline, width)
+			utils.append_block(lines, spans, { lines = graph_lines, highlights = graph_spans })
+		end
 	end
 
 	set_lines(buf, lines)
