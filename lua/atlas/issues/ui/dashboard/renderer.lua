@@ -154,9 +154,9 @@ local function has_milestone_group(issue_groups)
 	return false
 end
 
----@param opts { width: integer }
+---@param opts { width: integer, height: integer|nil }
 ---@param issue_groups IssuesGroup[]
----@return string[], table<integer, table>, table[]
+---@return string[], table<integer, table>, table[], table|nil
 local function render_issue_table(opts, issue_groups)
 	local display = providers.get(state.provider and state.provider.id)
 	local columns = display.columns(has_milestone_group(issue_groups))
@@ -175,6 +175,8 @@ local function render_issue_table(opts, issue_groups)
 		columns = columns,
 		rows = rows,
 		header_separator = true,
+		max_rows = opts.height,
+		page = state.page,
 		tree = {
 			column_key = "icon",
 			children_key = "children",
@@ -247,9 +249,9 @@ local function compact_rows(issues)
 	return rows, columns
 end
 
----@param opts { width: integer }
+---@param opts { width: integer, height: integer|nil }
 ---@param issues Issue[]
----@return string[], table<integer, table>, table[]
+---@return string[], table<integer, table>, table[], table|nil
 local function render_compact_table(opts, issues)
 	local rows, columns = compact_rows(issues)
 	if state.is_loading then
@@ -266,17 +268,20 @@ local function render_compact_table(opts, issues)
 		columns = columns,
 		rows = rows,
 		header_separator = true,
+		max_rows = opts.height,
+		page = state.page,
 		cell_hl = cell_hl,
 	})
 end
 
----@param opts { width: integer }
----@return string[], table[], table<integer, table>
+---@param opts { width: integer, height: integer|nil }
+---@return string[], table[], table<integer, table>, table|nil
 function M.render(opts)
 	local active = state.active_view
 
 	local lines, spans = {}, {}
 	local line_map = {}
+	local page_info = nil
 
 	if state.error then
 		local err_text = "Error: " .. state.error
@@ -301,12 +306,13 @@ function M.render(opts)
 		if state.is_loading ~= true and not has_rows then
 			table.insert(lines, "No issues found.")
 		else
-			local tbl_lines, tbl_spans, tbl_map
+			local tbl_lines, tbl_spans, tbl_map, tbl_page_info
 			if layout == "compact" then
-				tbl_lines, tbl_map, tbl_spans = render_compact_table(opts, issues)
+				tbl_lines, tbl_map, tbl_spans, tbl_page_info = render_compact_table(opts, issues)
 			else
-				tbl_lines, tbl_map, tbl_spans = render_issue_table(opts, issue_groups)
+				tbl_lines, tbl_map, tbl_spans, tbl_page_info = render_issue_table(opts, issue_groups)
 			end
+			page_info = tbl_page_info
 
 			local table_base = #lines
 			utils.append_block(lines, spans, { lines = tbl_lines, highlights = tbl_spans })
@@ -317,7 +323,10 @@ function M.render(opts)
 		end
 	end
 
-	return lines, spans, line_map
+	state.page = page_info and page_info.page or 1
+	state.total_pages = page_info and page_info.total_pages or 1
+
+	return lines, spans, line_map, page_info
 end
 
 return M

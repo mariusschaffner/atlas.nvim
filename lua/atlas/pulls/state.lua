@@ -12,6 +12,8 @@
 ---@field reload_spinner_frame string
 ---@field status_filters table<string, boolean>
 ---@field filter_text string Filter bar text mirroring `active_view` (e.g. "assignee:me").
+---@field page integer 1-based current page of the dashboard table.
+---@field total_pages integer Page count as of the last render; kept in sync so next_page/previous_page can clamp without re-rendering first.
 local M = {
 	active_view = nil,
 	current_view = nil,
@@ -26,6 +28,8 @@ local M = {
 	reload_spinner_frame = "⠋",
 	status_filters = { OPEN = true, MERGED = false, DECLINED = false },
 	filter_text = "",
+	page = 1,
+	total_pages = 1,
 }
 
 ---@param repo_id string

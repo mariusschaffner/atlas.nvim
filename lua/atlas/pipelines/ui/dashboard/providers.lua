@@ -25,17 +25,17 @@ function M.columns()
 	return {
 		{ key = "icon", name = "", can_grow = false, align = "center" },
 		{ key = "id", name = "Pipeline", can_grow = false },
-		{ key = "branch", name = string.format("%s Branch", icons.pulls("branch")), max_width = 24, can_grow = false },
+		{ key = "branch", name = "Branch", max_width = 24, can_grow = false },
 		{ key = "commit", name = "Commit", can_grow = false },
 		{ key = "stages", name = "Stages" },
 		{
 			key = "creator",
-			name = string.format("%s Creator", icons.general("user")),
+			name = "Creator",
 			max_width = 20,
 			can_grow = false,
 			align = "right",
 		},
-		{ key = "status", name = " Status", can_grow = false },
+		{ key = "status", name = "Status", can_grow = false },
 	}
 end
 

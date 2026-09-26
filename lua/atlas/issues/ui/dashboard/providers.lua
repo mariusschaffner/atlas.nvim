@@ -35,13 +35,13 @@ local function columns(has_milestone)
 		{ key = "name", name = "Issue" },
 		{
 			key = "assignee",
-			name = string.format("%s Assignee", icons.general("user")),
+			name = "Assignee",
 			max_width = 22,
 			can_grow = false,
 		},
 		{
 			key = "labels",
-			name = string.format("%s Labels", LABELS_ICON),
+			name = "Labels",
 			max_width = 22,
 			can_grow = false,
 		},
@@ -49,7 +49,7 @@ local function columns(has_milestone)
 	if has_milestone then
 		table.insert(cols, { key = "children_count", name = "Child Items", can_grow = false, align = "center" })
 	end
-	table.insert(cols, { key = "status", name = " Status", can_grow = false })
+	table.insert(cols, { key = "status", name = "Status", can_grow = false })
 	return cols
 end
 

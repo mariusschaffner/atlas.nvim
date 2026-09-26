@@ -64,6 +64,36 @@ function M.register(buf)
 
 	utils.insert_if(
 		items,
+		resolver.item("ui.next_page", {
+			desc = "Next page",
+			hint_desc = "Page+",
+			index = 20,
+			callback = function()
+				local dashboard = domain_dashboard()
+				if dashboard and dashboard.next_page then
+					dashboard.next_page()
+				end
+			end,
+		})
+	)
+
+	utils.insert_if(
+		items,
+		resolver.item("ui.previous_page", {
+			desc = "Previous page",
+			hint_desc = "Page-",
+			index = 20,
+			callback = function()
+				local dashboard = domain_dashboard()
+				if dashboard and dashboard.previous_page then
+					dashboard.previous_page()
+				end
+			end,
+		})
+	)
+
+	utils.insert_if(
+		items,
 		resolver.item("ui.help", {
 			desc = "Toggle this help popup",
 			hint = false,
@@ -152,6 +182,8 @@ function M.remove(buf)
 	utils.insert_if(items, resolver.remove_item("ui.previous_item"))
 	utils.insert_if(items, resolver.remove_item("ui.first_item"))
 	utils.insert_if(items, resolver.remove_item("ui.last_item"))
+	utils.insert_if(items, resolver.remove_item("ui.next_page"))
+	utils.insert_if(items, resolver.remove_item("ui.previous_page"))
 	utils.insert_if(items, resolver.remove_item("ui.help"))
 	utils.insert_if(items, resolver.remove_item("ui.close"))
 	utils.insert_if(items, resolver.remove_item("ui.inspect"))

@@ -43,6 +43,12 @@ end
 
 ---@param pr PullRequest
 ---@return string
+local function pr_status_value(pr)
+	return string.format(" %s ", presentation.pr_state_label(pr.state))
+end
+
+---@param pr PullRequest
+---@return string
 local function displayed_pr_icon(pr)
 	if state.is_pr_reloading(pr.repo_full_name, pr.id) then
 		return state.reload_spinner_frame
@@ -110,6 +116,12 @@ local function cell_hl(row, col, ctx, display)
 			},
 		}
 	end
+	if col.key == "status" then
+		local empty = row.kind ~= "pr"
+		local pr = row._item and row._item.pr or nil
+		local hl = empty and "" or presentation.pr_state_hl(pr and pr.state)
+		return { { start_col = 0, end_col = #ctx.padded, hl_group = hl } }
+	end
 end
 
 ---@param row table
@@ -162,6 +174,7 @@ local function compact_rows(pulls, display)
 			conversation = tostring(pr.comments_count or 0),
 			reviewer = string.format("%s %s", REVIEW_ICON, utils.shorten_name(reviewer, 20)),
 			reviewer_hl = reviewer_hl,
+			status = pr_status_value(pr),
 			_item = { kind = "pr", id = pr.id, repo = repo, pr = pr },
 		}
 		add_values(row, display.values(pr))
@@ -220,6 +233,7 @@ local function list_rows(pulls, layout, display, row_spacer)
 				conversation = tostring(pr.comments_count or 0),
 				reviewer = string.format("%s %s", REVIEW_ICON, utils.shorten_name(reviewer, 20)),
 				reviewer_hl = reviewer_hl,
+				status = pr_status_value(pr),
 				_item = { kind = "pr", id = pr.id, repo = repo, pr = pr },
 			}
 			add_values(row, display.values(pr))
@@ -236,11 +250,11 @@ end
 ---@param layout "compact"|"grouped"|"plain"
 ---@param width integer
 ---@param display table
----@param opts { header_separator: boolean|nil, row_spacer: boolean|nil }|nil
----@return string[], table[], table<integer, table>
+---@param opts { header_separator: boolean|nil, row_spacer: boolean|nil, max_rows: integer|nil, page: integer|nil }|nil
+---@return string[], table[], table<integer, table>, table|nil
 function M.render_table(pulls, layout, width, display, opts)
 	local compact = layout ~= "grouped" and layout ~= "plain"
-	local lines, line_map, spans = table_tree.render({
+	local lines, line_map, spans, page_info = table_tree.render({
 		width = width,
 		margin = 1,
 		columns = compact and display.columns.compact or display.columns.list,
@@ -249,6 +263,8 @@ function M.render_table(pulls, layout, width, display, opts)
 			return cell_hl(row, col, ctx, display)
 		end,
 		header_separator = opts and opts.header_separator or nil,
+		max_rows = opts and opts.max_rows or nil,
+		page = opts and opts.page or nil,
 	})
 	for lnum, item in pairs(line_map) do
 		if item.kind == "pr" then
@@ -264,7 +280,7 @@ function M.render_table(pulls, layout, width, display, opts)
 			end
 		end
 	end
-	return lines, spans, line_map
+	return lines, spans, line_map, page_info
 end
 
 ---@param lines string[]
@@ -281,12 +297,13 @@ local function append_centered_loading(lines, text, width, height)
 end
 
 ---@param opts { width: integer, height: integer }
----@return string[], table[], table<integer, table>
+---@return string[], table[], table<integer, table>, table|nil
 function M.render(opts)
 	local lines, spans, line_map = {}, {}, {}
 	local pulls = state.pulls
 	local display = providers.get(state.provider and state.provider.id)
 	local loading = string.format("%s Loading...", state.reload_spinner_frame)
+	local page_info = nil
 
 	if state.error then
 		local text = "Error: " .. tostring(state.error):gsub("[\r\n]+", " | ")
@@ -298,15 +315,23 @@ function M.render(opts)
 		append_centered_loading(lines, loading, opts.width, opts.height)
 	else
 		local layout = state.active_view and state.active_view.layout or "compact"
-		local body_lines, body_spans, body_map =
-			M.render_table(pulls, layout, opts.width, display, { header_separator = true })
+		local body_lines, body_spans, body_map, tbl_page_info = M.render_table(pulls, layout, opts.width, display, {
+			header_separator = true,
+			max_rows = opts.height,
+			page = state.page,
+		})
+		page_info = tbl_page_info
 		local base = #lines
 		utils.append_block(lines, spans, { lines = body_lines, highlights = body_spans })
 		for lnum, item in pairs(body_map) do
 			line_map[base + lnum] = item
 		end
 	end
-	return lines, spans, line_map
+
+	state.page = page_info and page_info.page or 1
+	state.total_pages = page_info and page_info.total_pages or 1
+
+	return lines, spans, line_map, page_info
 end
 
 return M

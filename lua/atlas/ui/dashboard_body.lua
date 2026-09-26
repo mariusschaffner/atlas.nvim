@@ -58,10 +58,20 @@ local function table_box_hint(buf)
 	return table.concat(parts, " - ")
 end
 
+---@param page_info { page: integer, total_pages: integer }|nil
+---@return string
+local function page_indicator(page_info)
+	if page_info == nil then
+		return ""
+	end
+	return string.format("(%d/%d)", page_info.page, page_info.total_pages)
+end
+
 --- Renders the filter bar plus a domain-specific body into the dashboard
 --- buffer, the body wrapped in its own bordered box (title "Table", grey
---- non-editable chrome, keybinding hints embedded in the bottom border).
----@param render_body fun(width: integer, height: integer, bar_lines: integer): string[], table[], table<integer, table>
+--- non-editable chrome, keybinding hints -- prefixed with a "(page/total)"
+--- indicator when the body is paginated -- embedded in the bottom border).
+---@param render_body fun(width: integer, height: integer, bar_lines: integer): string[], table[], table<integer, table>, { page: integer, total_pages: integer }|nil
 function M.render(render_body)
 	local win = dashboard_host.win()
 	local buf = dashboard_host.buf()
@@ -80,7 +90,7 @@ function M.render(render_body)
 	-- Reserve the box's first interior row for a blank spacer above the
 	-- table header, so the domain renderer's own row budget stays accurate.
 	local table_budget_height = math.max(0, available_body_height - 1)
-	local body_lines, body_spans, body_line_map = render_body(interior_width, table_budget_height, #bar_lines)
+	local body_lines, body_spans, body_line_map, page_info = render_body(interior_width, table_budget_height, #bar_lines)
 
 	local content_lines = { "" }
 	vim.list_extend(content_lines, body_lines)
@@ -95,6 +105,15 @@ function M.render(render_body)
 		table.insert(content_lines, "")
 	end
 
+	local indicator = page_indicator(page_info)
+	local hints = table_box_hint(buf)
+	local bottom_hint = indicator
+	if indicator ~= "" and hints ~= "" then
+		bottom_hint = indicator .. "  " .. hints
+	elseif hints ~= "" then
+		bottom_hint = hints
+	end
+
 	local box_lines, box_spans = bordered_box.render({
 		width = width,
 		box_width = width,
@@ -102,7 +121,7 @@ function M.render(render_body)
 		content_lines = content_lines,
 		content_highlights = content_highlights,
 		border_hl = "AtlasBorder",
-		bottom_hint = table_box_hint(buf),
+		bottom_hint = bottom_hint,
 	})
 
 	local lines = vim.list_extend({}, bar_lines)

@@ -324,6 +324,7 @@ end
 ---@param view AtlasPullsViewConfig|nil
 function M.switch_view(view)
 	state.active_view = view
+	state.page = 1
 	state.filter_text =
 		require("atlas.ui.filter_query").serialize(view, { domain = "pulls", status_filters = state.status_filters })
 	load_view(view, false, function()

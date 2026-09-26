@@ -8,6 +8,8 @@
 ---@field provider_views PipelinesViewConfig[]
 ---@field views PipelinesViewConfig[]
 ---@field filter_text string Filter bar text mirroring `active_view` (e.g. "mr:123").
+---@field page integer 1-based current page of the dashboard table.
+---@field total_pages integer Page count as of the last render; kept in sync so next_page/previous_page can clamp without re-rendering first.
 local M = {
 	active_view = nil,
 	current_view = nil,
@@ -18,6 +20,8 @@ local M = {
 	provider_views = {},
 	views = {},
 	filter_text = "",
+	page = 1,
+	total_pages = 1,
 }
 
 ---@param pipelines Pipeline[]

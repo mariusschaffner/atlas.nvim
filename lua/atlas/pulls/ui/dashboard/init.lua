@@ -13,6 +13,28 @@ function M.render()
 	end)
 end
 
+function M.next_page()
+	local state = require("atlas.pulls.state")
+	local page = math.min(state.total_pages or 1, (state.page or 1) + 1)
+	if page == state.page then
+		return
+	end
+	state.page = page
+	M.render()
+	require("atlas.ui.navigation").focus_first_item()
+end
+
+function M.previous_page()
+	local state = require("atlas.pulls.state")
+	local page = math.max(1, (state.page or 1) - 1)
+	if page == state.page then
+		return
+	end
+	state.page = page
+	M.render()
+	require("atlas.ui.navigation").focus_first_item()
+end
+
 ---@param pr PullRequest
 local function open_detail(pr)
 	local state = require("atlas.pulls.state")

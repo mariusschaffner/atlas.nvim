@@ -22,8 +22,8 @@ local function cell_hl(row, col, ctx)
 	return providers.highlights(row, col, ctx)
 end
 
----@param opts { width: integer }
----@return string[], table[], table<integer, table>
+---@param opts { width: integer, height: integer|nil }
+---@return string[], table[], table<integer, table>, table|nil
 function M.render(opts)
 	local lines, spans = {}, {}
 	local line_map = {}
@@ -34,12 +34,14 @@ function M.render(opts)
 			lines = { err_text },
 			highlights = { { line = 0, start_col = 0, end_col = #err_text, hl_group = "AtlasLogError" } },
 		})
+		state.total_pages = 1
 		return lines, spans, line_map
 	end
 
 	local pipelines = state.pipelines
 	if state.is_loading ~= true and #pipelines == 0 then
 		table.insert(lines, "No pipelines found.")
+		state.total_pages = 1
 		return lines, spans, line_map
 	end
 
@@ -51,12 +53,14 @@ function M.render(opts)
 		table.insert(rows, { id = "", branch = "", commit = "", creator = "", stages = "", status = "Loading..." })
 	end
 
-	local tbl_lines, tbl_map, tbl_spans = table_tree.render({
+	local tbl_lines, tbl_map, tbl_spans, page_info = table_tree.render({
 		width = opts.width,
 		margin = 1,
 		columns = providers.columns(),
 		rows = rows,
 		header_separator = true,
+		max_rows = opts.height,
+		page = state.page,
 		cell_hl = cell_hl,
 	})
 
@@ -66,7 +70,10 @@ function M.render(opts)
 		line_map[table_base + lnum] = node
 	end
 
-	return lines, spans, line_map
+	state.page = page_info and page_info.page or 1
+	state.total_pages = page_info and page_info.total_pages or 1
+
+	return lines, spans, line_map, page_info
 end
 
 return M

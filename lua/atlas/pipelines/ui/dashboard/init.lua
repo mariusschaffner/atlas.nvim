@@ -5,9 +5,31 @@ local dashboard_body = require("atlas.ui.dashboard_body")
 local statusline = require("atlas.ui.statusline")
 
 function M.render()
-	dashboard_body.render(function(width)
-		return require("atlas.pipelines.ui.dashboard.renderer").render({ width = width })
+	dashboard_body.render(function(width, height)
+		return require("atlas.pipelines.ui.dashboard.renderer").render({ width = width, height = height })
 	end)
+end
+
+function M.next_page()
+	local state = require("atlas.pipelines.state")
+	local page = math.min(state.total_pages or 1, (state.page or 1) + 1)
+	if page == state.page then
+		return
+	end
+	state.page = page
+	M.render()
+	require("atlas.ui.navigation").focus_first_item()
+end
+
+function M.previous_page()
+	local state = require("atlas.pipelines.state")
+	local page = math.max(1, (state.page or 1) - 1)
+	if page == state.page then
+		return
+	end
+	state.page = page
+	M.render()
+	require("atlas.ui.navigation").focus_first_item()
 end
 
 ---@param pipeline Pipeline

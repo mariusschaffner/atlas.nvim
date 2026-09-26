@@ -5,6 +5,8 @@ local M = {}
 ---@field previous_item? AtlasKeymapValue
 ---@field first_item? AtlasKeymapValue
 ---@field last_item? AtlasKeymapValue
+---@field next_page? AtlasKeymapValue
+---@field previous_page? AtlasKeymapValue
 ---@field select? AtlasKeymapValue
 ---@field submit? AtlasKeymapValue
 ---@field help? AtlasKeymapValue
@@ -133,6 +135,8 @@ local M = {}
 ---| "ui.previous_item"
 ---| "ui.first_item"
 ---| "ui.last_item"
+---| "ui.next_page"
+---| "ui.previous_page"
 ---| "ui.select"
 ---| "ui.submit"
 ---| "ui.help"

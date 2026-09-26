@@ -274,6 +274,11 @@ local function compute_widths(columns, rows, available_width, gap_after, tree, f
 	end
 end
 
+---@class TableTreePageInfo
+---@field page integer 1-based, clamped to [1, total_pages].
+---@field total_pages integer
+---@field total_rows integer Row count before slicing to the current page.
+
 ---@class TableTreeRenderOpts
 ---@field columns table[]
 ---@field rows table[]
@@ -286,11 +291,14 @@ end
 ---@field cell_hl? fun(row:table, col:table, ctx:{text:string, padded:string, width:integer}):string|table[]|nil
 ---@field align_title? boolean If true and header_align is nil, header uses column align.
 ---@field header_separator? boolean Replace the blank line below the header with a dimmed full-width rule.
+---@field max_rows? integer When set, paginates the (flattened) row list to at most this many rows and returns page_info. Column widths are still computed from the full row set, so they stay stable across pages.
+---@field page? integer 1-based page to render when max_rows is set (default 1); clamped to the valid range.
 
 ---@param opts TableTreeRenderOpts
 ---@return string[] lines
 ---@return table<integer, table> line_map
 ---@return table[] spans
+---@return TableTreePageInfo|nil page_info Present only when opts.max_rows is set.
 function M.render(opts)
 	local columns = vim.deepcopy(opts.columns or {})
 	local tree = resolve_tree(opts.tree)
@@ -326,6 +334,26 @@ function M.render(opts)
 	end
 
 	compute_widths(columns, rows, math.max(width - (margin * 2), 1), gap_after, tree, fill)
+
+	-- Pagination slices the already-flattened row list. Widths above are
+	-- computed from the full set first so columns don't jitter between pages.
+	local page_info = nil
+	if opts.max_rows ~= nil then
+		local total_rows = #rows
+		local page_size = math.max(1, opts.max_rows)
+		local total_pages = math.max(1, math.ceil(total_rows / page_size))
+		local page = math.max(1, math.min(opts.page or 1, total_pages))
+		if total_rows > page_size then
+			local start_idx = (page - 1) * page_size + 1
+			local end_idx = math.min(total_rows, start_idx + page_size - 1)
+			local sliced = {}
+			for i = start_idx, end_idx do
+				table.insert(sliced, rows[i])
+			end
+			rows = sliced
+		end
+		page_info = { page = page, total_pages = total_pages, total_rows = total_rows }
+	end
 
 	local lines = {}
 	local line_map = {}
@@ -455,7 +483,7 @@ function M.render(opts)
 		end
 	end
 
-	return lines, line_map, spans
+	return lines, line_map, spans, page_info
 end
 
 return M

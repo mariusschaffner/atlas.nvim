@@ -2,7 +2,7 @@ local M = {}
 
 local icons = require("atlas.ui.shared.icons")
 
-local function columns(conversation, before_reviewer, after_reviewer)
+local function columns(before_reviewer, after_reviewer)
 	local function build(title_key, compact)
 		local result = {}
 		if compact then
@@ -20,7 +20,7 @@ local function columns(conversation, before_reviewer, after_reviewer)
 		)
 		table.insert(result, {
 			key = "conversation",
-			name = string.format("%s Comments", conversation),
+			name = "Comments",
 			min_width = 2,
 			can_grow = false,
 			header_hl = "AtlasColumnHeader",
@@ -28,12 +28,18 @@ local function columns(conversation, before_reviewer, after_reviewer)
 		vim.list_extend(result, before_reviewer)
 		table.insert(result, {
 			key = "reviewer",
-			name = string.format("%s Reviewer", icons.pulls("review")),
+			name = "Reviewer",
 			min_width = 3,
 			can_grow = false,
 			header_hl = "AtlasColumnHeader",
 		})
 		vim.list_extend(result, after_reviewer)
+		table.insert(result, {
+			key = "status",
+			name = "Status",
+			can_grow = false,
+			header_hl = "AtlasColumnHeader",
+		})
 		return result
 	end
 
@@ -73,7 +79,7 @@ local function gitlab()
 
 	local mergeable_column = {
 		key = "mergeable",
-		name = string.format("%s Can Merge", check_icon),
+		name = "Can Merge",
 		min_width = 1,
 		can_grow = false,
 		header_hl = "AtlasColumnHeader",
@@ -81,7 +87,7 @@ local function gitlab()
 
 	return {
 		reference = "!",
-		columns = columns(icons.general("comment"), { mergeable_column }, {}),
+		columns = columns({ mergeable_column }, {}),
 		values = function(pr)
 			---@cast pr GitLabPullRequest
 			local status = tostring(pr.detailed_merge_status or pr.merge_status or ""):lower()
@@ -109,7 +115,7 @@ end
 local function default()
 	return {
 		reference = "#",
-		columns = columns(icons.general("conversation"), {}, {}),
+		columns = columns({}, {}),
 		values = function()
 			return {}
 		end,

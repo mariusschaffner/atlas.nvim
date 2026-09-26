@@ -62,6 +62,25 @@ function M.pr_state_hl(pr_state)
 	return "AtlasTextMuted"
 end
 
+---@param pr_state string|nil
+---@return string
+function M.pr_state_label(pr_state)
+	local lower = tostring(pr_state or ""):lower()
+	if lower == "open" then
+		return "Open"
+	end
+	if lower == "merged" then
+		return "Merged"
+	end
+	if lower == "declined" then
+		return "Declined"
+	end
+	if lower == "draft" then
+		return "Draft"
+	end
+	return pr_state and tostring(pr_state) or ""
+end
+
 --- Same as pr_state_hl but foreground-only, no chip background fill — used
 --- for the title field's border color rather than as a standalone pill.
 --- Merged is red here (same as a closed issue), not the blue used for the
