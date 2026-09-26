@@ -101,6 +101,9 @@
 ---@field custom_actions AtlasIssuesCustomAction[]|nil
 ---@field gitlab AtlasGitLabIssuesConfig|nil
 
+---@class AtlasPipelinesConfig
+---@field gitlab AtlasGitLabPipelinesConfig|nil
+
 -- Config
 
 ---@class AtlasUIConfig
@@ -113,6 +116,7 @@
 ---@field providers AtlasProvidersConfig|nil
 ---@field pulls AtlasPullsConfig|nil
 ---@field issues AtlasIssuesConfig|nil
+---@field pipelines AtlasPipelinesConfig|nil
 ---@field keymaps AtlasKeymapsConfig|nil  -- see core/keymaps.lua for type
 
 local M = {}
@@ -166,6 +170,7 @@ M.options = {
 		},
 	},
 	issues = nil,
+	pipelines = nil,
 	keymaps = {
 		ui = {
 			next_item = "j",
@@ -295,7 +300,7 @@ function M.provider_options(id)
 end
 
 ---@param id AtlasProviderId
----@param domain "pulls"|"issues"
+---@param domain AtlasDomain
 ---@return table|nil
 function M.domain_options(id, domain)
 	local section = type(M.options[domain]) == "table" and M.options[domain] or nil

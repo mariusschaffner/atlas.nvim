@@ -16,6 +16,7 @@ local keymaps = require("atlas.core.keymaps")
 local STATE_MODULES = {
 	issues = "atlas.issues.state",
 	pulls = "atlas.pulls.state",
+	pipelines = "atlas.pipelines.state",
 }
 
 --- Notification bell + unread count, and the "g? Help" hint, right-aligned

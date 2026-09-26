@@ -5,7 +5,7 @@ local events = require("atlas.core.events")
 local statusline = require("atlas.ui.statusline")
 local utils = require("atlas.ui.shared.utils")
 
-local DOMAIN_ORDER = { "issues", "pulls" }
+local DOMAIN_ORDER = { "issues", "pulls", "pipelines" }
 
 ---@class AtlasDashboardState
 ---@field win integer|nil
@@ -378,7 +378,8 @@ function M.apply_filter_text(text)
 	end
 	local filter_query = require("atlas.ui.filter_query")
 	local parsed = filter_query.parse(text, { domain = state.domain })
-	local target = (parsed.view == "issues" or parsed.view == "pulls") and parsed.view or state.domain
+	local target = (parsed.view == "issues" or parsed.view == "pulls" or parsed.view == "pipelines") and parsed.view
+		or state.domain
 
 	if target ~= state.domain then
 		open_domain(target)

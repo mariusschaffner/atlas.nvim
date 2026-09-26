@@ -53,17 +53,19 @@ local KEY_ALIASES = {
 	scope = "scope",
 	state = "state",
 	view = "view",
+	mr = "merge_request",
+	merge_request = "merge_request",
 }
 
 local PULLS_STATUS_VALUES = { OPEN = true, MERGED = true, DECLINED = true }
 
 ---@class AtlasFilterQueryParseResult
----@field view "issues"|"pulls"|nil
+---@field view "issues"|"pulls"|"pipelines"|nil
 ---@field query table
 ---@field status_filters table<string, boolean>|nil
 
 ---@param text string|nil
----@param opts { domain: "pulls"|"issues" }
+---@param opts { domain: AtlasDomain }
 ---@return AtlasFilterQueryParseResult
 function M.parse(text, opts)
 	opts = opts or {}
@@ -117,9 +119,11 @@ function M.parse(text, opts)
 				end
 			elseif canonical == "view" then
 				local candidate = value:lower()
-				if candidate == "issues" or candidate == "pulls" then
+				if candidate == "issues" or candidate == "pulls" or candidate == "pipelines" then
 					view_token = candidate
 				end
+			elseif canonical == "merge_request" and opts.domain == "pipelines" then
+				view.merge_request_iid = tonumber(value)
 			elseif canonical == "scope" then
 				view.scope = value:lower()
 			elseif canonical == "milestone" then
@@ -158,15 +162,19 @@ end
 local PULLS_STATUS_ORDER = { "OPEN", "MERGED", "DECLINED" }
 
 ---@param view table|nil
----@param opts { domain: "pulls"|"issues", status_filters?: table<string, boolean> }
+---@param opts { domain: AtlasDomain, status_filters?: table<string, boolean> }
 ---@return string
 function M.serialize(view, opts)
 	opts = opts or {}
 	view = view or {}
 	local parts = {}
 
-	if opts.domain == "issues" or opts.domain == "pulls" then
+	if opts.domain == "issues" or opts.domain == "pulls" or opts.domain == "pipelines" then
 		table.insert(parts, token("view", opts.domain))
+	end
+
+	if opts.domain == "pipelines" and view.merge_request_iid ~= nil then
+		table.insert(parts, token("mr", view.merge_request_iid))
 	end
 
 	if view.scope == "assigned_to_me" then

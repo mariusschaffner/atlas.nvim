@@ -10,10 +10,10 @@
 -- project_path.
 local M = {}
 
-local FILTER_KEYS = { "view", "scope", "state", "label", "assignee", "author", "milestone" }
+local FILTER_KEYS = { "view", "scope", "state", "label", "assignee", "author", "milestone", "mr" }
 
 local STATIC_VALUES = {
-	view = { "issues", "pulls" },
+	view = { "issues", "pulls", "pipelines" },
 	scope = { "all", "assigned_to_me", "created_by_me" },
 }
 
@@ -24,7 +24,7 @@ local STATE_VALUES = {
 
 local ME_KEYS = { assignee = true, author = true }
 
----@param domain "issues"|"pulls"
+---@param domain AtlasDomain
 ---@return AtlasFieldCompletionProvider
 function M.for_domain(domain)
 	return {

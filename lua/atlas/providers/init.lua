@@ -4,8 +4,9 @@ local url = require("atlas.providers.url")
 
 ---@alias AtlasPullsProviderId "gitlab"
 ---@alias AtlasIssuesProviderId "gitlab"
----@alias AtlasProviderId AtlasPullsProviderId|AtlasIssuesProviderId
----@alias AtlasDomain "pulls"|"issues"
+---@alias AtlasPipelinesProviderId "gitlab"
+---@alias AtlasProviderId AtlasPullsProviderId|AtlasIssuesProviderId|AtlasPipelinesProviderId
+---@alias AtlasDomain "pulls"|"issues"|"pipelines"
 ---@alias AtlasEntity "pr"|"issue"|"repo"
 
 ---@class AtlasTarget
@@ -32,7 +33,7 @@ local url = require("atlas.providers.url")
 ---@field id AtlasProviderId
 ---@field name string
 ---@field resolver { resolve: fun(value: string, parsed: AtlasParsedUrl|nil): AtlasTarget|nil, string|nil }
----@field domains table<"pulls"|"issues", AtlasProviderDomain>
+---@field domains table<AtlasDomain, AtlasProviderDomain>
 
 ---@type AtlasProvider[]
 local all = {}
@@ -43,7 +44,7 @@ local function add(provider)
 	table.insert(all, provider)
 end
 
----@param domain "pulls"|"issues"|nil
+---@param domain AtlasDomain|nil
 ---@return AtlasProvider[]
 function M.list(domain)
 	local result = {}
@@ -56,7 +57,7 @@ function M.list(domain)
 end
 
 ---@param id AtlasProviderId
----@param domain "pulls"|"issues"
+---@param domain AtlasDomain
 ---@return AtlasProviderDomain|nil
 function M.domain(id, domain)
 	local provider = M[id]
@@ -64,8 +65,8 @@ function M.domain(id, domain)
 end
 
 ---@param id AtlasProviderId
----@param domain "pulls"|"issues"
----@return PullsProvider|IssuesProvider|nil
+---@param domain AtlasDomain
+---@return PullsProvider|IssuesProvider|PipelinesProvider|nil
 function M.load(id, domain)
 	local provider = M[id]
 	local provider_domain = provider and provider.domains[domain] or nil
@@ -101,7 +102,7 @@ function M.resolve(value)
 	return nil, resolve_err or (parsed and "Unsupported Atlas URL") or parse_err or "Unsupported Atlas target"
 end
 
----@param domain "pulls"|"issues"
+---@param domain AtlasDomain
 ---@return AtlasProvider[]
 function M.configured(domain)
 	local result = {}
@@ -125,6 +126,10 @@ add({
 		issues = {
 			module = "atlas.issues.providers.gitlab",
 			icon = { icon = "", hl_group = "AtlasGLIssuesTheme" },
+		},
+		pipelines = {
+			module = "atlas.pipelines.providers.gitlab",
+			icon = { icon = "", hl_group = "AtlasGLPipelineTheme" },
 		},
 	},
 })

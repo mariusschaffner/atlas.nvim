@@ -63,7 +63,7 @@ local function check_provider_views(id)
 		return
 	end
 
-	for _, domain in ipairs({ "pulls", "issues" }) do
+	for _, domain in ipairs({ "pulls", "issues", "pipelines" }) do
 		if provider.domains[domain] then
 			local options = config.domain_options(id, domain) or {}
 			local views = options.views or {}

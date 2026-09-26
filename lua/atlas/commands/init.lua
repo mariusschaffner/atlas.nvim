@@ -37,7 +37,7 @@ local function find_command(name)
 	end
 end
 
----@param domain "pulls"|"issues"
+---@param domain AtlasDomain
 ---@param arglead string
 ---@return string[]
 local function complete_providers(domain, arglead)
@@ -95,6 +95,17 @@ M.register({
 	end,
 	run = function(args)
 		require("atlas").open("issues", args[1] and args[1]:lower() or nil)
+	end,
+})
+
+M.register({
+	name = "pipelines",
+	description = "Open pipelines",
+	complete = function(arglead)
+		return complete_providers("pipelines", arglead)
+	end,
+	run = function(args)
+		require("atlas").open("pipelines", args[1] and args[1]:lower() or nil)
 	end,
 })
 
@@ -231,13 +242,14 @@ local function pick_command()
 		})
 	end
 
+	local DOMAIN_LABELS = { pulls = "pull requests", issues = "issues", pipelines = "pipelines" }
+
 	for _, command in ipairs(M.commands) do
-		if command.name == "pulls" or command.name == "issues" then
+		if command.name == "pulls" or command.name == "issues" or command.name == "pipelines" then
 			local domain = command.name
-			---@cast domain "pulls"|"issues"
+			---@cast domain AtlasDomain
 			for _, provider in ipairs(providers.configured(domain)) do
-				local label = domain == "pulls" and "pull requests" or "issues"
-				add(command, { provider.id }, string.format("Open %s %s", provider.name, label))
+				add(command, { provider.id }, string.format("Open %s %s", provider.name, DOMAIN_LABELS[domain]))
 			end
 		elseif command.name == "search" then
 			for _, provider_id in ipairs(assert(command.complete)("")) do

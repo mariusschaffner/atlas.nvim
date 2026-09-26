@@ -18,7 +18,7 @@ local function is_selectable(node)
 	if type(node) ~= "table" then
 		return false
 	end
-	return node.kind == "pr" or node.kind == "issue" or node.kind == "milestone"
+	return node.kind == "pr" or node.kind == "issue" or node.kind == "milestone" or node.kind == "pipeline"
 end
 
 function M.current_item()

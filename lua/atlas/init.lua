@@ -27,7 +27,7 @@ local function bootstrap_common()
 	)
 end
 
----@param domain "pulls"|"issues"
+---@param domain AtlasDomain
 ---@return string[]
 local function configured_provider_ids(domain)
 	return vim.tbl_map(function(provider)
@@ -35,9 +35,9 @@ local function configured_provider_ids(domain)
 	end, providers.configured(domain))
 end
 
----@param domain "pulls"|"issues"
+---@param domain AtlasDomain
 ---@param id string
----@return PullsProvider|IssuesProvider|nil
+---@return PullsProvider|IssuesProvider|PipelinesProvider|nil
 local function load_provider(domain, id)
 	if providers.domain(id, domain) == nil then
 		notify.error(string.format("Unknown %s provider: %s", domain, id), { vim_notify = true })
@@ -50,7 +50,7 @@ local function load_provider(domain, id)
 	return providers.load(id, domain)
 end
 
----@param domain "pulls"|"issues"
+---@param domain AtlasDomain
 ---@param id string
 ---@param opts? { initial_view?: table }
 local function open_with_provider(domain, id, opts)
@@ -61,7 +61,7 @@ local function open_with_provider(domain, id, opts)
 
 	local already_initialized = require("atlas.ui.dashboard").open(domain, provider.id)
 	bootstrap_common()
-	local module = domain == "pulls" and require("atlas.pulls") or require("atlas.issues")
+	local module = require("atlas." .. domain)
 	if already_initialized then
 		module.activate(provider)
 	else
@@ -69,7 +69,7 @@ local function open_with_provider(domain, id, opts)
 	end
 end
 
----@param domain "pulls"|"issues"
+---@param domain AtlasDomain
 ---@param provider_id string|nil
 ---@param opts? { initial_view?: table }
 function M.open(domain, provider_id, opts)
@@ -86,8 +86,8 @@ function M.open(domain, provider_id, opts)
 		return
 	end
 
-	-- Exactly one provider (GitLab) is ever registered (see atlas.providers),
-	-- so `ids` can only ever have 0 or 1 entries here.
+	-- Exactly one provider (GitLab) is ever registered per domain (see
+	-- atlas.providers), so `ids` can only ever have 0 or 1 entries here.
 	open_with_provider(domain, ids[1], opts)
 end
 
