@@ -47,7 +47,7 @@ local function box_title(pipeline)
 	local hl = graph.state_hl(pipeline.state)
 	local id_text = string.format("#%s", tostring(pipeline.id or ""))
 	local duration_text = utils.human_duration(pipeline.duration)
-	local title = duration_text == "" and id_text or (id_text .. "  " .. duration_text)
+	local title = duration_text == "" and id_text or (id_text .. " - " .. duration_text)
 	return title, { { start_col = 0, end_col = #title, hl_group = hl } }
 end
 
@@ -67,16 +67,19 @@ local function render_header_box(pipeline, width)
 	local end_text = "End: " .. format_dt(pipeline.finished_at)
 	local branch = tostring(pipeline.ref or "")
 	local commit = tostring(pipeline.short_sha or pipeline.sha or "")
-	local branch_hl = highlights.dynamic_for(branch) or "Normal"
+	-- Branch renders as a colored-background tag/chip; commit stays plain
+	-- (dynamic) foreground text.
+	local branch_tag = branch ~= "" and string.format(" %s ", branch) or ""
+	local branch_hl = branch ~= "" and (highlights.dynamic_for_bg(branch) or "Normal") or "Normal"
 	local commit_hl = highlights.dynamic_for(commit) or "Normal"
 
-	local row1, branch_start = two_column_row(start_text, branch, interior_width)
+	local row1, branch_start = two_column_row(start_text, branch_tag, interior_width)
 	local row2, commit_start = two_column_row(end_text, commit, interior_width)
 
 	local content_lines = { row1, row2, "" }
 	local content_highlights = {
 		{ line = 0, start_col = 0, end_col = #start_text, hl_group = "AtlasTextMuted" },
-		{ line = 0, start_col = branch_start, end_col = branch_start + #branch, hl_group = branch_hl },
+		{ line = 0, start_col = branch_start, end_col = branch_start + #branch_tag, hl_group = branch_hl },
 		{ line = 1, start_col = 0, end_col = #end_text, hl_group = "AtlasTextMuted" },
 		{ line = 1, start_col = commit_start, end_col = commit_start + #commit, hl_group = commit_hl },
 	}

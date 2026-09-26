@@ -13,6 +13,7 @@
 local M = {}
 
 local bordered_box = require("atlas.ui.components.bordered_box")
+local ui_utils = require("atlas.ui.utils")
 local utils = require("atlas.ui.shared.utils")
 
 local CONNECTOR_WIDTH = 5
@@ -150,6 +151,43 @@ local function join_horizontal(blocks)
 	return lines, highlights
 end
 
+--- Horizontally centers a rendered block within `width` by prepending the
+--- same left padding to every line (so the block's own internal alignment
+--- is preserved -- only its position within the available width shifts).
+---@param lines string[]
+---@param highlights table[]
+---@param width integer
+---@return string[] lines
+---@return table[] highlights
+local function center_block(lines, highlights, width)
+	local content_width = 0
+	for _, line in ipairs(lines) do
+		content_width = math.max(content_width, ui_utils.text_width(line))
+	end
+	local pad = math.max(0, math.floor((width - content_width) / 2))
+	if pad == 0 then
+		return lines, highlights
+	end
+
+	local prefix = string.rep(" ", pad)
+	local centered_lines = {}
+	for i, line in ipairs(lines) do
+		centered_lines[i] = prefix .. line
+	end
+
+	local centered_highlights = {}
+	for _, span in ipairs(highlights) do
+		local shifted = vim.tbl_extend("force", {}, span)
+		if span.line_hl_group == nil then
+			shifted.start_col = span.start_col + pad
+			shifted.end_col = span.end_col + pad
+		end
+		table.insert(centered_highlights, shifted)
+	end
+
+	return centered_lines, centered_highlights
+end
+
 ---@param pipeline Pipeline
 ---@param width integer
 ---@return string[] lines
@@ -168,16 +206,18 @@ function M.render(pipeline, width)
 		total_width = total_width + block_width + (index < #stages and CONNECTOR_WIDTH or 0)
 	end
 
+	local lines, highlights
 	if total_width <= width then
-		return join_horizontal(blocks)
+		lines, highlights = join_horizontal(blocks)
+	else
+		lines, highlights = {}, {}
+		for _, block in ipairs(blocks) do
+			utils.append_block(lines, highlights, { lines = block.lines, highlights = block.highlights })
+			table.insert(lines, "")
+		end
 	end
 
-	local lines, highlights = {}, {}
-	for _, block in ipairs(blocks) do
-		utils.append_block(lines, highlights, { lines = block.lines, highlights = block.highlights })
-		table.insert(lines, "")
-	end
-	return lines, highlights
+	return center_block(lines, highlights, width)
 end
 
 return M

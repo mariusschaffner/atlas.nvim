@@ -77,7 +77,9 @@ end
 ---@param page_info { page: integer, total_pages: integer }|nil
 ---@return string
 local function page_indicator(page_info)
-	if page_info == nil then
+	-- A single page has nothing to page between, so hide both the indicator
+	-- and the [gp]/[gP] hint rather than show dead controls.
+	if page_info == nil or page_info.total_pages <= 1 then
 		return ""
 	end
 	local text = string.format("(%d/%d)", page_info.page, page_info.total_pages)
