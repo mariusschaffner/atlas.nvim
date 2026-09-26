@@ -155,6 +155,9 @@ end
 ---@param bufnr integer
 ---@return AtlasStatuslineSegment[]
 local function hint_segments(bufnr)
+	if not help.footer_hints_enabled(bufnr) then
+		return {}
+	end
 	local hints = help.hints(bufnr)
 	local count = #hints
 	local segments = {}

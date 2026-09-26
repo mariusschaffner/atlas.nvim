@@ -5,10 +5,10 @@ local dashboard_body = require("atlas.ui.dashboard_body")
 local statusline = require("atlas.ui.statusline")
 
 function M.render()
-	dashboard_body.render(function(width, height, tab_lines)
+	dashboard_body.render(function(width, height)
 		return require("atlas.pulls.ui.dashboard.renderer").render({
 			width = width,
-			height = height - tab_lines,
+			height = height,
 		})
 	end)
 end

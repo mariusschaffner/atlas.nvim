@@ -321,6 +321,24 @@ function M.hints(bufnr)
 	return hints
 end
 
+--- Opts a buffer's hints out of the statusline's automatic hint-line
+--- fallback (`atlas.ui.statusline`'s `hint_segments`) -- e.g. the dashboard
+--- buffer, which embeds the same hints in its table box's bottom border
+--- instead. Does not affect `M.hints`/the help popup, which still lists
+--- everything registered for the buffer.
+---@param bufnr integer
+---@param enabled boolean
+function M.set_footer_hints_enabled(bufnr, enabled)
+	ensure_state(bufnr).footer_hints_enabled = enabled
+end
+
+---@param bufnr integer
+---@return boolean
+function M.footer_hints_enabled(bufnr)
+	local bstate = state.buffers[bufnr]
+	return bstate == nil or bstate.footer_hints_enabled ~= false
+end
+
 ---@param valid_groups table[]
 ---@return table[]
 local function build_render_items(valid_groups)

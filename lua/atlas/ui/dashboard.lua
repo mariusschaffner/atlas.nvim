@@ -250,6 +250,9 @@ local function create()
 	state.buf = utils.buffer.create("Atlas", "atlas")
 	state.listed = config.options.ui.listed_buffer == true
 	vim.api.nvim_set_option_value("buflisted", state.listed, { buf = state.buf })
+	-- Hints are embedded in the table box's bottom border (dashboard_body.lua)
+	-- instead of the statusline, so suppress its hint fallback here.
+	require("atlas.ui.popups.help").set_footer_hints_enabled(state.buf, false)
 	vim.cmd("tabnew")
 	state.tab = vim.api.nvim_get_current_tabpage()
 	state.win = vim.api.nvim_get_current_win()
