@@ -259,4 +259,27 @@ function M.fetch_pipeline_details(pipeline, _opts, on_done)
 	end, { action = "Fetch pipeline details", project = path, pipeline_id = pipeline_id })
 end
 
+---@param pipeline Pipeline
+---@param job PipelineJob
+---@param _opts PipelinesFetchOpts|nil
+---@param on_done fun(log: string|nil, err: string|nil)
+---@return { cancel: fun() }|nil
+function M.fetch_job_log(pipeline, job, _opts, on_done)
+	local path = tostring(pipeline.project_path or "")
+	local job_id = tonumber(job.id)
+	if path == "" or job_id == nil then
+		vim.schedule(function()
+			on_done(nil, path == "" and "Missing project" or "Missing job ID")
+		end)
+		return nil
+	end
+
+	local endpoint = string.format("/projects/%s/jobs/%d/trace", service.url_encode(path), job_id)
+	return service.request_text("GET", endpoint, on_done, {
+		action = "Fetch pipeline job log",
+		project = path,
+		job_id = job_id,
+	})
+end
+
 return M

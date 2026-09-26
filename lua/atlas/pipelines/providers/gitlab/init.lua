@@ -22,6 +22,7 @@ local M = {
 		core = {
 			fetch_pipelines = pipelines_api.fetch_pipelines,
 			fetch_pipeline_details = pipelines_api.fetch_pipeline_details,
+			fetch_job_log = pipelines_api.fetch_job_log,
 		},
 		ui = {
 			setup = highlights.setup,

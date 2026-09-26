@@ -6,11 +6,43 @@ local notify = require("atlas.core.notify")
 local request_scope = require("atlas.core.requests")
 local state = require("atlas.pipelines.ui.detail.state")
 
-local function render()
-	renderer.render()
+-- Forward-declared: ensure_job_log's async callback needs render_if_open
+-- before its own (later) definition -- see the reassignment below.
+local render_if_open
+
+---@param pipeline Pipeline
+---@param job PipelineJob
+local function ensure_job_log(pipeline, job)
+	local id = tostring(job.id)
+	if state.log_by_job_id[id] ~= nil then
+		return
+	end
+
+	local provider = state.provider
+	local fetch = provider and provider.capabilities.core.fetch_job_log
+	if not fetch then
+		state.log_by_job_id[id] = { status = "error", text = "Job logs are not supported by this provider" }
+		return
+	end
+
+	state.log_by_job_id[id] = { status = "loading" }
+	state.log_requests.run(function(done)
+		return fetch(pipeline, job, {}, done)
+	end, function(log, err)
+		if err then
+			state.log_by_job_id[id] = { status = "error", text = "Failed to load job log: " .. tostring(err) }
+		else
+			state.log_by_job_id[id] = { status = "loaded", text = tostring(log or "") }
+		end
+		render_if_open()
+	end)
 end
 
-local function render_if_open()
+local function render()
+	renderer.render(ensure_job_log)
+end
+
+render_if_open = function()
 	if detail_ui.is_showing("pipelines") then
 		render()
 	end
@@ -70,12 +102,68 @@ function M.select(pipeline, opts)
 	end
 	opts = opts or {}
 
+	local changed = not same_pipeline(state.current_pipeline, pipeline)
 	state.requests.cancel()
 	state.requests = request_scope.new()
 	state.current_pipeline = pipeline
 	state.details_loading = false
+	if changed then
+		-- A different pipeline: default back to its first stage rather than
+		-- keep whatever stage/job index was active on the previous one.
+		state.log_requests.cancel()
+		state.log_requests = request_scope.new()
+		state.active_stage = 1
+		state.active_job_by_stage = {}
+		state.log_by_job_id = {}
+	end
 	render()
 	load_details(pipeline, opts.force_refresh == true)
+end
+
+---@param step 1|-1
+local function change_stage(step)
+	local stages = state.current_pipeline and state.current_pipeline.stages or {}
+	if #stages == 0 then
+		return
+	end
+	local index = math.max(1, math.min(#stages, state.active_stage))
+	state.active_stage = (index - 1 + step) % #stages + 1
+	render()
+	if state.win and vim.api.nvim_win_is_valid(state.win) then
+		pcall(vim.api.nvim_win_set_cursor, state.win, { 1, 0 })
+	end
+end
+
+function M.next_stage()
+	change_stage(1)
+end
+
+function M.previous_stage()
+	change_stage(-1)
+end
+
+---@param step 1|-1
+local function change_job(step)
+	local stages = state.current_pipeline and state.current_pipeline.stages or {}
+	local stage_index = math.max(1, math.min(#stages, state.active_stage))
+	local jobs = stages[stage_index] and stages[stage_index].jobs or {}
+	if #jobs == 0 then
+		return
+	end
+	local index = math.max(1, math.min(#jobs, state.active_job_index(stage_index)))
+	state.active_job_by_stage[stage_index] = (index - 1 + step) % #jobs + 1
+	render()
+	if state.win and vim.api.nvim_win_is_valid(state.win) then
+		pcall(vim.api.nvim_win_set_cursor, state.win, { 1, 0 })
+	end
+end
+
+function M.next_job()
+	change_job(1)
+end
+
+function M.previous_job()
+	change_job(-1)
 end
 
 ---@param pipeline Pipeline

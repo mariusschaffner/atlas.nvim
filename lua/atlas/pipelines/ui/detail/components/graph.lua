@@ -60,10 +60,11 @@ local function render_job_box(job, content_width)
 end
 
 ---@param stage PipelineStage
+---@param is_active boolean Whether this is the stage selected in the bottom part -- shown with the same blue border used for editable/selected fields elsewhere.
 ---@return string[] lines
 ---@return table[] highlights
 ---@return integer width
-local function render_stage_block(stage)
+local function render_stage_block(stage, is_active)
 	local content_width = stage_content_width(stage)
 
 	local content_lines, content_highlights = {}, {}
@@ -81,7 +82,7 @@ local function render_stage_block(stage)
 		width = stage_box_width,
 		box_width = stage_box_width,
 		title = tostring(stage.name or "Stage"),
-		border_hl = "AtlasTextMuted",
+		border_hl = is_active and "AtlasFieldBoxBorderEditable" or "AtlasTextMuted",
 		content_lines = content_lines,
 		content_highlights = content_highlights,
 	})
@@ -190,9 +191,10 @@ end
 
 ---@param pipeline Pipeline
 ---@param width integer
+---@param active_stage_index integer|nil 1-based; the stage currently selected in the bottom part.
 ---@return string[] lines
 ---@return table[] highlights
-function M.render(pipeline, width)
+function M.render(pipeline, width, active_stage_index)
 	local stages = pipeline.stages or {}
 	if #stages == 0 then
 		return { "", "  No stages available." }, {}
@@ -201,7 +203,7 @@ function M.render(pipeline, width)
 	local blocks = {}
 	local total_width = 0
 	for index, stage in ipairs(stages) do
-		local lines, highlights, block_width = render_stage_block(stage)
+		local lines, highlights, block_width = render_stage_block(stage, index == active_stage_index)
 		table.insert(blocks, { lines = lines, highlights = highlights, width = block_width })
 		total_width = total_width + block_width + (index < #stages and CONNECTOR_WIDTH or 0)
 	end
