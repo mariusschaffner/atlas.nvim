@@ -2,7 +2,8 @@ local M = {}
 
 local utils = require("atlas.ui.shared.utils")
 local highlights = require("atlas.ui.shared.highlights")
-local field_box = require("atlas.ui.components.field_box")
+local bordered_box = require("atlas.ui.components.bordered_box")
+local ui_utils = require("atlas.ui.utils")
 local spinner = require("atlas.ui.components.spinner")
 local state = require("atlas.pipelines.ui.detail.state")
 local detail_ui = require("atlas.ui.detail")
@@ -29,45 +30,49 @@ local function format_dt(iso)
 	return text ~= "" and text or "-"
 end
 
----@param pipeline Pipeline
----@return table
-local function start_field(pipeline)
-	return { kind = "text", value = "Start: " .. format_dt(pipeline.started_at or pipeline.created_at), hl = "AtlasTextMuted" }
+---@param left string Byte-safe: appended to `right` via plain string concatenation.
+---@param right string
+---@param interior_width integer
+---@return string row, integer right_start Byte offset (into `row`) where `right` begins.
+local function two_column_row(left, right, interior_width)
+	local gap = math.max(1, interior_width - ui_utils.text_width(left) - ui_utils.text_width(right))
+	local row = left .. string.rep(" ", gap) .. right
+	return row, #row - #right
 end
 
+--- Renders the "pipeline box" (Start/End on the left, branch/commit on the
+--- right, both inside the same bordered box) that occupies the header
+--- window's top part. A second box may join it below in the future.
 ---@param pipeline Pipeline
----@return table
-local function end_field(pipeline)
-	return { kind = "text", value = "End: " .. format_dt(pipeline.finished_at), hl = "AtlasTextMuted" }
-end
+---@param width integer Header window width the box should fill.
+---@return string[] lines
+---@return table[] highlights
+local function render_summary_box(pipeline, width)
+	local box_width = math.max(4, width)
+	local interior_width = box_width - 2
 
----@param label string
----@param value string
----@param value_hl string
----@return table
-local function labeled_colored_field(label, value)
-	local text = label .. value
-	local value_hl = highlights.dynamic_for(value) or "Normal"
-	return {
-		kind = "text",
-		value = text,
-		hl = {
-			{ start_col = 0, end_col = #label, hl_group = "AtlasTextMuted" },
-			{ start_col = #label, end_col = #text, hl_group = value_hl },
+	local start_text = "Start: " .. format_dt(pipeline.started_at or pipeline.created_at)
+	local end_text = "End: " .. format_dt(pipeline.finished_at)
+	local branch = tostring(pipeline.ref or "")
+	local commit = tostring(pipeline.short_sha or pipeline.sha or "")
+	local branch_hl = highlights.dynamic_for(branch) or "Normal"
+	local commit_hl = highlights.dynamic_for(commit) or "Normal"
+
+	local row1, branch_start = two_column_row(start_text, branch, interior_width)
+	local row2, commit_start = two_column_row(end_text, commit, interior_width)
+
+	return bordered_box.render({
+		width = box_width,
+		box_width = box_width,
+		border_hl = "AtlasBorder",
+		content_lines = { row1, row2 },
+		content_highlights = {
+			{ line = 0, start_col = 0, end_col = #start_text, hl_group = "AtlasTextMuted" },
+			{ line = 0, start_col = branch_start, end_col = branch_start + #branch, hl_group = branch_hl },
+			{ line = 1, start_col = 0, end_col = #end_text, hl_group = "AtlasTextMuted" },
+			{ line = 1, start_col = commit_start, end_col = commit_start + #commit, hl_group = commit_hl },
 		},
-	}
-end
-
----@param pipeline Pipeline
----@return table
-local function in_field(pipeline)
-	return labeled_colored_field("In: ", tostring(pipeline.ref or ""))
-end
-
----@param pipeline Pipeline
----@return table
-local function on_field(pipeline)
-	return labeled_colored_field("On: ", tostring(pipeline.short_sha or pipeline.sha or ""))
+	})
 end
 
 ---@param pipeline Pipeline
@@ -109,10 +114,7 @@ function M.render()
 	if has_header then
 		local header_lines, header_spans = {}, {}
 		if pipeline ~= nil then
-			header_lines, header_spans = field_box.render(
-				{ start_field(pipeline), in_field(pipeline), end_field(pipeline), on_field(pipeline) },
-				{ width = vim.api.nvim_win_get_width(header_win) }
-			)
+			header_lines, header_spans = render_summary_box(pipeline, vim.api.nvim_win_get_width(header_win))
 		end
 		set_lines(header_buf, header_lines)
 		utils.apply_spans(header_buf, header_ns, header_spans)

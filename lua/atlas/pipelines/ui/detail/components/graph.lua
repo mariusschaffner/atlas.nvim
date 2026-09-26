@@ -103,33 +103,47 @@ local function join_horizontal(blocks)
 	end
 
 	local highlights = {}
-	local col_offset = 0
 
 	for index, block in ipairs(blocks) do
+		-- Highlight columns are byte offsets (extmarks are byte-indexed), but
+		-- box-drawing glyphs are multi-byte -- a border row and a content row
+		-- of the same *display* width can have different *byte* lengths. So
+		-- each row's join offset must come from the actual accumulated byte
+		-- length of that row, not a single display-width count shared across
+		-- every row in the block.
+		local row_byte_offset = {}
 		for row = 1, max_height do
+			row_byte_offset[row] = #lines[row]
 			lines[row] = lines[row] .. (block.lines[row] or string.rep(" ", block.width))
 		end
 		for _, span in ipairs(block.highlights) do
-			table.insert(
-				highlights,
-				{ line = span.line, start_col = col_offset + span.start_col, end_col = col_offset + span.end_col, hl_group = span.hl_group }
-			)
+			local offset = row_byte_offset[span.line + 1] or 0
+			table.insert(highlights, {
+				line = span.line,
+				start_col = offset + span.start_col,
+				end_col = offset + span.end_col,
+				hl_group = span.hl_group,
+			})
 		end
-		col_offset = col_offset + block.width
 
 		if index < #blocks then
 			local connector = string.rep("─", CONNECTOR_WIDTH)
 			local blank = string.rep(" ", CONNECTOR_WIDTH)
+			local connector_row_offset = 0
 			for row = 1, max_height do
+				if row - 1 == CONNECTOR_ROW then
+					connector_row_offset = #lines[row]
+				end
 				lines[row] = lines[row] .. ((row - 1 == CONNECTOR_ROW) and connector or blank)
 			end
 			if CONNECTOR_ROW + 1 <= max_height then
-				table.insert(
-					highlights,
-					{ line = CONNECTOR_ROW, start_col = col_offset, end_col = col_offset + CONNECTOR_WIDTH, hl_group = "AtlasTextMuted" }
-				)
+				table.insert(highlights, {
+					line = CONNECTOR_ROW,
+					start_col = connector_row_offset,
+					end_col = connector_row_offset + #connector,
+					hl_group = "AtlasTextMuted",
+				})
 			end
-			col_offset = col_offset + CONNECTOR_WIDTH
 		end
 	end
 
