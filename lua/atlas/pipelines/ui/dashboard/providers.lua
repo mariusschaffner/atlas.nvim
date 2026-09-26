@@ -4,15 +4,37 @@ local icons = require("atlas.ui.shared.icons")
 local highlights = require("atlas.ui.shared.highlights")
 
 local STAGE_GLYPH = "■"
+local PIPELINE_ICON, PIPELINE_ICON_HL = icons.pulls("pipeline")
+
+local STATE_CHIP_HL = {
+	SUCCESSFUL = "AtlasGLPipelineSuccessChip",
+	FAILED = "AtlasGLPipelineFailedChip",
+	INPROGRESS = "AtlasGLPipelineRunningChip",
+	STOPPED = "AtlasGLPipelineMutedChip",
+	UNKNOWN = "AtlasGLPipelineMutedChip",
+}
+
+---@param state PipelineState|nil
+---@return string
+local function state_chip_hl(state)
+	return STATE_CHIP_HL[tostring(state or "UNKNOWN"):upper()] or STATE_CHIP_HL.UNKNOWN
+end
 
 ---@return table[]
 function M.columns()
 	return {
+		{ key = "icon", name = "", can_grow = false, align = "center" },
 		{ key = "id", name = "Pipeline", can_grow = false },
 		{ key = "branch", name = string.format("%s Branch", icons.pulls("branch")), max_width = 24, can_grow = false },
 		{ key = "commit", name = "Commit", can_grow = false },
-		{ key = "creator", name = string.format("%s Creator", icons.general("user")), max_width = 20, can_grow = false },
 		{ key = "stages", name = "Stages" },
+		{
+			key = "creator",
+			name = string.format("%s Creator", icons.general("user")),
+			max_width = 20,
+			can_grow = false,
+			align = "right",
+		},
 		{ key = "status", name = " Status", can_grow = false },
 	}
 end
@@ -30,14 +52,14 @@ end
 ---@param pipeline Pipeline
 ---@return string
 local function status_value(pipeline)
-	local icon = icons.pulls_status(tostring(pipeline.state or "unknown"):lower())
-	return string.format(" %s %s", icon, tostring(pipeline.status or ""))
+	return string.format(" %s ", tostring(pipeline.status or ""))
 end
 
 ---@param pipeline Pipeline
 ---@return table
 function M.values(pipeline)
 	return {
+		icon = PIPELINE_ICON,
 		id = "#" .. tostring(pipeline.id or ""),
 		branch = tostring(pipeline.ref or ""),
 		commit = tostring(pipeline.short_sha or pipeline.sha or ""),
@@ -56,6 +78,14 @@ function M.highlights(table_row, col, ctx)
 	local pipeline = table_row._pipeline
 	if pipeline == nil then
 		return nil
+	end
+
+	if col.key == "icon" then
+		return { { start_col = 0, end_col = #ctx.padded, hl_group = PIPELINE_ICON_HL } }
+	end
+
+	if col.key == "id" then
+		return { { start_col = 0, end_col = #ctx.padded, hl_group = "AtlasTextMuted" } }
 	end
 
 	if col.key == "branch" then
@@ -87,8 +117,7 @@ function M.highlights(table_row, col, ctx)
 	end
 
 	if col.key == "status" then
-		local _, hl = icons.pulls_status(tostring(pipeline.state or "unknown"):lower())
-		return { { start_col = 0, end_col = #ctx.padded, hl_group = hl } }
+		return { { start_col = 0, end_col = #ctx.padded, hl_group = state_chip_hl(pipeline.state) } }
 	end
 
 	return nil
