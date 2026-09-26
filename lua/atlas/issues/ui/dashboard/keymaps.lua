@@ -18,6 +18,12 @@ local function selected_issue()
 	return nil
 end
 
+---@return boolean
+local function cursor_on_milestone()
+	local node = require("atlas.ui.navigation").current_item()
+	return type(node) == "table" and node.kind == "milestone"
+end
+
 ---@param buf integer
 ---@param views IssuesViewConfig[]
 function M.register(buf, views)
@@ -102,6 +108,9 @@ function M.register(buf, views)
 		resolver.item("ui.toggle_fold", {
 			desc = "Toggle milestone/group fold",
 			hint_desc = "Fold",
+			hidden = function()
+				return not cursor_on_milestone()
+			end,
 			opts = { nowait = true, silent = true },
 			callback = function()
 				controller.toggle_current_issue_collapsed()

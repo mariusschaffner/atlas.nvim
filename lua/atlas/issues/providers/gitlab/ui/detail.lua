@@ -104,10 +104,11 @@ function M.header_fields(issue, details, loading)
 	end
 
 	local milestone_text = details and details.milestone and details.milestone.title or ""
+	local has_milestone = details ~= nil and details.milestone ~= nil and details.milestone.id ~= nil
 	local assignee_text = string.format("%s %s", user_icon, assignee_name)
 	local assignee_hl = helper.person_hl(assignee and assignee.display_name or nil)
-	local assignee_editable = supports("assign")
-	local milestone_editable = supports("milestone")
+	local assignee_editable = supports("assign") and helper.is_open(issue)
+	local milestone_editable = supports("milestone") and helper.is_open(issue)
 
 	return {
 		author = {
@@ -126,7 +127,7 @@ function M.header_fields(issue, details, loading)
 		milestone = {
 			id = "milestone",
 			label = utils.field_hint_label(
-				{ "issues.go_to_milestone", "issues.change_milestone" },
+				has_milestone and { "issues.go_to_milestone", "issues.change_milestone" } or "issues.change_milestone",
 				"Milestone",
 				milestone_editable
 			),

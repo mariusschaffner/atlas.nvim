@@ -66,7 +66,7 @@ local groups = {
 	AtlasFieldBoxBorderEditable = { fg = "#89b4fa" },
 	AtlasFieldBoxBorderEditing = { fg = "#f5a97f", bold = true },
 
-	AtlasDetailTabActive = { fg = "#c6a0f6", bold = true },
+	AtlasDetailTabActive = { fg = "#c8c093", bold = true },
 }
 
 function M.setup()

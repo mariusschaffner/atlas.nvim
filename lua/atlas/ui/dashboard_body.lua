@@ -77,18 +77,30 @@ function M.render(render_body)
 
 	local interior_width = math.max(1, width - 2)
 	local available_body_height = math.max(0, height - #bar_lines - BOX_BORDER_LINES)
-	local body_lines, body_spans, body_line_map = render_body(interior_width, available_body_height, #bar_lines)
+	-- Reserve the box's first interior row for a blank spacer above the
+	-- table header, so the domain renderer's own row budget stays accurate.
+	local table_budget_height = math.max(0, available_body_height - 1)
+	local body_lines, body_spans, body_line_map = render_body(interior_width, table_budget_height, #bar_lines)
 
-	for _ = #body_lines + 1, available_body_height do
-		table.insert(body_lines, "")
+	local content_lines = { "" }
+	vim.list_extend(content_lines, body_lines)
+	local content_highlights = {}
+	for _, span in ipairs(body_spans) do
+		local shifted = vim.tbl_extend("force", {}, span)
+		shifted.line = span.line + 1
+		table.insert(content_highlights, shifted)
+	end
+
+	for _ = #content_lines + 1, available_body_height do
+		table.insert(content_lines, "")
 	end
 
 	local box_lines, box_spans = bordered_box.render({
 		width = width,
 		box_width = width,
 		title = "Table",
-		content_lines = body_lines,
-		content_highlights = body_spans,
+		content_lines = content_lines,
+		content_highlights = content_highlights,
 		border_hl = "AtlasBorder",
 		bottom_hint = table_box_hint(buf),
 	})
@@ -104,10 +116,10 @@ function M.render(render_body)
 		table.insert(spans, shifted)
 	end
 
-	-- +1 on top of the bar offset for the box's own top-border line, which
-	-- now sits between the filter bar and the first table row.
+	-- +1 for the box's own top-border line and +1 for the blank spacer row,
+	-- both of which now sit between the filter bar and the first table row.
 	local line_map = {}
-	local content_offset = box_offset + 1
+	local content_offset = box_offset + 2
 	for lnum, entry in pairs(body_line_map) do
 		line_map[lnum + content_offset] = entry
 	end

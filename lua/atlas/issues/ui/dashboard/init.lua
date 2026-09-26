@@ -26,6 +26,12 @@ local function open_detail(issue)
 	})
 end
 
+-- Tracks whether the cursor was on a milestone row as of the last render, so
+-- `M.select` only re-renders (to refresh the "za" hint in the table box's
+-- bottom border -- see `keymaps.lua`'s `cursor_on_milestone`) when that
+-- actually changes, not on every cursor move.
+local last_cursor_on_milestone = nil
+
 ---@param milestone IssueMilestone
 local function open_milestone_detail(milestone)
 	local state = require("atlas.issues.state")
@@ -42,6 +48,12 @@ end
 
 ---@param item { kind: string, _issue: Issue|nil }|nil
 function M.select(item)
+	local on_milestone = type(item) == "table" and item.kind == "milestone"
+	if on_milestone ~= last_cursor_on_milestone then
+		last_cursor_on_milestone = on_milestone
+		M.render()
+	end
+
 	local detail = require("atlas.issues.ui.detail")
 	if detail.is_open() and type(item) == "table" and item.kind == "issue" and type(item._issue) == "table" then
 		open_detail(item._issue)
@@ -76,6 +88,7 @@ function M.init(provider, opts)
 	local state = require("atlas.issues.state")
 	local controller = require("atlas.issues.ui.dashboard.controller")
 	local keymaps = require("atlas.issues.ui.dashboard.keymaps")
+	last_cursor_on_milestone = nil
 	if state.provider ~= provider then
 		state.current_user = nil
 	end

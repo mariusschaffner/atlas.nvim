@@ -8,6 +8,18 @@ local inline_field_edit = require("atlas.ui.inline_field_edit")
 local actions = require("atlas.issues.ui.detail.tabs.conversation.actions")
 local detail = require("atlas.issues.ui.detail.state")
 local state = require("atlas.issues.ui.detail.tabs.conversation.state")
+local presentation = require("atlas.issues.ui.presentation")
+local notify = require("atlas.core.notify")
+
+---@param issue Issue|nil
+---@return boolean
+local function guard_open(issue)
+	if presentation.is_open(issue) then
+		return true
+	end
+	notify.warn("Issue is closed")
+	return false
+end
 
 local ACTIONS = {
 	"issues.add_comment",
@@ -71,6 +83,9 @@ local function start_add(buf, refresh)
 	if not issue or not comments or not comments.add_comment then
 		return
 	end
+	if not guard_open(issue) then
+		return
+	end
 	state.composing = { kind = "add", seed_text = "" }
 	refresh()
 	local region = state.regions.composing
@@ -99,6 +114,9 @@ local function start_reply(buf, refresh)
 	local comment = state.active_comment()
 	local comments = detail.provider and detail.provider.capabilities.comments
 	if not issue or not comment or not comments or not comments.add_comment then
+		return
+	end
+	if not guard_open(issue) then
 		return
 	end
 
@@ -170,6 +188,9 @@ local function start_edit(buf, refresh)
 	if not actions.is_own_comment(comment) then
 		return
 	end
+	if not guard_open(issue) then
+		return
+	end
 
 	state.editing_id = tostring(comment.id)
 	refresh()
@@ -202,6 +223,9 @@ local function do_delete(refresh)
 	if not actions.is_own_comment(comment) then
 		return
 	end
+	if not guard_open(issue) then
+		return
+	end
 	actions.delete(issue, comment, refresh)
 end
 
@@ -210,6 +234,9 @@ local function do_react(refresh)
 	local issue = detail.current_issue
 	local comment = state.active_comment()
 	if not issue or not comment then
+		return
+	end
+	if not guard_open(issue) then
 		return
 	end
 	actions.react(issue, comment, refresh)

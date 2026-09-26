@@ -16,6 +16,7 @@ local users_completion = require("atlas.providers.gitlab.completion.users")
 local labels_completion = require("atlas.providers.gitlab.completion.labels")
 local milestones_completion = require("atlas.providers.gitlab.completion.milestones")
 local detail_state = require("atlas.issues.ui.detail.state")
+local presentation = require("atlas.issues.ui.presentation")
 
 ---@param ctx AtlasIssueActionContext
 ---@return boolean
@@ -582,6 +583,18 @@ end
 
 ---@param ctx AtlasIssueActionContext
 ---@return boolean, string|nil
+local function open_issue_available(ctx)
+	if not has_issue(ctx) then
+		return false, "No issue selected"
+	end
+	if not presentation.is_open(ctx.issue) then
+		return false, "Issue is closed"
+	end
+	return true, nil
+end
+
+---@param ctx AtlasIssueActionContext
+---@return boolean, string|nil
 local function toggle_subscription_available(ctx)
 	if not has_issue(ctx) then
 		return false, "No issue selected"
@@ -639,10 +652,16 @@ register({
 		set_issue_state(ctx, "reopen", done)
 	end,
 })
-register({ id = "edit_title", label = "Edit Title", hidden = true, is_available = has_issue, run = edit_title })
-register({ id = "assign", label = "Edit Assignees", hidden = true, is_available = has_issue, run = assign })
+register({ id = "edit_title", label = "Edit Title", hidden = true, is_available = open_issue_available, run = edit_title })
+register({ id = "assign", label = "Edit Assignees", hidden = true, is_available = open_issue_available, run = assign })
 register({ id = "labels", label = "Edit Labels", hidden = true, is_available = has_issue, run = labels })
-register({ id = "milestone", label = "Edit Milestone", hidden = true, is_available = has_issue, run = milestone })
+register({
+	id = "milestone",
+	label = "Edit Milestone",
+	hidden = true,
+	is_available = open_issue_available,
+	run = milestone,
+})
 register({ id = "search", label = "Search Issues", hidden = true, run = search })
 register({ id = "create_issue", label = "Create Issue", hidden = true, run = create_issue })
 register(actions.manage_templates)

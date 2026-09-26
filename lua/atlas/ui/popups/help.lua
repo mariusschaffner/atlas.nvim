@@ -8,7 +8,7 @@ local utils = require("atlas.ui.shared.utils")
 ---@field callback? function|string
 ---@field mode? string|string[]
 ---@field opts? table
----@field hidden? boolean
+---@field hidden? boolean|fun(): boolean Evaluated fresh each time hints/the help popup are computed, so it can react to state (e.g. cursor position).
 ---@field hint? boolean Set to false to exclude this item from the statusline hints even though it still appears (unless also hidden) in the help popup.
 ---@field hint_desc? string Shorter description to use in the statusline hints instead of `desc`. `desc` is still used in the help popup.
 ---@field index? number
@@ -142,7 +142,7 @@ function M.register(group, items, opts)
 			hint_desc = item.hint_desc,
 			mode = mode,
 			index = item.index or DEFAULT_INDEX,
-			hidden = item.hidden == true,
+			hidden = item.hidden,
 			no_hint = item.hint == false,
 		})
 	end
@@ -282,6 +282,15 @@ local function collect_valid_groups(all_groups)
 	return valid_groups
 end
 
+---@param item table
+---@return boolean
+local function is_hidden(item)
+	if type(item.hidden) == "function" then
+		return item.hidden() == true
+	end
+	return item.hidden == true
+end
+
 ---@param valid_groups table[]
 ---@return table[]
 local function without_hidden(valid_groups)
@@ -289,7 +298,7 @@ local function without_hidden(valid_groups)
 	for _, group in ipairs(valid_groups) do
 		local visible_items = {}
 		for _, item in ipairs(group.items) do
-			if not item.hidden then
+			if not is_hidden(item) then
 				table.insert(visible_items, item)
 			end
 		end
@@ -312,7 +321,7 @@ function M.hints(bufnr)
 	for _, group in ipairs(collect_valid_groups(collect_all_groups(bstate))) do
 		if not group.is_cmd then
 			for _, item in ipairs(group.items) do
-				if not item.no_hint then
+				if not item.no_hint and not is_hidden(item) then
 					table.insert(hints, { key = item.key, desc = item.hint_desc or item.desc })
 				end
 			end

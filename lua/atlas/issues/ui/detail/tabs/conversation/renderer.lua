@@ -193,7 +193,7 @@ end
 ---@return table[]|nil highlights
 local function bottom_hint_for(comment)
 	local comments = detail.provider and detail.provider.capabilities.comments
-	if not comments then
+	if not comments or not presentation.is_open(detail.current_issue) then
 		return nil, nil
 	end
 

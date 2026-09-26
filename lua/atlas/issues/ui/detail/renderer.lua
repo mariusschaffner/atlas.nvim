@@ -10,6 +10,7 @@ local inline_edit = require("atlas.ui.inline_edit")
 local inline_field_edit = require("atlas.ui.inline_field_edit")
 local highlights = require("atlas.ui.shared.highlights")
 local conversation_state = require("atlas.issues.ui.detail.tabs.conversation.state")
+local presentation = require("atlas.issues.ui.presentation")
 
 local ns = vim.api.nvim_create_namespace("atlas.issues.provider_detail")
 local header_ns = vim.api.nvim_create_namespace("atlas.issues.provider_detail.header")
@@ -68,7 +69,10 @@ local function linked_branches_field()
 		return nil
 	end
 	local core = state.provider and state.provider.capabilities.core
-	local can_create = core and core.create_branch ~= nil and core.fetch_project_branches ~= nil
+	local can_create = core
+		and core.create_branch ~= nil
+		and core.fetch_project_branches ~= nil
+		and presentation.is_open(state.current_issue)
 
 	if value == "loading" then
 		return { label = "Linked Branches", value = spinner.with_text("Loading..."), hl = "AtlasTextMuted" }
@@ -117,7 +121,7 @@ local function date_field(field, label)
 	end
 
 	local core = state.provider and state.provider.capabilities.core
-	local can_edit = core and core.update_issue_dates ~= nil
+	local can_edit = core and core.update_issue_dates ~= nil and presentation.is_open(state.current_issue)
 	local value = tostring(dates[field] or "")
 
 	return {
@@ -176,7 +180,10 @@ end
 ---@return boolean
 local function description_editable()
 	local core = state.provider and state.provider.capabilities.core
-	return state.current_tab == "overview" and core ~= nil and core.update_description ~= nil
+	return state.current_tab == "overview"
+		and core ~= nil
+		and core.update_description ~= nil
+		and presentation.is_open(state.current_issue)
 end
 
 --- The Activity tab's own border color -- blue by default whenever the tab
@@ -221,6 +228,7 @@ local function conversation_addable()
 		and comments ~= nil
 		and comments.add_comment ~= nil
 		and not inline_field_edit.is_active()
+		and presentation.is_open(state.current_issue)
 end
 
 ---@param tab_items IssuesDetailTabDefinition[]

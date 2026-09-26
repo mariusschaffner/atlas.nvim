@@ -6,6 +6,7 @@ local utils = require("atlas.ui.shared.utils")
 local actions = require("atlas.issues.actions")
 local state = require("atlas.issues.ui.detail.state")
 local notify = require("atlas.core.notify")
+local presentation = require("atlas.issues.ui.presentation")
 
 ---@param text string
 ---@return string
@@ -33,6 +34,18 @@ end
 local function is_current_issue(issue)
 	local current = state.current_issue
 	return current ~= nil and tostring(current.key or "") == tostring(issue.key or "")
+end
+
+---@return boolean
+local function issue_open()
+	return presentation.is_open(state.current_issue)
+end
+
+---@return boolean
+local function has_linked_milestone()
+	local details = state.current_details
+	local milestone = details and details.milestone
+	return milestone ~= nil and milestone.id ~= nil
 end
 
 ---@param mr IssueLinkedMergeRequest
@@ -224,6 +237,10 @@ function M.register(buf, opts)
 				hint = false,
 				opts = { nowait = true, silent = true },
 				callback = function()
+					if not issue_open() then
+						notify.warn("Issue is closed")
+						return
+					end
 					require("atlas.issues.ui.detail").edit_start_date()
 				end,
 			})
@@ -235,6 +252,10 @@ function M.register(buf, opts)
 				hint = false,
 				opts = { nowait = true, silent = true },
 				callback = function()
+					if not issue_open() then
+						notify.warn("Issue is closed")
+						return
+					end
 					require("atlas.issues.ui.detail").edit_due_date()
 				end,
 			})
@@ -250,6 +271,10 @@ function M.register(buf, opts)
 				callback = function()
 					local issue = state.current_issue
 					if issue == nil then
+						return
+					end
+					if not issue_open() then
+						notify.warn("Issue is closed")
 						return
 					end
 					if type(state.linked_branches) == "table" and #state.linked_branches > 0 then
@@ -363,21 +388,13 @@ function M.register(buf, opts)
 		resolver.item("issues.go_to_milestone", {
 			desc = "Go to linked milestone",
 			hint = false,
+			hidden = function()
+				return not has_linked_milestone()
+			end,
 			callback = function()
 				local details = state.current_details
 				local milestone = details and details.milestone
 				if not milestone or milestone.id == nil then
-					if supports("milestone") then
-						local issue = state.current_issue
-						if issue == nil then
-							return
-						end
-						local on_update = state.on_update
-						actions.run("milestone", context(issue), function(result)
-							complete_action(issue, on_update, result)
-						end)
-						return
-					end
 					notify.warn("No linked milestone")
 					return
 				end
