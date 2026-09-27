@@ -104,7 +104,10 @@ local function render_stage_block(stage, is_active)
 	local stage_box_width = job_box_width + 2
 	-- Widen the box if needed so a hint-prefixed (longer) title still fits on
 	-- the top border without overflowing it -- build_top doesn't truncate.
-	local title_min_width = ui_utils.text_width(title) + 2 + 2 -- " title " padding + the two corners
+	-- bordered_box's top border needs interior_width >= title_w + 3 (leading
+	-- "─" + " title " padding), i.e. box_width >= title_w + 5 (see
+	-- field_box.lua's `natural_width` for the same +5 derivation).
+	local title_min_width = ui_utils.text_width(title) + 5
 	stage_box_width = math.max(stage_box_width, title_min_width)
 
 	local lines, highlights = bordered_box.render({
