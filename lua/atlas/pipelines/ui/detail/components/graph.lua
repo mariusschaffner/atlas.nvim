@@ -15,6 +15,7 @@ local M = {}
 local bordered_box = require("atlas.ui.components.bordered_box")
 local ui_utils = require("atlas.ui.utils")
 local utils = require("atlas.ui.shared.utils")
+local resolver = require("atlas.core.keymaps")
 
 local CONNECTOR_WIDTH = 5
 local CONNECTOR_ROW = 1 -- 0-indexed row (within a stage box's own output lines) the dashed connector aligns with.
@@ -59,8 +60,23 @@ local function render_job_box(job, content_width)
 	})
 end
 
+---@param key string
+---@return string
+local function clean_key(key)
+	return (key:gsub("[<>]", ""))
+end
+
+--- The configured "cycle to next stage" key (see pipelines/ui/detail/keymaps.lua's
+--- reuse of the dashboard's "ui.next_page" action), for the active stage's own
+--- title hint. nil if the action has no key configured.
+---@return string|nil
+local function next_stage_hint_key()
+	local keys = resolver.resolve("ui.next_page")
+	return keys and keys[1] and clean_key(keys[1]) or nil
+end
+
 ---@param stage PipelineStage
----@param is_active boolean Whether this is the stage selected in the bottom part -- shown with the same blue border used for editable/selected fields elsewhere.
+---@param is_active boolean Whether this is the stage selected in the bottom part -- shown with the same blue border used for editable/selected fields elsewhere, its title prefixed with the "cycle stage" key hint.
 ---@return string[] lines
 ---@return table[] highlights
 ---@return integer width
@@ -76,12 +92,25 @@ local function render_stage_block(stage, is_active)
 		utils.append_block(content_lines, content_highlights, { lines = job_lines, highlights = job_highlights })
 	end
 
+	local title = tostring(stage.name or "Stage")
+	if is_active then
+		local key = next_stage_hint_key()
+		if key then
+			title = string.format("[%s] - %s", key, title)
+		end
+	end
+
 	local job_box_width = content_width + 2
 	local stage_box_width = job_box_width + 2
+	-- Widen the box if needed so a hint-prefixed (longer) title still fits on
+	-- the top border without overflowing it -- build_top doesn't truncate.
+	local title_min_width = ui_utils.text_width(title) + 2 + 2 -- " title " padding + the two corners
+	stage_box_width = math.max(stage_box_width, title_min_width)
+
 	local lines, highlights = bordered_box.render({
 		width = stage_box_width,
 		box_width = stage_box_width,
-		title = tostring(stage.name or "Stage"),
+		title = title,
 		border_hl = is_active and "AtlasFieldBoxBorderEditable" or "AtlasTextMuted",
 		content_lines = content_lines,
 		content_highlights = content_highlights,

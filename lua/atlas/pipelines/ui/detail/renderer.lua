@@ -145,19 +145,19 @@ local function render_job_log(pipeline, ensure_job_log)
 	state.active_job_by_stage[stage_index] = job_index
 	local job = jobs[job_index]
 
+	-- Always titled, even with a single job -- unlike the issue/pulls detail
+	-- views' own tab bar (which hides entirely for one tab), a lone job's
+	-- name is still worth showing so the box says what log is in it.
 	local tab_items = {}
 	for _, j in ipairs(jobs) do
 		table.insert(tab_items, { key = tostring(j.id), label = tostring(j.name or "job") })
 	end
-	local title_chunks = {}
-	if #tab_items > 1 then
-		title_chunks = tabs.title_chunks(tab_items, tostring(job.id), {
-			active_hl = "AtlasDetailTabActive",
-			inactive_hl = "AtlasTextMuted",
-			gap = " - ",
-			border_hl = graph.state_hl(job.state),
-		})
-	end
+	local title_chunks = tabs.title_chunks(tab_items, tostring(job.id), {
+		active_hl = "AtlasDetailTabActive",
+		inactive_hl = "AtlasTextMuted",
+		gap = " - ",
+		border_hl = graph.state_hl(job.state),
+	})
 
 	ensure_job_log(pipeline, job)
 	local log_entry = state.log_by_job_id[tostring(job.id)]

@@ -120,26 +120,19 @@ function M.select(pipeline, opts)
 	load_details(pipeline, opts.force_refresh == true)
 end
 
----@param step 1|-1
-local function change_stage(step)
+--- Cycles forward (wrapping) to the next stage. Forward-only, matching the
+--- single "gp" binding -- there's no "previous stage" key.
+function M.next_stage()
 	local stages = state.current_pipeline and state.current_pipeline.stages or {}
 	if #stages == 0 then
 		return
 	end
 	local index = math.max(1, math.min(#stages, state.active_stage))
-	state.active_stage = (index - 1 + step) % #stages + 1
+	state.active_stage = index % #stages + 1
 	render()
 	if state.win and vim.api.nvim_win_is_valid(state.win) then
 		pcall(vim.api.nvim_win_set_cursor, state.win, { 1, 0 })
 	end
-end
-
-function M.next_stage()
-	change_stage(1)
-end
-
-function M.previous_stage()
-	change_stage(-1)
 end
 
 ---@param step 1|-1

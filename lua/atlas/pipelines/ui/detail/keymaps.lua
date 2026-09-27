@@ -34,29 +34,19 @@ function M.register(buf)
 		})
 	)
 
-	-- Same keys as the dashboard's page switcher, repurposed here to cycle
-	-- the stage selected in the graph/bottom part (different buffer, so no
-	-- clash -- see core/keymaps.lua's ALLOWED_CONFLICTS for the same pattern).
+	-- Same key as the dashboard's page switcher, repurposed here to cycle
+	-- (forward only, wrapping) the stage selected in the graph/bottom part --
+	-- different buffer, so no clash (see core/keymaps.lua's ALLOWED_CONFLICTS
+	-- for the same pattern). Hidden from the general hint list -- shown
+	-- instead on the active stage box's own title (see graph.lua).
 	utils.insert_if(
 		items,
 		resolver.item("ui.next_page", {
 			desc = "Next stage",
-			hint_desc = "Stage+",
+			hint = false,
 			opts = { nowait = true, silent = true },
 			callback = function()
 				require("atlas.pipelines.ui.detail").next_stage()
-			end,
-		})
-	)
-
-	utils.insert_if(
-		items,
-		resolver.item("ui.previous_page", {
-			desc = "Previous stage",
-			hint_desc = "Stage-",
-			opts = { nowait = true, silent = true },
-			callback = function()
-				require("atlas.pipelines.ui.detail").previous_stage()
 			end,
 		})
 	)
@@ -97,7 +87,6 @@ function M.remove(buf)
 	utils.insert_if(general, resolver.remove_item("ui.help"))
 	utils.insert_if(general, resolver.remove_item("ui.close"))
 	utils.insert_if(general, resolver.remove_item("ui.next_page"))
-	utils.insert_if(general, resolver.remove_item("ui.previous_page"))
 	utils.insert_if(general, resolver.remove_item("ui.next_panel_tab"))
 	utils.insert_if(general, resolver.remove_item("ui.previous_panel_tab"))
 	help.remove("General", general, { buffer = buf })
