@@ -58,7 +58,7 @@ local function table_box_hint(buf)
 	return table.concat(parts, " - ")
 end
 
---- Builds the "[gp] - [gP]" page-navigation key hint (bindings only, no
+--- Builds the "[gp|gP]" page-navigation key hint (bindings only, no
 --- descriptions -- those live in the help popup instead), for the page
 --- indicator's own corner rather than the main hint list.
 ---@return string
@@ -68,10 +68,13 @@ local function page_nav_hint()
 	for _, action_id in ipairs({ "ui.next_page", "ui.previous_page" }) do
 		local keys = resolver.resolve(action_id)
 		if keys and keys[1] then
-			table.insert(parts, string.format("[%s]", clean_key(keys[1])))
+			table.insert(parts, clean_key(keys[1]))
 		end
 	end
-	return table.concat(parts, " - ")
+	if #parts == 0 then
+		return ""
+	end
+	return string.format("[%s]", table.concat(parts, "|"))
 end
 
 ---@param page_info { page: integer, total_pages: integer }|nil

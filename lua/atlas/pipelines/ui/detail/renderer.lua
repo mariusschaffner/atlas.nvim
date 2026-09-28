@@ -108,6 +108,52 @@ local function render_header_box(pipeline, width)
 	})
 end
 
+---@param pstate PipelineState|string|nil
+---@return boolean
+local function is_running(pstate)
+	return tostring(pstate or ""):upper() == "INPROGRESS"
+end
+
+--- Builds the job-log box's native title: the job tabs (as before), plus --
+--- while `streaming` -- a right-aligned "<spinner> Live" indicator flush
+--- against the top-right corner, filled in with border dashes so it reads as
+--- part of the border rather than floating text (mirrors
+--- `bordered_box.lua`'s own `title`/`title_right` split, adapted to a native
+--- floating-window title's single string instead of hand-drawn buffer text).
+---@param tab_items { key: string, label: string }[]
+---@param active_job_id string
+---@param border_hl string
+---@param streaming boolean
+---@param width integer Content window width -- matches the span the native title is drawn across.
+---@return { [1]: string, [2]: string }[]
+local function job_log_title(tab_items, active_job_id, border_hl, streaming, width)
+	local chunks = tabs.title_chunks(tab_items, active_job_id, {
+		active_hl = "AtlasDetailTabActive",
+		inactive_hl = "AtlasTextMuted",
+		gap = " - ",
+		border_hl = border_hl,
+	})
+	if not streaming then
+		return chunks
+	end
+
+	local left_width = 0
+	for _, chunk in ipairs(chunks) do
+		left_width = left_width + ui_utils.text_width(chunk[1])
+	end
+
+	local right_part = string.format(" %s Live ", spinner.frame())
+	local right_width = ui_utils.text_width(right_part) + 1 -- trailing dash before the corner
+
+	local fill = math.max(0, width - left_width - right_width)
+	if fill > 0 then
+		table.insert(chunks, { string.rep("─", fill), border_hl })
+	end
+	table.insert(chunks, { right_part, "AtlasTextWarning" })
+	table.insert(chunks, { "─", border_hl })
+	return chunks
+end
+
 --- Renders the bottom part: the active stage's jobs as tabs (shown in the
 --- content window's own native title, like the issue/pulls detail views'
 --- top-level tabs), and the active job's log as the window's plain buffer
@@ -152,12 +198,13 @@ local function render_job_log(pipeline, ensure_job_log)
 	for _, j in ipairs(jobs) do
 		table.insert(tab_items, { key = tostring(j.id), label = tostring(j.name or "job") })
 	end
-	local title_chunks = tabs.title_chunks(tab_items, tostring(job.id), {
-		active_hl = "AtlasDetailTabActive",
-		inactive_hl = "AtlasTextMuted",
-		gap = " - ",
-		border_hl = graph.state_hl(job.state),
-	})
+	local title_chunks = job_log_title(
+		tab_items,
+		tostring(job.id),
+		graph.state_hl(job.state),
+		is_running(job.state),
+		vim.api.nvim_win_get_width(state.win)
+	)
 
 	ensure_job_log(pipeline, job)
 	local log_entry = state.log_by_job_id[tostring(job.id)]
@@ -202,6 +249,24 @@ local function render_job_log(pipeline, ensure_job_log)
 	return lines, highlights, title_chunks, graph.state_hl(job.state), show_line_numbers
 end
 
+-- Last-applied sticky header render, so switching job tabs (which re-renders
+-- the whole panel, header included, even though the header's own inputs --
+-- pipeline/active stage -- haven't changed) doesn't needlessly re-set the
+-- header buffer/extmarks/window height on every keypress. That redundant
+-- churn was visible as the branch/commit chip in the top-right corner
+-- flickering while cycling job tabs. Keyed on the header buffer too, so a
+-- fresh `detail.open()` (new header buffer, possibly identical text) always
+-- renders instead of being skipped as a false-positive match.
+---@type { buf: integer|nil, signature: string|nil }
+local last_header = { buf = nil, signature = nil }
+
+---@param lines string[]
+---@param spans table[]
+---@return string
+local function header_signature(lines, spans)
+	return table.concat(lines, "\n") .. "\0" .. vim.inspect(spans)
+end
+
 ---@param ensure_job_log fun(pipeline: Pipeline, job: PipelineJob)
 function M.render(ensure_job_log)
 	local buf = state.buf
@@ -223,9 +288,14 @@ function M.render(ensure_job_log)
 		if pipeline ~= nil then
 			header_lines, header_spans = render_header_box(pipeline, vim.api.nvim_win_get_width(header_win))
 		end
-		set_lines(header_buf, header_lines)
-		utils.apply_spans(header_buf, header_ns, header_spans)
-		detail_ui.resize_header(#header_lines)
+		local signature = header_signature(header_lines, header_spans)
+		if last_header.buf ~= header_buf or last_header.signature ~= signature then
+			last_header.buf = header_buf
+			last_header.signature = signature
+			set_lines(header_buf, header_lines)
+			utils.apply_spans(header_buf, header_ns, header_spans)
+			detail_ui.resize_header(#header_lines)
+		end
 	end
 
 	local lines, spans = {}, {}
@@ -243,6 +313,41 @@ function M.render(ensure_job_log)
 
 	set_lines(buf, lines)
 	utils.apply_spans(buf, ns, spans)
+end
+
+--- Re-applies just the job-log box's native title (job tabs + the "Live"
+--- streaming indicator's spinner frame), skipping the header and log buffer
+--- entirely. Called on every streaming-animation tick (see
+--- `pipelines/ui/detail/init.lua`) so the indicator visibly animates without
+--- paying for (or risking flicker from) a full re-render every tick.
+function M.update_streaming_indicator()
+	local win = state.win
+	local pipeline = state.current_pipeline
+	if win == nil or not vim.api.nvim_win_is_valid(win) or pipeline == nil then
+		return
+	end
+
+	local stages = pipeline.stages or {}
+	local stage_index = math.max(1, math.min(#stages, state.active_stage))
+	local stage = stages[stage_index]
+	local jobs = stage and stage.jobs or {}
+	if #jobs == 0 then
+		return
+	end
+
+	local job_index = math.max(1, math.min(#jobs, state.active_job_index(stage_index)))
+	local job = jobs[job_index]
+	if not is_running(job.state) then
+		return
+	end
+
+	local tab_items = {}
+	for _, j in ipairs(jobs) do
+		table.insert(tab_items, { key = tostring(j.id), label = tostring(j.name or "job") })
+	end
+	local title_chunks =
+		job_log_title(tab_items, tostring(job.id), graph.state_hl(job.state), true, vim.api.nvim_win_get_width(win))
+	detail_ui.set_content_title(title_chunks)
 end
 
 return M

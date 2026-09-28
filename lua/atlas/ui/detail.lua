@@ -339,9 +339,16 @@ function M.resize_header(line_count)
 	if not utils.window.valid(state.header_win) or not utils.window.valid(state.win) then
 		return
 	end
-	local total = vim.api.nvim_win_get_height(state.header_win) + vim.api.nvim_win_get_height(state.win)
+	local current = vim.api.nvim_win_get_height(state.header_win)
+	local total = current + vim.api.nvim_win_get_height(state.win)
 	local max_height = math.max(MIN_HEADER_HEIGHT, math.floor(total * MAX_HEADER_RATIO))
 	local height = math.max(MIN_HEADER_HEIGHT, math.min(line_count, max_height))
+	-- No-op when already the right size -- resizing (even to the same value)
+	-- repositions the content float right after, which is a visible flicker
+	-- for callers that re-render on every keypress (e.g. cycling job tabs).
+	if height == current then
+		return
+	end
 	pcall(vim.api.nvim_win_set_height, state.header_win, height)
 	sync_content_float()
 end
