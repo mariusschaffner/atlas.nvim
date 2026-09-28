@@ -225,22 +225,17 @@ local function render_job_log(pipeline, ensure_job_log)
 				table.insert(lines, line)
 				local row = i - 1
 
-				-- Leading timestamp (if any) always renders muted, independent
-				-- of whether the message after it gets classified below --
-				-- previously a classified message colored the timestamp along
-				-- with it, and an unclassified one left it fully default, so
-				-- timestamped and non-timestamped jobs looked inconsistent.
+				-- Only the leading timestamp (if any) gets its own color; the
+				-- message always stays the buffer's plain foreground. This used
+				-- to also classify the message itself (error/warning/etc.),
+				-- but that made lines look inconsistently colored depending on
+				-- content -- some jobs' output was effectively all grey, others
+				-- all white, with no way to tell which was "normal". Uniform
+				-- foreground + a muted timestamp prefix reads consistently
+				-- across every job's log.
 				local ts_end = pipeline_logs.timestamp_end(line)
 				if ts_end and ts_end > 0 then
 					table.insert(highlights, { line = row, start_col = 0, end_col = ts_end, hl_group = "AtlasTextMuted" })
-				end
-
-				local message_hl = pipeline_logs.classify_log_line(line)
-				if message_hl then
-					local message_start = line:find("%S", (ts_end or 0) + 1)
-					if message_start then
-						table.insert(highlights, { line = row, start_col = message_start - 1, end_col = #line, hl_group = message_hl })
-					end
 				end
 			end
 		end
@@ -249,22 +244,95 @@ local function render_job_log(pipeline, ensure_job_log)
 	return lines, highlights, title_chunks, graph.state_hl(job.state), show_line_numbers
 end
 
--- Last-applied sticky header render, so switching job tabs (which re-renders
--- the whole panel, header included, even though the header's own inputs --
--- pipeline/active stage -- haven't changed) doesn't needlessly re-set the
--- header buffer/extmarks/window height on every keypress. That redundant
--- churn was visible as the branch/commit chip in the top-right corner
--- flickering while cycling job tabs. Keyed on the header buffer too, so a
--- fresh `detail.open()` (new header buffer, possibly identical text) always
--- renders instead of being skipped as a false-positive match.
----@type { buf: integer|nil, signature: string|nil }
-local last_header = { buf = nil, signature = nil }
+-- render_header_box always emits exactly: top border, the Start/branch row,
+-- the End/commit row, then the dynamic part (loading spinner or the
+-- stage/job graph) down to the bottom border. Rows [0, HEADER_STATIC_LINES)
+-- are that fixed lead-in -- the only rows two_column_row's branch/commit
+-- chips ever live on.
+local HEADER_STATIC_LINES = 3
+
+-- Last-applied sticky header render. Switching job tabs, and (once pipelines
+-- live-poll while running) every few seconds of a running pipeline, both
+-- re-render the whole panel, header included, even though the header's
+-- static rows -- Start/End, branch, commit -- never actually change; only
+-- the graph rows below them do, as job states update. A single whole-buffer
+-- rewrite couldn't tell the two apart, so any graph-only change still
+-- cleared and redrew the branch/commit rows too, visible as that corner
+-- flickering every poll tick. Diffing and patching the two regions
+-- independently (see sync_header_region) means the static rows are now only
+-- ever touched when their own text actually changes -- practically never
+-- for the lifetime of a single pipeline.
+---@type { buf: integer|nil, lines: string[], spans: table[] }
+local last_header = { buf = nil, lines = {}, spans = {} }
 
 ---@param lines string[]
 ---@param spans table[]
+---@param from integer 0-indexed inclusive start row.
+---@param to integer|nil 0-indexed exclusive end row, or nil for "through the last line" (the dynamic region, whose row count can itself change between renders).
 ---@return string
-local function header_signature(lines, spans)
-	return table.concat(lines, "\n") .. "\0" .. vim.inspect(spans)
+local function header_region_signature(lines, spans, from, to)
+	local slice = {}
+	for i = from + 1, (to or #lines) do
+		table.insert(slice, lines[i])
+	end
+	local region_spans = {}
+	for _, span in ipairs(spans) do
+		local line = span.line or 0
+		if line >= from and (to == nil or line < to) then
+			table.insert(region_spans, span)
+		end
+	end
+	return table.concat(slice, "\n") .. "\0" .. vim.inspect(region_spans)
+end
+
+---@param buf integer
+---@param ns integer
+---@param from integer
+---@param to integer|nil
+---@param lines string[]
+---@param spans table[]
+local function apply_header_region(buf, ns, from, to, lines, spans)
+	local slice = {}
+	for i = from + 1, (to or #lines) do
+		table.insert(slice, lines[i])
+	end
+	vim.api.nvim_set_option_value("modifiable", true, { buf = buf })
+	vim.api.nvim_buf_set_lines(buf, from, to or -1, false, slice)
+	vim.api.nvim_set_option_value("modifiable", false, { buf = buf })
+
+	vim.api.nvim_buf_clear_namespace(buf, ns, from, to or -1)
+	for _, span in ipairs(spans) do
+		local line = span.line or 0
+		if line >= from and (to == nil or line < to) then
+			if span.line_hl_group ~= nil then
+				vim.api.nvim_buf_set_extmark(buf, ns, line, 0, { line_hl_group = span.line_hl_group })
+			else
+				vim.api.nvim_buf_set_extmark(buf, ns, line, span.start_col, {
+					end_row = line,
+					end_col = span.end_col,
+					hl_group = span.hl_group,
+				})
+			end
+		end
+	end
+end
+
+--- Re-applies rows `[from, to)` of the header buffer only if that region's
+--- own text/highlights actually changed since the last render.
+---@param buf integer
+---@param ns integer
+---@param from integer
+---@param to integer|nil
+---@param old_lines string[]
+---@param old_spans table[]
+---@param new_lines string[]
+---@param new_spans table[]
+local function sync_header_region(buf, ns, from, to, old_lines, old_spans, new_lines, new_spans)
+	if
+		header_region_signature(old_lines, old_spans, from, to) ~= header_region_signature(new_lines, new_spans, from, to)
+	then
+		apply_header_region(buf, ns, from, to, new_lines, new_spans)
+	end
 end
 
 ---@param ensure_job_log fun(pipeline: Pipeline, job: PipelineJob)
@@ -288,14 +356,41 @@ function M.render(ensure_job_log)
 		if pipeline ~= nil then
 			header_lines, header_spans = render_header_box(pipeline, vim.api.nvim_win_get_width(header_win))
 		end
-		local signature = header_signature(header_lines, header_spans)
-		if last_header.buf ~= header_buf or last_header.signature ~= signature then
-			last_header.buf = header_buf
-			last_header.signature = signature
+
+		if last_header.buf ~= header_buf or #last_header.lines == 0 or #header_lines == 0 then
+			-- New header buffer (fresh `detail.open()`), or a nil<->pipeline
+			-- transition -- nothing to diff against, so just write it all.
 			set_lines(header_buf, header_lines)
 			utils.apply_spans(header_buf, header_ns, header_spans)
-			detail_ui.resize_header(#header_lines)
+		else
+			sync_header_region(
+				header_buf,
+				header_ns,
+				0,
+				HEADER_STATIC_LINES,
+				last_header.lines,
+				last_header.spans,
+				header_lines,
+				header_spans
+			)
+			sync_header_region(
+				header_buf,
+				header_ns,
+				HEADER_STATIC_LINES,
+				nil,
+				last_header.lines,
+				last_header.spans,
+				header_lines,
+				header_spans
+			)
 		end
+		-- resize_header no-ops internally when the target height already
+		-- matches, so calling it unconditionally here is cheap.
+		detail_ui.resize_header(#header_lines)
+
+		last_header.buf = header_buf
+		last_header.lines = header_lines
+		last_header.spans = header_spans
 	end
 
 	local lines, spans = {}, {}
