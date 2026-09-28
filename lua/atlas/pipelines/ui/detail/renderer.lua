@@ -40,7 +40,18 @@ end
 ---@param interior_width integer
 ---@return string row, integer right_start Byte offset (into `row`) where `right` begins.
 local function two_column_row(left, right, interior_width)
-	local gap = math.max(1, interior_width - ui_utils.text_width(left) - ui_utils.text_width(right))
+	local left_w = ui_utils.text_width(left)
+	-- `right` (the branch chip / commit) is what has to give on a narrow
+	-- window -- `left` (the "Start:"/"End:" label) always stays intact.
+	-- Without this, a `right` too wide for what's left of `interior_width`
+	-- produced a row wider than the box itself, and bordered_box.lua's own
+	-- (structure-blind) truncation would then chop the row whole, sometimes
+	-- eating almost all of the branch/commit text instead of just its tail.
+	local available_for_right = math.max(0, interior_width - left_w - 1)
+	if ui_utils.text_width(right) > available_for_right then
+		right = utils.truncate(right, available_for_right)
+	end
+	local gap = math.max(1, interior_width - left_w - ui_utils.text_width(right))
 	local row = left .. string.rep(" ", gap) .. right
 	return row, #row - #right
 end
@@ -327,12 +338,15 @@ end
 ---@param old_spans table[]
 ---@param new_lines string[]
 ---@param new_spans table[]
+---@return boolean changed
 local function sync_header_region(buf, ns, from, to, old_lines, old_spans, new_lines, new_spans)
 	if
-		header_region_signature(old_lines, old_spans, from, to) ~= header_region_signature(new_lines, new_spans, from, to)
+		header_region_signature(old_lines, old_spans, from, to) == header_region_signature(new_lines, new_spans, from, to)
 	then
-		apply_header_region(buf, ns, from, to, new_lines, new_spans)
+		return false
 	end
+	apply_header_region(buf, ns, from, to, new_lines, new_spans)
+	return true
 end
 
 ---@param ensure_job_log fun(pipeline: Pipeline, job: PipelineJob)
@@ -357,13 +371,15 @@ function M.render(ensure_job_log)
 			header_lines, header_spans = render_header_box(pipeline, vim.api.nvim_win_get_width(header_win))
 		end
 
+		local any_changed
 		if last_header.buf ~= header_buf or #last_header.lines == 0 or #header_lines == 0 then
 			-- New header buffer (fresh `detail.open()`), or a nil<->pipeline
 			-- transition -- nothing to diff against, so just write it all.
 			set_lines(header_buf, header_lines)
 			utils.apply_spans(header_buf, header_ns, header_spans)
+			any_changed = true
 		else
-			sync_header_region(
+			local static_changed = sync_header_region(
 				header_buf,
 				header_ns,
 				0,
@@ -373,7 +389,7 @@ function M.render(ensure_job_log)
 				header_lines,
 				header_spans
 			)
-			sync_header_region(
+			local dynamic_changed = sync_header_region(
 				header_buf,
 				header_ns,
 				HEADER_STATIC_LINES,
@@ -383,10 +399,15 @@ function M.render(ensure_job_log)
 				header_lines,
 				header_spans
 			)
+			any_changed = static_changed or dynamic_changed
 		end
-		-- resize_header no-ops internally when the target height already
-		-- matches, so calling it unconditionally here is cheap.
-		detail_ui.resize_header(#header_lines)
+		-- Only touches the window at all (resize_header internally repositions
+		-- the content float too) when something in the header actually
+		-- changed -- on top of resize_header's own no-op guard, this avoids
+		-- even asking for a resize on a render that turned out to be a no-op.
+		if any_changed then
+			detail_ui.resize_header(#header_lines)
+		end
 
 		last_header.buf = header_buf
 		last_header.lines = header_lines
