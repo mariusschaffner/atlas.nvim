@@ -1,7 +1,6 @@
 local M = {}
 
 local utils = require("atlas.ui.shared.utils")
-local highlights = require("atlas.ui.shared.highlights")
 local bordered_box = require("atlas.ui.components.bordered_box")
 local ui_utils = require("atlas.ui.utils")
 local spinner = require("atlas.ui.components.spinner")
@@ -28,34 +27,6 @@ local function set_lines(buf, lines)
 	vim.api.nvim_set_option_value("modifiable", false, { buf = buf })
 end
 
----@param iso string|nil
----@return string
-local function format_dt(iso)
-	local text = utils.format_datetime_short(iso)
-	return text ~= "" and text or "-"
-end
-
----@param left string Byte-safe: appended to `right` via plain string concatenation.
----@param right string
----@param interior_width integer
----@return string row, integer right_start Byte offset (into `row`) where `right` begins.
-local function two_column_row(left, right, interior_width)
-	local left_w = ui_utils.text_width(left)
-	-- `right` (the branch chip / commit) is what has to give on a narrow
-	-- window -- `left` (the "Start:"/"End:" label) always stays intact.
-	-- Without this, a `right` too wide for what's left of `interior_width`
-	-- produced a row wider than the box itself, and bordered_box.lua's own
-	-- (structure-blind) truncation would then chop the row whole, sometimes
-	-- eating almost all of the branch/commit text instead of just its tail.
-	local available_for_right = math.max(0, interior_width - left_w - 1)
-	if ui_utils.text_width(right) > available_for_right then
-		right = utils.truncate(right, available_for_right)
-	end
-	local gap = math.max(1, interior_width - left_w - ui_utils.text_width(right))
-	local row = left .. string.rep(" ", gap) .. right
-	return row, #row - #right
-end
-
 ---@param pipeline Pipeline
 ---@return string title
 ---@return table[] highlights Spans relative to `title`.
@@ -67,9 +38,8 @@ local function box_title(pipeline)
 	return title, { { start_col = 0, end_col = #title, hl_group = hl } }
 end
 
---- Renders the sticky header's single box (the "top part"): Start/End +
---- branch/commit on its first two lines, then the stage/job graph below,
---- with the active stage's border highlighted blue. The bottom part
+--- Renders the sticky header's single box (the "top part"): the stage/job
+--- graph, with the active stage's border highlighted blue. The bottom part
 --- (content window below) shows that stage's job logs -- see render_job_log.
 ---@param pipeline Pipeline
 ---@param width integer Header window width the box should fill.
@@ -79,26 +49,7 @@ local function render_header_box(pipeline, width)
 	local box_width = math.max(4, width)
 	local interior_width = box_width - 2
 
-	local start_text = "Start: " .. format_dt(pipeline.started_at or pipeline.created_at)
-	local end_text = "End: " .. format_dt(pipeline.finished_at)
-	local branch = tostring(pipeline.ref or "")
-	local commit = tostring(pipeline.short_sha or pipeline.sha or "")
-	-- Branch renders as a colored-background tag/chip; commit stays plain
-	-- (dynamic) foreground text.
-	local branch_tag = branch ~= "" and string.format(" %s ", branch) or ""
-	local branch_hl = branch ~= "" and (highlights.dynamic_for_bg(branch) or "Normal") or "Normal"
-	local commit_hl = highlights.dynamic_for(commit) or "Normal"
-
-	local row1, branch_start = two_column_row(start_text, branch_tag, interior_width)
-	local row2, commit_start = two_column_row(end_text, commit, interior_width)
-
-	local content_lines = { row1, row2 }
-	local content_highlights = {
-		{ line = 0, start_col = 0, end_col = #start_text, hl_group = "AtlasTextMuted" },
-		{ line = 0, start_col = branch_start, end_col = branch_start + #branch_tag, hl_group = branch_hl },
-		{ line = 1, start_col = 0, end_col = #end_text, hl_group = "AtlasTextMuted" },
-		{ line = 1, start_col = commit_start, end_col = commit_start + #commit, hl_group = commit_hl },
-	}
+	local content_lines, content_highlights = {}, {}
 
 	if state.details_loading and #(pipeline.stages or {}) == 0 then
 		utils.push(content_lines, content_highlights, spinner.with_text("Loading pipeline..."), "AtlasTextMuted")
@@ -232,21 +183,31 @@ local function render_job_log(pipeline, ensure_job_log)
 			utils.push(lines, highlights, "(empty log)", "AtlasTextMuted")
 		else
 			show_line_numbers = true
+			-- Only the leading timestamp (if any) gets its own color; the
+			-- message always stays the buffer's plain foreground -- classifying
+			-- the message itself (error/warning/etc.) used to make lines look
+			-- inconsistently colored depending on content. A raw line without
+			-- its own timestamp (e.g. a `\r`-continuation of a progress line,
+			-- or plain job-script output the runner didn't stamp) inherits the
+			-- most recently seen one instead of showing no timestamp at all,
+			-- so every line reads consistently.
+			local last_ts = nil
 			for i, line in ipairs(log_lines) do
-				table.insert(lines, line)
 				local row = i - 1
-
-				-- Only the leading timestamp (if any) gets its own color; the
-				-- message always stays the buffer's plain foreground. This used
-				-- to also classify the message itself (error/warning/etc.),
-				-- but that made lines look inconsistently colored depending on
-				-- content -- some jobs' output was effectively all grey, others
-				-- all white, with no way to tell which was "normal". Uniform
-				-- foreground + a muted timestamp prefix reads consistently
-				-- across every job's log.
 				local ts_end = pipeline_logs.timestamp_end(line)
-				if ts_end and ts_end > 0 then
-					table.insert(highlights, { line = row, start_col = 0, end_col = ts_end, hl_group = "AtlasTextMuted" })
+				local display_line = line
+				local ts_len = ts_end and ts_end > 0 and ts_end or nil
+
+				if ts_len then
+					last_ts = line:sub(1, ts_len)
+				elseif last_ts then
+					display_line = last_ts .. " " .. line
+					ts_len = #last_ts
+				end
+
+				table.insert(lines, display_line)
+				if ts_len then
+					table.insert(highlights, { line = row, start_col = 0, end_col = ts_len, hl_group = "AtlasTextMuted" })
 				end
 			end
 		end
@@ -255,98 +216,18 @@ local function render_job_log(pipeline, ensure_job_log)
 	return lines, highlights, title_chunks, graph.state_hl(job.state), show_line_numbers
 end
 
--- render_header_box always emits exactly: top border, the Start/branch row,
--- the End/commit row, then the dynamic part (loading spinner or the
--- stage/job graph) down to the bottom border. Rows [0, HEADER_STATIC_LINES)
--- are that fixed lead-in -- the only rows two_column_row's branch/commit
--- chips ever live on.
-local HEADER_STATIC_LINES = 3
-
--- Last-applied sticky header render. Switching job tabs, and (once pipelines
--- live-poll while running) every few seconds of a running pipeline, both
--- re-render the whole panel, header included, even though the header's
--- static rows -- Start/End, branch, commit -- never actually change; only
--- the graph rows below them do, as job states update. A single whole-buffer
--- rewrite couldn't tell the two apart, so any graph-only change still
--- cleared and redrew the branch/commit rows too, visible as that corner
--- flickering every poll tick. Diffing and patching the two regions
--- independently (see sync_header_region) means the static rows are now only
--- ever touched when their own text actually changes -- practically never
--- for the lifetime of a single pipeline.
----@type { buf: integer|nil, lines: string[], spans: table[] }
-local last_header = { buf = nil, lines = {}, spans = {} }
+-- Last-applied sticky header render, so switching job tabs (which re-renders
+-- the whole panel, header included, even though the header only depicts the
+-- active *stage*, not the active job) doesn't needlessly re-set the header
+-- buffer/extmarks/window height when nothing in it actually changed.
+---@type { buf: integer|nil, signature: string|nil }
+local last_header = { buf = nil, signature = nil }
 
 ---@param lines string[]
 ---@param spans table[]
----@param from integer 0-indexed inclusive start row.
----@param to integer|nil 0-indexed exclusive end row, or nil for "through the last line" (the dynamic region, whose row count can itself change between renders).
 ---@return string
-local function header_region_signature(lines, spans, from, to)
-	local slice = {}
-	for i = from + 1, (to or #lines) do
-		table.insert(slice, lines[i])
-	end
-	local region_spans = {}
-	for _, span in ipairs(spans) do
-		local line = span.line or 0
-		if line >= from and (to == nil or line < to) then
-			table.insert(region_spans, span)
-		end
-	end
-	return table.concat(slice, "\n") .. "\0" .. vim.inspect(region_spans)
-end
-
----@param buf integer
----@param ns integer
----@param from integer
----@param to integer|nil
----@param lines string[]
----@param spans table[]
-local function apply_header_region(buf, ns, from, to, lines, spans)
-	local slice = {}
-	for i = from + 1, (to or #lines) do
-		table.insert(slice, lines[i])
-	end
-	vim.api.nvim_set_option_value("modifiable", true, { buf = buf })
-	vim.api.nvim_buf_set_lines(buf, from, to or -1, false, slice)
-	vim.api.nvim_set_option_value("modifiable", false, { buf = buf })
-
-	vim.api.nvim_buf_clear_namespace(buf, ns, from, to or -1)
-	for _, span in ipairs(spans) do
-		local line = span.line or 0
-		if line >= from and (to == nil or line < to) then
-			if span.line_hl_group ~= nil then
-				vim.api.nvim_buf_set_extmark(buf, ns, line, 0, { line_hl_group = span.line_hl_group })
-			else
-				vim.api.nvim_buf_set_extmark(buf, ns, line, span.start_col, {
-					end_row = line,
-					end_col = span.end_col,
-					hl_group = span.hl_group,
-				})
-			end
-		end
-	end
-end
-
---- Re-applies rows `[from, to)` of the header buffer only if that region's
---- own text/highlights actually changed since the last render.
----@param buf integer
----@param ns integer
----@param from integer
----@param to integer|nil
----@param old_lines string[]
----@param old_spans table[]
----@param new_lines string[]
----@param new_spans table[]
----@return boolean changed
-local function sync_header_region(buf, ns, from, to, old_lines, old_spans, new_lines, new_spans)
-	if
-		header_region_signature(old_lines, old_spans, from, to) == header_region_signature(new_lines, new_spans, from, to)
-	then
-		return false
-	end
-	apply_header_region(buf, ns, from, to, new_lines, new_spans)
-	return true
+local function header_signature(lines, spans)
+	return table.concat(lines, "\n") .. "\0" .. vim.inspect(spans)
 end
 
 ---@param ensure_job_log fun(pipeline: Pipeline, job: PipelineJob)
@@ -371,47 +252,14 @@ function M.render(ensure_job_log)
 			header_lines, header_spans = render_header_box(pipeline, vim.api.nvim_win_get_width(header_win))
 		end
 
-		local any_changed
-		if last_header.buf ~= header_buf or #last_header.lines == 0 or #header_lines == 0 then
-			-- New header buffer (fresh `detail.open()`), or a nil<->pipeline
-			-- transition -- nothing to diff against, so just write it all.
+		local signature = header_signature(header_lines, header_spans)
+		if last_header.buf ~= header_buf or last_header.signature ~= signature then
+			last_header.buf = header_buf
+			last_header.signature = signature
 			set_lines(header_buf, header_lines)
 			utils.apply_spans(header_buf, header_ns, header_spans)
-			any_changed = true
-		else
-			local static_changed = sync_header_region(
-				header_buf,
-				header_ns,
-				0,
-				HEADER_STATIC_LINES,
-				last_header.lines,
-				last_header.spans,
-				header_lines,
-				header_spans
-			)
-			local dynamic_changed = sync_header_region(
-				header_buf,
-				header_ns,
-				HEADER_STATIC_LINES,
-				nil,
-				last_header.lines,
-				last_header.spans,
-				header_lines,
-				header_spans
-			)
-			any_changed = static_changed or dynamic_changed
-		end
-		-- Only touches the window at all (resize_header internally repositions
-		-- the content float too) when something in the header actually
-		-- changed -- on top of resize_header's own no-op guard, this avoids
-		-- even asking for a resize on a render that turned out to be a no-op.
-		if any_changed then
 			detail_ui.resize_header(#header_lines)
 		end
-
-		last_header.buf = header_buf
-		last_header.lines = header_lines
-		last_header.spans = header_spans
 	end
 
 	local lines, spans = {}, {}

@@ -42,6 +42,12 @@ local function stage_content_width(stage)
 	local width = MIN_JOB_CONTENT_WIDTH
 	for _, job in ipairs(stage.jobs or {}) do
 		width = math.max(width, vim.fn.strdisplaywidth(tostring(job.name or "")))
+		local duration_text = utils.human_duration(job.duration)
+		if duration_text ~= "" then
+			-- bordered_box's top border needs interior_width >= title_w + 3
+			-- (see bordered_box.lua's build_top) for the title to fit unclipped.
+			width = math.max(width, ui_utils.text_width(duration_text) + 3)
+		end
 	end
 	return math.min(width, MAX_JOB_CONTENT_WIDTH)
 end
@@ -52,11 +58,13 @@ end
 ---@return table[] highlights
 local function render_job_box(job, content_width)
 	local box_width = content_width + 2
+	local duration_text = utils.human_duration(job.duration)
 	return bordered_box.render({
 		width = box_width,
 		box_width = box_width,
-		content_lines = { tostring(job.name or "") },
+		title = duration_text ~= "" and duration_text or nil,
 		border_hl = M.state_hl(job.state),
+		content_lines = { tostring(job.name or "") },
 	})
 end
 
