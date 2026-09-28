@@ -176,9 +176,24 @@ local function render_job_log(pipeline, ensure_job_log)
 			show_line_numbers = true
 			for i, line in ipairs(log_lines) do
 				table.insert(lines, line)
-				local hl = pipeline_logs.classify_log_line(line)
-				if hl then
-					table.insert(highlights, { line = i - 1, start_col = 0, end_col = #line, hl_group = hl })
+				local row = i - 1
+
+				-- Leading timestamp (if any) always renders muted, independent
+				-- of whether the message after it gets classified below --
+				-- previously a classified message colored the timestamp along
+				-- with it, and an unclassified one left it fully default, so
+				-- timestamped and non-timestamped jobs looked inconsistent.
+				local ts_end = pipeline_logs.timestamp_end(line)
+				if ts_end and ts_end > 0 then
+					table.insert(highlights, { line = row, start_col = 0, end_col = ts_end, hl_group = "AtlasTextMuted" })
+				end
+
+				local message_hl = pipeline_logs.classify_log_line(line)
+				if message_hl then
+					local message_start = line:find("%S", (ts_end or 0) + 1)
+					if message_start then
+						table.insert(highlights, { line = row, start_col = message_start - 1, end_col = #line, hl_group = message_hl })
+					end
 				end
 			end
 		end

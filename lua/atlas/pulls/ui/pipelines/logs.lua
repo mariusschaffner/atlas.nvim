@@ -79,6 +79,17 @@ local function log_timestamp_end(line)
 	return timestamp_end
 end
 
+--- Byte position (1-indexed, inclusive -- directly usable as an extmark's
+--- 0-indexed exclusive `end_col`) where a leading timestamp ends, or nil if
+--- `line` doesn't start with one. Exposed so callers can style the
+--- timestamp separately from the rest of the line (classify_log_line only
+--- classifies the message that follows it).
+---@param line string
+---@return integer|nil
+function M.timestamp_end(line)
+	return log_timestamp_end(line)
+end
+
 ---@param content string
 ---@return string|nil
 local function log_message_hl(content)
