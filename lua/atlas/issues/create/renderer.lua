@@ -12,7 +12,9 @@ local utils = require("atlas.ui.shared.utils")
 local icons = require("atlas.ui.shared.icons")
 local highlights = require("atlas.ui.shared.highlights")
 local presentation = require("atlas.issues.ui.presentation")
+local spinner = require("atlas.ui.components.spinner")
 local field_box = require("atlas.ui.components.field_box")
+local tabs = require("atlas.ui.components.tabs")
 local detail_ui = require("atlas.ui.detail")
 local inline_edit = require("atlas.ui.inline_edit")
 local state = require("atlas.issues.create.state")
@@ -22,6 +24,7 @@ local header_ns = vim.api.nvim_create_namespace("atlas.issues.create.header")
 local PADDING_X = 1
 local TYPE_WIDTH_RATIO = 0.3
 local ROW_GAP = 2
+local DESCRIPTION_TAB = { { key = "description", label = "Description" } }
 
 ---@param buf integer
 ---@param lines string[]
@@ -89,6 +92,33 @@ local function optional_date_field(id, action_id, label, value)
 		label = utils.field_hint_label(action_id, label, true),
 		value = value ~= "" and value or "None",
 		hl = "AtlasTextMuted",
+		border_hl = "AtlasFieldBoxBorder",
+	}
+end
+
+--- Read-only, like the real issue detail view's Author field: no `id` (not
+--- focusable/editable) and no border_hl override needed beyond the usual
+--- optional-field grey.
+---@return AtlasFieldBoxField
+local function author_field()
+	if state.current_user_loading then
+		return {
+			label = "Author",
+			value = spinner.with_text("Loading..."),
+			hl = "AtlasTextMuted",
+			border_hl = "AtlasFieldBoxBorder",
+		}
+	end
+
+	local user = state.current_user
+	local name = user and tostring(user.display_name or "") or ""
+	if name == "" then
+		name = "Unknown"
+	end
+	return {
+		label = "Author",
+		value = string.format("%s %s", icons.general("user"), name),
+		hl = presentation.person_hl(name),
 		border_hl = "AtlasFieldBoxBorder",
 	}
 end
@@ -182,9 +212,12 @@ local function render_header(width)
 		}
 	elseif state.type == "issue" then
 		columns = {
-			{ assignee_field() },
+			{ author_field(), assignee_field() },
 			{ labels_field(), milestone_field() },
-			{ optional_date_field("due_date", "issues.change_due_date", "Due date", state.fields.due_date) },
+			{
+				optional_date_field("start_date", "issues.change_start_date", "Start date", state.fields.start_date),
+				optional_date_field("due_date", "issues.change_due_date", "Due date", state.fields.due_date),
+			},
 		}
 	end
 
@@ -244,7 +277,10 @@ function M.render()
 		state.header_regions = header_regions or {}
 	end
 
-	detail_ui.set_content_title({ { "Description", "AtlasDetailTabActive" } })
+	detail_ui.set_content_title(tabs.title_chunks(DESCRIPTION_TAB, "description", {
+		active_hl = "AtlasDetailTabActive",
+		border_hl = content_border_hl(),
+	}))
 
 	local footer_chunks
 	if inline_edit.is_active(buf) then

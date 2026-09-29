@@ -381,30 +381,47 @@ function M.render_row(fields, widths, opts)
 		max_rows = math.max(max_rows, #lines)
 	end
 
-	local offsets = {}
+	-- Nominal (display-column) offsets -- correct for `regions.col`, which
+	-- floating-window positioning (`inline_field_edit`) treats as a screen
+	-- column count.
+	local col_offsets = {}
 	for i = 1, #fields do
-		offsets[i] = (i == 1) and 0 or (offsets[i - 1] + widths[i - 1] + gap_width)
+		col_offsets[i] = (i == 1) and 0 or (col_offsets[i - 1] + widths[i - 1] + gap_width)
+	end
+
+	local blanks = {}
+	for i = 1, #fields do
+		blanks[i] = string.rep(" ", widths[i])
 	end
 
 	local lines = {}
 	for row = 1, max_rows do
 		local parts = {}
 		for i = 1, #fields do
-			table.insert(parts, field_lines[i][row] or string.rep(" ", widths[i]))
+			table.insert(parts, field_lines[i][row] or blanks[i])
 		end
 		lines[row] = table.concat(parts, gap)
 	end
 
+	-- Highlight spans need each field's actual *byte*-length prefix on that
+	-- specific line, not `widths[i]` -- box-drawing glyphs are multi-byte but
+	-- exactly 1 display column wide, so a field's rendered line is longer in
+	-- bytes than its nominal width. Same approach as `render_columns`' own
+	-- span-offset math below.
 	local spans = {}
 	for i, field_span_list in ipairs(field_spans) do
 		for _, span in ipairs(field_span_list) do
 			if span.line_hl_group ~= nil then
 				table.insert(spans, span)
 			else
+				local prefix_len = 0
+				for j = 1, i - 1 do
+					prefix_len = prefix_len + #(field_lines[j][span.line + 1] or blanks[j]) + #gap
+				end
 				table.insert(spans, {
 					line = span.line,
-					start_col = offsets[i] + span.start_col,
-					end_col = offsets[i] + span.end_col,
+					start_col = prefix_len + span.start_col,
+					end_col = prefix_len + span.end_col,
 					hl_group = span.hl_group,
 				})
 			end
@@ -415,7 +432,8 @@ function M.render_row(fields, widths, opts)
 	for i, field in ipairs(fields) do
 		local region = field_regions[i]
 		if field.id and region then
-			regions[field.id] = { row = region.row, col = offsets[i] + region.col, width = region.width, height = region.height }
+			regions[field.id] =
+				{ row = region.row, col = col_offsets[i] + region.col, width = region.width, height = region.height }
 		end
 	end
 

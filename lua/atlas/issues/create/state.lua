@@ -31,6 +31,8 @@ end
 ---@field project_path string|nil
 ---@field type ""|"issue"|"milestone"
 ---@field fields CreateDraftFields
+---@field current_user IssueUser|nil The signed-in user, shown read-only as the issue-type Author field.
+---@field current_user_loading boolean
 ---@field requests AtlasRequestScope
 ---@field on_done (fun(result: table|nil, err: string|nil))|nil
 ---@field submitting boolean
@@ -43,6 +45,8 @@ local M = {
 	project_path = nil,
 	type = "",
 	fields = empty_fields(),
+	current_user = nil,
+	current_user_loading = false,
 	requests = request_scope.new(),
 	on_done = nil,
 	submitting = false,
@@ -57,6 +61,8 @@ function M.reset()
 	M.project_path = nil
 	M.type = ""
 	M.fields = empty_fields()
+	M.current_user = nil
+	M.current_user_loading = false
 	M.on_done = nil
 	M.submitting = false
 	M.requests.cancel()

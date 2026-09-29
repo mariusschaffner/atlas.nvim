@@ -525,6 +525,45 @@ local function build_issue_payload()
 	}
 end
 
+---@param result { key: string|nil, iid: integer|nil, url: string|nil }
+local function finish_issue_created(result)
+	state.submitting = false
+	local on_done = state.on_done
+	notify.success("Issue created: " .. tostring(result.key), { timeout = 1200 })
+	M.close()
+	if on_done then
+		on_done({ issue_key = result.key, refresh = true }, nil)
+	end
+end
+
+--- GitLab's REST create-issue endpoint has no `start_date` param (only
+--- `due_date`) -- start date lives on the GraphQL "work item" dates widget,
+--- which needs a `work_item_id` that only exists once the issue is created.
+--- So: create the issue first, then look up its work item id and set the
+--- start date as a follow-up call. A failure here still leaves the issue
+--- created; it's surfaced as a warning, not a hard error.
+---@param result { key: string|nil, iid: integer|nil, url: string|nil }
+local function apply_start_date_then_finish(result)
+	local issue_ref = { key = result.key }
+	state.requests.run(function(done)
+		return issues_api.fetch_issue_dates(issue_ref, {}, done)
+	end, function(dates, err)
+		if err or dates == nil or not dates.work_item_id then
+			notify.warn("Issue created, but couldn't set start date: " .. tostring(err or "Unknown error"))
+			finish_issue_created(result)
+			return
+		end
+		state.requests.run(function(done)
+			return issues_api.update_issue_dates(issue_ref, dates.work_item_id, { start_date = state.fields.start_date }, done)
+		end, function(ok, update_err)
+			if not ok then
+				notify.warn("Issue created, but couldn't set start date: " .. tostring(update_err or "Unknown error"))
+			end
+			finish_issue_created(result)
+		end)
+	end)
+end
+
 --- `:w` handler: validates the two required fields, then fires the actual
 --- `create_issue`/`create_milestone` API call. Leaves the view open (and
 --- 'modified') on failure so the user can fix something and `:w` again.
@@ -569,16 +608,15 @@ local function attempt_submit()
 		state.requests.run(function(done)
 			return issues_api.create_issue(build_issue_payload(), done)
 		end, function(result, err)
-			state.submitting = false
 			if err or result == nil then
+				state.submitting = false
 				notify.error("Create issue failed: " .. tostring(err or "Unknown error"))
 				return
 			end
-			local on_done = state.on_done
-			notify.success("Issue created: " .. tostring(result.key), { timeout = 1200 })
-			M.close()
-			if on_done then
-				on_done({ issue_key = result.key, refresh = true }, nil)
+			if state.fields.start_date ~= "" then
+				apply_start_date_then_finish(result)
+			else
+				finish_issue_created(result)
 			end
 		end)
 	end
@@ -639,6 +677,17 @@ function M.open(opts)
 	end
 
 	render()
+
+	state.current_user_loading = true
+	state.requests.run(function(done)
+		return users_api.get_user(done)
+	end, function(user, err)
+		state.current_user_loading = false
+		if not err and user then
+			state.current_user = user
+		end
+		render_if_open()
+	end)
 end
 
 return M
