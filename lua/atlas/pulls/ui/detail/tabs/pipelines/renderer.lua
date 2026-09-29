@@ -143,7 +143,7 @@ local function render_job_box(pr, pipeline, stage, job, available_width, ensure_
 			table.insert(content_lines, text)
 			table.insert(content_highlights, { line = 0, start_col = 0, end_col = #text, hl_group = "AtlasLogError" })
 		else
-			local log_lines = pipeline_logs.split_log_lines(log_entry.text)
+			local log_lines = pipeline_logs.flatten(pipeline_logs.parse(log_entry.text))
 			local shown = log_lines
 			if #log_lines > MAX_LOG_LINES then
 				local truncated = #log_lines - MAX_LOG_LINES
