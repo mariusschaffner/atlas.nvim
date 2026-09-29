@@ -64,9 +64,10 @@ local function stage_content_width(stage)
 		width = math.max(width, vim.fn.strdisplaywidth(tostring(job.name or "")))
 		local title_text = job_box_title(job)
 		if title_text ~= "" then
-			-- bordered_box's top border needs interior_width >= title_w + 3
-			-- (see bordered_box.lua's build_top) for the title to fit unclipped.
-			width = math.max(width, ui_utils.text_width(title_text) + 3)
+			-- bordered_box's top border needs interior_width >= title_w + 4
+			-- (see bordered_box.lua's build_top) for the title to fit unclipped
+			-- with a trailing "─" before the corner.
+			width = math.max(width, ui_utils.text_width(title_text) + 4)
 		end
 	end
 	return math.min(width, MAX_JOB_CONTENT_WIDTH)
@@ -133,10 +134,11 @@ local function render_stage_block(stage, is_active)
 	local stage_box_width = job_box_width + 2
 	-- Widen the box if needed so a hint-prefixed (longer) title still fits on
 	-- the top border without overflowing it -- build_top doesn't truncate.
-	-- bordered_box's top border needs interior_width >= title_w + 3 (leading
-	-- "─" + " title " padding), i.e. box_width >= title_w + 5 (see
-	-- field_box.lua's `natural_width` for the same +5 derivation).
-	local title_min_width = ui_utils.text_width(title) + 5
+	-- bordered_box's top border needs interior_width >= title_w + 4 (leading
+	-- "─" + " title " padding + a trailing "─" before the corner), i.e.
+	-- box_width >= title_w + 6 (see field_box.lua's `natural_width` for the
+	-- same +6 derivation).
+	local title_min_width = ui_utils.text_width(title) + 6
 	stage_box_width = math.max(stage_box_width, title_min_width)
 
 	local lines, highlights = bordered_box.render({

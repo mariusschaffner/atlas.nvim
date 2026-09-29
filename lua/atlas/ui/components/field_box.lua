@@ -62,10 +62,11 @@ end
 ---@param field AtlasFieldBoxField
 ---@return integer
 local function natural_width(field)
-	-- bordered_box's top border needs interior_width >= label_w + 1 (where
-	-- label_w = title_w + 2, for " Title ") to close the border without
-	-- overflowing box_width by a column; box_width = interior_width + 2.
-	local title_w = ui_utils.text_width(field.label) + 5
+	-- bordered_box's top border needs interior_width >= label_w + 2 (where
+	-- label_w = title_w + 2, for " Title ") to close the border with a
+	-- trailing "─" before the corner, not just a bare space; box_width =
+	-- interior_width + 2.
+	local title_w = ui_utils.text_width(field.label) + 6
 
 	local value_w = 0
 	if field.rows then
