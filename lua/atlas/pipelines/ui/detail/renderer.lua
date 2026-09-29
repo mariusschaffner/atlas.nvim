@@ -138,6 +138,9 @@ local function append_log_tree(entries, job_id, path_prefix, depth, lines, highl
 			local duration_text = entry.duration and (" (" .. pipeline_logs.format_duration(entry.duration) .. ")") or ""
 			local text = indent .. (collapsed and "▸ " or "▾ ") .. entry.name .. duration_text
 			table.insert(lines, text)
+			-- Background first, narrower foreground span after -- same
+			-- layering order `bordered_box.lua` uses to combine the two.
+			table.insert(highlights, { line = #lines - 1, line_hl_group = "CursorLine" })
 			table.insert(highlights, { line = #lines - 1, start_col = 0, end_col = #text, hl_group = "AtlasColumnHeader" })
 			state.section_headers[#lines] = key
 			if not collapsed then
