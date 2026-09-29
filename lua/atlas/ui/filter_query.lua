@@ -189,7 +189,17 @@ function M.serialize(view, opts)
 		table.insert(parts, token("author", view.author_username))
 	end
 
-	if view.scope and view.scope ~= "" and view.scope ~= "assigned_to_me" and view.scope ~= "created_by_me" then
+	-- "all" is the default scope every dashboard opens with (see
+	-- issues/pulls `ui/dashboard/init.lua`) -- it still applies, but showing
+	-- it as literal `scope:all` text is just noise until the user actually
+	-- overrides it (typing `assignee:`/`author:`/a different `scope:` value).
+	if
+		view.scope
+		and view.scope ~= ""
+		and view.scope ~= "assigned_to_me"
+		and view.scope ~= "created_by_me"
+		and view.scope ~= "all"
+	then
 		table.insert(parts, token("scope", view.scope))
 	end
 

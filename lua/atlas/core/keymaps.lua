@@ -40,6 +40,8 @@ local M = {}
 
 ---@class AtlasUIFieldEditKeymaps
 ---@field close? AtlasKeymapValue Discards an in-progress inline field edit (assignee/labels/reviewers/title/filter box/...).
+---@field next_completion? AtlasKeymapValue Cycles to the next completion candidate (insert mode only) while an inline field edit's popup is visible.
+---@field previous_completion? AtlasKeymapValue Cycles to the previous completion candidate (insert mode only) while an inline field edit's popup is visible.
 
 ---@class AtlasUINotificationKeymaps
 ---@field open? AtlasKeymapValue
@@ -148,6 +150,8 @@ local M = {}
 ---| "ui.comments.react"
 ---| "ui.edit_description"
 ---| "ui.field_edit.close"
+---| "ui.field_edit.next_completion"
+---| "ui.field_edit.previous_completion"
 ---| "ui.inspect"
 ---| "ui.toggle_panel"
 ---| "ui.toggle_fold"
@@ -410,6 +414,12 @@ function M.validate()
 		-- (the standalone diff viewer, a separate buffer) never apply to the
 		-- same buffer, so sharing "gP" is safe.
 		{ "ui.previous_page", "pulls.review.diff.toggle_detail_panel" },
+		-- next_panel_tab/previous_panel_tab (detail-panel buffer) and
+		-- field_edit.next_completion/previous_completion (the inline
+		-- field-edit floating buffer, opened only while editing a field) are
+		-- never active on the same buffer at once, so sharing Tab/S-Tab is safe.
+		{ "ui.next_panel_tab", "ui.field_edit.next_completion" },
+		{ "ui.previous_panel_tab", "ui.field_edit.previous_completion" },
 	}
 
 	local function conflict_allowed(actions)

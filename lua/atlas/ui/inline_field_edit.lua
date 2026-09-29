@@ -95,7 +95,7 @@ end
 ---@field on_cancel (fun())|nil
 ---@field on_done fun()
 
----@type { win: integer, buf: integer, anchor_buf: integer, restore_win: integer|nil, resolved_by_lower: table<string, string>, saving: boolean, augroup: integer, debounce: uv.uv_timer_t|nil, request: AtlasRequestScope|nil }|nil
+---@type { win: integer, buf: integer, anchor_buf: integer, restore_win: integer|nil, resolved_by_lower: table<string, string>, saving: boolean, augroup: integer, debounce: uv.uv_timer_t|nil, request: AtlasRequestScope|nil, saved_completeopt: string|nil }|nil
 local active = nil
 
 ---@return boolean
@@ -281,6 +281,8 @@ function M.start(opts)
 
 	local submit_keys = opts.submit_keys or keymaps.resolve("ui.submit") or {}
 	local close_keys = opts.close_keys or keymaps.resolve("ui.field_edit.close") or {}
+	local next_completion_keys = keymaps.resolve("ui.field_edit.next_completion") or {}
+	local previous_completion_keys = keymaps.resolve("ui.field_edit.previous_completion") or {}
 
 	local buf = vim.api.nvim_create_buf(false, true)
 	vim.api.nvim_set_option_value("buftype", "nofile", { buf = buf })
@@ -347,6 +349,19 @@ function M.start(opts)
 	local anchor_buf = vim.api.nvim_win_get_buf(opts.anchor_win)
 	highlight_border(anchor_buf, opts.row, opts.col, opts.width, opts.height or 1)
 
+	-- 'completeopt' is global-only. Many users' own completion engine (e.g.
+	-- blink.cmp/nvim-cmp) sets it to include noselect/noinsert globally so
+	-- *its* accept keymaps drive insertion -- left as-is, that setting leaks
+	-- into our own vim.fn.complete() popup below and makes cycling through
+	-- candidates highlight-only, never writing the candidate into the buffer.
+	-- Force a known-good value for the life of this field edit and restore
+	-- the caller's value in finish().
+	local saved_completeopt = nil
+	if opts.completion then
+		saved_completeopt = vim.o.completeopt
+		vim.o.completeopt = "menu,menuone"
+	end
+
 	active = {
 		win = win,
 		buf = buf,
@@ -355,6 +370,7 @@ function M.start(opts)
 		resolved_by_lower = resolved_by_lower,
 		saving = false,
 		augroup = augroup,
+		saved_completeopt = saved_completeopt,
 	}
 
 	vim.api.nvim_win_set_cursor(win, { 1, #(opts.seed_text or "") })
@@ -368,6 +384,12 @@ function M.start(opts)
 		for _, key in ipairs(close_keys) do
 			pcall(vim.keymap.del, "n", key, { buffer = buf })
 		end
+		for _, key in ipairs(next_completion_keys) do
+			pcall(vim.keymap.del, "i", key, { buffer = buf })
+		end
+		for _, key in ipairs(previous_completion_keys) do
+			pcall(vim.keymap.del, "i", key, { buffer = buf })
+		end
 	end
 
 	local function finish()
@@ -376,6 +398,9 @@ function M.start(opts)
 		pcall(vim.api.nvim_del_augroup_by_id, augroup)
 		unbind()
 		clear_border_highlight(anchor_buf)
+		if active and active.saved_completeopt ~= nil then
+			vim.o.completeopt = active.saved_completeopt
+		end
 		active = nil
 		if vim.api.nvim_win_is_valid(win) then
 			pcall(vim.api.nvim_win_close, win, true)
@@ -441,6 +466,25 @@ function M.start(opts)
 	end
 
 	if opts.completion then
+		-- Cycle the popup (if visible) via Neovim's own <C-n>/<C-p> ins-completion
+		-- commands, which -- with `completeopt` forced above -- write the
+		-- highlighted candidate into the buffer as you move. A no-op when the
+		-- popup isn't visible, so these never insert a literal tab here.
+		for _, key in ipairs(next_completion_keys) do
+			vim.keymap.set("i", key, function()
+				if vim.fn.pumvisible() == 1 then
+					vim.api.nvim_feedkeys(vim.api.nvim_replace_termcodes("<C-n>", true, false, true), "n", false)
+				end
+			end, { buffer = buf, nowait = true, silent = true })
+		end
+		for _, key in ipairs(previous_completion_keys) do
+			vim.keymap.set("i", key, function()
+				if vim.fn.pumvisible() == 1 then
+					vim.api.nvim_feedkeys(vim.api.nvim_replace_termcodes("<C-p>", true, false, true), "n", false)
+				end
+			end, { buffer = buf, nowait = true, silent = true })
+		end
+
 		vim.api.nvim_create_autocmd("TextChangedI", {
 			group = augroup,
 			buffer = buf,
@@ -463,6 +507,9 @@ function M.start(opts)
 				cancel_request()
 				pcall(vim.api.nvim_del_augroup_by_id, augroup)
 				clear_border_highlight(anchor_buf)
+				if active.saved_completeopt ~= nil then
+					vim.o.completeopt = active.saved_completeopt
+				end
 				active = nil
 			end
 		end,

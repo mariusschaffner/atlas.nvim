@@ -194,6 +194,8 @@ M.options = {
 			edit_description = "i",
 			field_edit = {
 				close = "<Esc>",
+				next_completion = "<Tab>",
+				previous_completion = "<S-Tab>",
 			},
 			toggle_panel = "p",
 			toggle_fold = "za",
