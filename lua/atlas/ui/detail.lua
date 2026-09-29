@@ -275,16 +275,16 @@ local function create_split()
 	vim.api.nvim_create_autocmd("WinClosed", { pattern = tostring(spacer_win), once = true, callback = on_closed })
 end
 
----@param kind "issues"|"pulls"|"repo"|"milestone"|"pipelines"|"pipelines"
+---@param kind "issues"|"pulls"|"repo"|"milestone"|"pipelines"|"create"
 ---@return "single"|"split"
 local function layout_for(kind)
-	if kind == "pulls" or kind == "issues" or kind == "milestone" or kind == "pipelines" then
+	if kind == "pulls" or kind == "issues" or kind == "milestone" or kind == "pipelines" or kind == "create" then
 		return "split"
 	end
 	return "single"
 end
 
----@param kind "issues"|"pulls"|"repo"|"milestone"|"pipelines"
+---@param kind "issues"|"pulls"|"repo"|"milestone"|"pipelines"|"create"
 ---@param cleanup fun()
 ---@param render fun()
 ---@return integer win, integer buf, integer|nil header_win, integer|nil header_buf
@@ -325,7 +325,7 @@ function M.is_open(tab)
 		and (tab == nil or vim.api.nvim_win_get_tabpage(state.win) == tab)
 end
 
----@param kind "issues"|"pulls"|"repo"|"milestone"|"pipelines"
+---@param kind "issues"|"pulls"|"repo"|"milestone"|"pipelines"|"create"
 ---@param tab integer|nil
 ---@return boolean
 function M.is_showing(kind, tab)

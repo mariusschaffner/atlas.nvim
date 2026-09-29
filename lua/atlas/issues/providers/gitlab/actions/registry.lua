@@ -545,9 +545,10 @@ local function create_issue(ctx, done)
 	end
 
 	local function open_editor(path)
-		local create_issue_ui = require("atlas.issues.create.gitlab.issue")
-		create_issue_ui.open({
+		local create_ui = require("atlas.issues.create.gitlab")
+		create_ui.open({
 			project_path = path,
+			initial_type = ctx.initial_type,
 			on_done = function(result, err)
 				if err then
 					done(nil, tostring(err))
@@ -557,7 +558,7 @@ local function create_issue(ctx, done)
 					done(nil, nil)
 					return
 				end
-				done({ issue_key = result.key }, nil)
+				done(result, nil)
 			end,
 		})
 	end
@@ -663,7 +664,7 @@ register({
 	run = milestone,
 })
 register({ id = "search", label = "Search Issues", hidden = true, run = search })
-register({ id = "create_issue", label = "Create Issue", hidden = true, run = create_issue })
+register({ id = "create_issue", label = "Create issue or milestone", hidden = true, run = create_issue })
 register(actions.manage_templates)
 register(actions.browse_issue)
 register(actions.copy_issue_key)

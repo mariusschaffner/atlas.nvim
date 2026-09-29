@@ -480,7 +480,13 @@ end
 
 ---@param result IssuesActionResult|nil
 function M.apply_action_result(result)
-	if result == nil or result.issue_key == nil or result.issue_key == "" then
+	if result == nil then
+		return
+	end
+	if result.issue_key == nil or result.issue_key == "" then
+		if result.refresh then
+			M.refresh_current_view()
+		end
 		return
 	end
 

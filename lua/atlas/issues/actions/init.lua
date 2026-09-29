@@ -25,6 +25,7 @@ local utils = require("atlas.issues.actions.utils")
 ---@field current_user IssueUser|nil
 ---@field repo_slug string|nil
 ---@field project_path string|nil
+---@field initial_type ("issue"|"milestone")|nil Pre-fills the unified create view's `Type` field (`create_issue` action only), e.g. from `:Atlas create milestone`.
 
 ---@class AtlasIssueAction
 ---@field id string

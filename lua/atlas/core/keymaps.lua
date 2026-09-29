@@ -121,6 +121,8 @@ local M = {}
 ---@field change_due_date? AtlasKeymapValue
 ---@field edit_issue? AtlasKeymapValue
 ---@field create_issue? AtlasKeymapValue
+---@field create_field_type? AtlasKeymapValue Edits the "Type" field (issue|milestone) on the unified issue/milestone create view. No equivalent elsewhere -- every other create-view field reuses its detail-view action id.
+---@field create_field_templates? AtlasKeymapValue Browses/inserts a GitLab issue template into the Description field, on the create view's issue-type Description field only.
 ---@field toggle_description_mode? AtlasKeymapValue
 ---@field create_branch? AtlasKeymapValue
 ---@field go_to_pull? AtlasKeymapValue
@@ -230,6 +232,8 @@ local M = {}
 ---| "issues.change_due_date"
 ---| "issues.edit_issue"
 ---| "issues.create_issue"
+---| "issues.create_field_type"
+---| "issues.create_field_templates"
 ---| "issues.toggle_description_mode"
 ---| "issues.create_branch"
 ---| "issues.go_to_pull"

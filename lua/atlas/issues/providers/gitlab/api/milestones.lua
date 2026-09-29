@@ -150,6 +150,50 @@ function M.list_merge_requests(project_path, milestone_id, on_done)
 end
 
 ---@param project_path string
+---@param opts { title: string, description: string|nil, start_date: string|nil, due_date: string|nil }
+---@param on_done fun(milestone: IssueMilestone|nil, err: string|nil)
+---@return { cancel: fun() }|nil
+function M.create(project_path, opts, on_done)
+	if project_path == "" then
+		on_done(nil, "Missing project path")
+		return nil
+	end
+	local title = vim.trim(tostring(opts.title or ""))
+	if title == "" then
+		on_done(nil, "Title is required")
+		return nil
+	end
+
+	local payload = { title = title }
+	if opts.description and opts.description ~= "" then
+		payload.description = opts.description
+	end
+	if opts.start_date and opts.start_date ~= "" then
+		payload.start_date = opts.start_date
+	end
+	if opts.due_date and opts.due_date ~= "" then
+		payload.due_date = opts.due_date
+	end
+
+	local endpoint = string.format("/projects/%s/milestones", service.url_encode(project_path))
+	return service.request("POST", endpoint, payload, function(result, err)
+		if err then
+			on_done(nil, err)
+			return
+		end
+		local milestone = to_milestone(json.safe_table(result))
+		if milestone == nil then
+			on_done(nil, "GitLab returned an invalid milestone")
+			return
+		end
+		on_done(milestone, nil)
+	end, {
+		action = "Create milestone",
+		project = project_path,
+	})
+end
+
+---@param project_path string
 ---@param milestone_id integer
 ---@param description string
 ---@param on_done fun(ok: boolean, err: string|nil)

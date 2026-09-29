@@ -22,11 +22,14 @@ local function build_choices()
 end
 
 ---@param provider IssuesProvider
-local function create(provider)
-	require("atlas.issues.actions").run("create_issue", { provider = provider })
+---@param initial_type ("issue"|"milestone")|nil
+local function create(provider, initial_type)
+	require("atlas.issues.actions").run("create_issue", { provider = provider, initial_type = initial_type })
 end
 
-function M.start()
+---@param opts { initial_type: ("issue"|"milestone")|nil }|nil
+function M.start(opts)
+	local initial_type = opts and opts.initial_type
 	local choices = build_choices()
 
 	if #choices == 0 then
@@ -35,7 +38,7 @@ function M.start()
 	end
 
 	if #choices == 1 then
-		create(choices[1].provider)
+		create(choices[1].provider, initial_type)
 		return
 	end
 
@@ -51,7 +54,7 @@ function M.start()
 			if index == nil then
 				return
 			end
-			create(choices[index].provider)
+			create(choices[index].provider, initial_type)
 		end,
 	})
 end

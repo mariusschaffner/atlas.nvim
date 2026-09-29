@@ -92,7 +92,7 @@ function M.register(buf, views)
 		utils.insert_if(
 			items,
 			resolver.item("issues.create_issue", {
-				desc = "Create issue",
+				desc = "Create issue or milestone",
 				hint_desc = "Create",
 				index = 30,
 				callback = function()

@@ -356,6 +356,72 @@ function M.render_columns(columns, opts)
 	return lines, spans, regions
 end
 
+--- A single row of N independently-bordered boxes at caller-specified exact
+--- widths (unlike `render_columns`, whose columns auto-size to content and
+--- are capped equally) -- e.g. a 30/70 split of a "Type" box and a "Title"
+--- box on one line.
+---@param fields AtlasFieldBoxField[]
+---@param widths integer[] One exact box_width per field, same length as `fields`.
+---@param opts { gap: integer|nil }|nil
+---@return string[] lines
+---@return table[] highlights
+---@return table<string, AtlasFieldBoxRegion> regions Keyed by `id` for any field that set one.
+function M.render_row(fields, widths, opts)
+	opts = opts or {}
+	local gap_width = opts.gap or GAP
+	local gap = string.rep(" ", gap_width)
+
+	local field_lines, field_spans, field_regions = {}, {}, {}
+	local max_rows = 0
+	for i, field in ipairs(fields) do
+		local lines, spans, region = render_one(field, widths[i])
+		field_lines[i] = lines
+		field_spans[i] = spans
+		field_regions[i] = region
+		max_rows = math.max(max_rows, #lines)
+	end
+
+	local offsets = {}
+	for i = 1, #fields do
+		offsets[i] = (i == 1) and 0 or (offsets[i - 1] + widths[i - 1] + gap_width)
+	end
+
+	local lines = {}
+	for row = 1, max_rows do
+		local parts = {}
+		for i = 1, #fields do
+			table.insert(parts, field_lines[i][row] or string.rep(" ", widths[i]))
+		end
+		lines[row] = table.concat(parts, gap)
+	end
+
+	local spans = {}
+	for i, field_span_list in ipairs(field_spans) do
+		for _, span in ipairs(field_span_list) do
+			if span.line_hl_group ~= nil then
+				table.insert(spans, span)
+			else
+				table.insert(spans, {
+					line = span.line,
+					start_col = offsets[i] + span.start_col,
+					end_col = offsets[i] + span.end_col,
+					hl_group = span.hl_group,
+				})
+			end
+		end
+	end
+
+	local regions = {}
+	for i, field in ipairs(fields) do
+		local region = field_regions[i]
+		if field.id and region then
+			regions[field.id] = { row = region.row, col = offsets[i] + region.col, width = region.width, height = region.height }
+		end
+	end
+
+	return lines, spans, regions
+end
+
 ---@param fields AtlasFieldBoxField[]
 ---@param opts { width: integer, max_field_width: integer|nil }
 ---@return string[] lines

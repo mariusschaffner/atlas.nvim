@@ -133,10 +133,10 @@ M.register({
 
 M.register({
 	name = "create",
-	usage = "create <pr|issue>",
-	description = "Create a pull request or issue",
+	usage = "create <pr|issue|milestone>",
+	description = "Create a pull request, issue, or milestone",
 	complete = function(arglead)
-		return complete_options(arglead, { "pr", "issue" })
+		return complete_options(arglead, { "pr", "issue", "milestone" })
 	end,
 	run = function(args)
 		local function start(kind)
@@ -144,15 +144,17 @@ M.register({
 				require("atlas.pulls.create.pr").start()
 			elseif kind == "issue" then
 				require("atlas.issues.create").start()
+			elseif kind == "milestone" then
+				require("atlas.issues.create").start({ initial_type = "milestone" })
 			else
-				notify.error("Usage: :Atlas create <pr|issue>", { vim_notify = true })
+				notify.error("Usage: :Atlas create <pr|issue|milestone>", { vim_notify = true })
 			end
 		end
 
 		if args[1] then
 			start(args[1]:lower())
 		else
-			picker.select({ title = "Create:", items = { "pr", "issue" }, on_select = start })
+			picker.select({ title = "Create:", items = { "pr", "issue", "milestone" }, on_select = start })
 		end
 	end,
 })
@@ -259,6 +261,7 @@ local function pick_command()
 		elseif command.name == "create" then
 			add(command, { "pr" }, "Create a pull request")
 			add(command, { "issue" }, "Create an issue")
+			add(command, { "milestone" }, "Create a milestone")
 		elseif command.name == "clear" then
 			add(command, {}, "Clear caches, clones, and logs")
 			add(command, { "cache" }, "Clear caches and cloned repositories")
