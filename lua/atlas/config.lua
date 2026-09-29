@@ -216,6 +216,7 @@ M.options = {
 			copy_url = "Y",
 			show_details = "gK",
 			filter = "/",
+			clear_filter = "\\",
 		},
 		picker = {
 			next_item = { "<Down>", "<C-n>", "<C-j>" },

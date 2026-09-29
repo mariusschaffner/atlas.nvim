@@ -378,6 +378,35 @@ function M.apply_filter_text(text)
 	M.switch_view(view)
 end
 
+--- The neutral, filter-free view every dashboard opens with. Shared by
+-- `ui/dashboard/init.lua` (initial open) and `M.clear_filter`/`M.is_filter_default`
+-- below, so all three stay in lockstep by construction.
+---@return IssuesViewConfig
+function M.default_view()
+	local provider = state.provider
+	return {
+		name = "Custom",
+		scope = "all",
+		state = "opened",
+		project = provider and provider.current_repo_project and provider.current_repo_project() or nil,
+	}
+end
+
+--- Whether the active filter is indistinguishable from `M.default_view()`,
+-- i.e. what the filter bar shows right now is exactly what it'd show for a
+-- freshly opened dashboard. Compared via the same serialized text the filter
+-- bar itself displays, so this always agrees with what's visibly "not the
+-- default" on screen (e.g. switching to a named quick view counts too).
+---@return boolean
+function M.is_filter_default()
+	local default_text = require("atlas.ui.filter_query").serialize(M.default_view(), { domain = "issues" })
+	return state.filter_text == default_text
+end
+
+function M.clear_filter()
+	M.switch_view(M.default_view())
+end
+
 ---@param source_buf integer|nil
 function M.show_issue_details(source_buf)
 	local node = navigation.current_item()

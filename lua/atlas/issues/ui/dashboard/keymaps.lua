@@ -105,6 +105,22 @@ function M.register(buf, views)
 
 	utils.insert_if(
 		items,
+		resolver.item("ui.clear_filter", {
+			desc = "Reset filter to default",
+			hint_desc = "Clear Filter",
+			index = 31,
+			hidden = function()
+				return controller.is_filter_default()
+			end,
+			opts = { nowait = true, silent = true },
+			callback = function()
+				controller.clear_filter()
+			end,
+		})
+	)
+
+	utils.insert_if(
+		items,
 		resolver.item("ui.toggle_fold", {
 			desc = "Toggle milestone/group fold",
 			hint_desc = "Fold",

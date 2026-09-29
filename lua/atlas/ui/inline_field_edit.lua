@@ -349,17 +349,21 @@ function M.start(opts)
 	local anchor_buf = vim.api.nvim_win_get_buf(opts.anchor_win)
 	highlight_border(anchor_buf, opts.row, opts.col, opts.width, opts.height or 1)
 
-	-- 'completeopt' is global-only. Many users' own completion engine (e.g.
-	-- blink.cmp/nvim-cmp) sets it to include noselect/noinsert globally so
-	-- *its* accept keymaps drive insertion -- left as-is, that setting leaks
-	-- into our own vim.fn.complete() popup below and makes cycling through
-	-- candidates highlight-only, never writing the candidate into the buffer.
-	-- Force a known-good value for the life of this field edit and restore
-	-- the caller's value in finish().
+	-- 'completeopt' is global-only, so force a known-good value for the life
+	-- of this field edit (restored in finish()) instead of trusting whatever
+	-- the user's own completion engine has set globally. `noselect` is the
+	-- important piece: without it, vim.fn.complete() below auto-inserts the
+	-- first candidate the instant it's called -- including the very first,
+	-- pre-keystroke fetch -- which force-fills the field before the user has
+	-- typed or pressed anything. With `noselect`, nothing is written until
+	-- the user explicitly cycles with next_completion/previous_completion
+	-- (<Tab>/<S-Tab> below, forwarding to Neovim's own <C-n>/<C-p>): the
+	-- first such press both selects *and* inserts the candidate, exactly
+	-- like a normal completion engine's accept-on-select.
 	local saved_completeopt = nil
 	if opts.completion then
 		saved_completeopt = vim.o.completeopt
-		vim.o.completeopt = "menu,menuone"
+		vim.o.completeopt = "menu,menuone,noselect"
 	end
 
 	active = {

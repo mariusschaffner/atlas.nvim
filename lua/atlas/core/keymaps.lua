@@ -31,6 +31,7 @@ local M = {}
 ---@field copy_url? AtlasKeymapValue
 ---@field show_details? AtlasKeymapValue
 ---@field filter? AtlasKeymapValue
+---@field clear_filter? AtlasKeymapValue Resets the dashboard's active filter back to its default (issues/pulls only), shown as a footer hint only while a non-default filter is active.
 
 ---@class AtlasUICommentKeymaps
 ---@field add? AtlasKeymapValue
@@ -170,6 +171,7 @@ local M = {}
 ---| "ui.copy_url"
 ---| "ui.show_details"
 ---| "ui.filter"
+---| "ui.clear_filter"
 ---| "picker.next_item"
 ---| "picker.previous_item"
 ---| "picker.select"
@@ -360,8 +362,13 @@ function M.validate()
 	---@type AtlasKeymapActionId[][]
 	local ALLOWED_CONFLICTS = {
 		{ "pulls.review.find_file", "pulls.review.explorer.find_file" },
-		{ "ui.next_panel_tab", "pulls.review.explorer.next_file" },
-		{ "ui.previous_panel_tab", "pulls.review.explorer.previous_file" },
+		-- next_panel_tab/previous_panel_tab (detail-panel buffer),
+		-- review.explorer.next_file/previous_file (review explorer buffer) and
+		-- field_edit.next_completion/previous_completion (the inline
+		-- field-edit floating buffer, opened only while editing a field) are
+		-- never active on the same buffer at once, so sharing Tab/S-Tab is safe.
+		{ "ui.next_panel_tab", "pulls.review.explorer.next_file", "ui.field_edit.next_completion" },
+		{ "ui.previous_panel_tab", "pulls.review.explorer.previous_file", "ui.field_edit.previous_completion" },
 		{ "pulls.review.diff.add_comment", "issues.create_issue", "pulls.create_pr" },
 		{ "pulls.toggle_repo_issue_state", "pulls.review.diff.toggle_layout" },
 		{ "pulls.open_diff", "pulls.review.focus_item" },
@@ -414,12 +421,6 @@ function M.validate()
 		-- (the standalone diff viewer, a separate buffer) never apply to the
 		-- same buffer, so sharing "gP" is safe.
 		{ "ui.previous_page", "pulls.review.diff.toggle_detail_panel" },
-		-- next_panel_tab/previous_panel_tab (detail-panel buffer) and
-		-- field_edit.next_completion/previous_completion (the inline
-		-- field-edit floating buffer, opened only while editing a field) are
-		-- never active on the same buffer at once, so sharing Tab/S-Tab is safe.
-		{ "ui.next_panel_tab", "ui.field_edit.next_completion" },
-		{ "ui.previous_panel_tab", "ui.field_edit.previous_completion" },
 	}
 
 	local function conflict_allowed(actions)
