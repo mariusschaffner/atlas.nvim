@@ -6,11 +6,12 @@ local notify = require("atlas.core.notify")
 local request_scope = require("atlas.core.requests")
 local state = require("atlas.pipelines.ui.detail.state")
 
--- Forward-declared: ensure_job_log's async callback needs render_if_open, and
--- load_details' needs sync_live_updates, before their own (later)
--- definitions -- see the reassignments below.
+-- Forward-declared: ensure_job_log's async callback needs render_if_open,
+-- load_details' needs sync_live_updates and finalize_finished_job_logs,
+-- before their own (later) definitions -- see the reassignments below.
 local render_if_open
 local sync_live_updates
+local finalize_finished_job_logs
 
 ---@param pipeline Pipeline
 ---@param job PipelineJob
@@ -78,6 +79,7 @@ local function load_details(pipeline, force_refresh)
 			notify.error(tostring(err or "Failed to load pipeline details"))
 		else
 			state.current_pipeline = detailed
+			finalize_finished_job_logs(detailed)
 		end
 		render_if_open()
 		sync_live_updates()
@@ -91,17 +93,30 @@ end
 -- one fast timer tick (also what animates the job-log box's "Live" spinner)
 -- rather than a separate slow poll timer, so the two stay trivially in sync.
 local TICK_MS = 150
-local POLL_INTERVAL_MS = 3000
+local POLL_INTERVAL_MS = 1000
 local TICKS_PER_POLL = math.max(1, math.floor(POLL_INTERVAL_MS / TICK_MS))
 
 ---@type uv.uv_timer_t|nil
 local live_timer = nil
 local live_tick_count = 0
 
+-- Per-job bookkeeping across polls, keyed by job id -- reset whenever the
+-- selected pipeline changes (see M.select/cleanup below).
+---@type table<string, string> Last-seen state per job id, so finalize_finished_job_logs can spot a running->finished transition.
+local job_states = {}
+---@type table<string, boolean> Job ids that already got their post-finish log refresh, so it only fires once.
+local log_finalized = {}
+
+---@param pstate PipelineState|string|nil
+---@return boolean
+local function is_running_state(pstate)
+	return tostring(pstate or ""):upper() == "INPROGRESS"
+end
+
 ---@param pipeline Pipeline|nil
 ---@return boolean
 local function is_pipeline_running(pipeline)
-	return pipeline ~= nil and tostring(pipeline.state or ""):upper() == "INPROGRESS"
+	return pipeline ~= nil and is_running_state(pipeline.state)
 end
 
 ---@return PipelineJob|nil
@@ -120,7 +135,7 @@ end
 ---@param job PipelineJob|nil
 ---@return boolean
 local function is_job_running(job)
-	return job ~= nil and tostring(job.state or ""):upper() == "INPROGRESS"
+	return job ~= nil and is_running_state(job.state)
 end
 
 --- Silently re-fetches a still-running job's log in the background. Unlike
@@ -156,6 +171,27 @@ local function refresh_job_log(pipeline, job)
 		state.log_by_job_id[id] = { status = "loaded", text = text }
 		render_if_open()
 	end)
+end
+
+--- Called whenever fresh pipeline details land (on the initial load and on
+--- every live poll). GitLab's trace can lag slightly behind a job's status
+--- flipping to finished, so a job that just transitioned from running to
+--- finished -- and whose log we've already shown -- gets one more silent
+--- refresh here, exactly once. Without this, the last line or two sometimes
+--- only showed up after closing and reopening the detail view.
+---@param pipeline Pipeline
+finalize_finished_job_logs = function(pipeline)
+	for _, stage in ipairs(pipeline.stages or {}) do
+		for _, job in ipairs(stage.jobs or {}) do
+			local id = tostring(job.id)
+			local was_running = is_running_state(job_states[id])
+			if was_running and not is_job_running(job) and state.log_by_job_id[id] ~= nil and not log_finalized[id] then
+				log_finalized[id] = true
+				refresh_job_log(pipeline, job)
+			end
+			job_states[id] = job.state
+		end
+	end
 end
 
 local function stop_live_updates()
@@ -207,6 +243,8 @@ end
 
 local function cleanup()
 	stop_live_updates()
+	job_states = {}
+	log_finalized = {}
 	local buf = state.buf
 	if buf and vim.api.nvim_buf_is_valid(buf) then
 		require("atlas.pipelines.ui.detail.keymaps").remove(buf)
@@ -240,6 +278,8 @@ function M.select(pipeline, opts)
 		state.active_stage = 1
 		state.active_job_by_stage = {}
 		state.log_by_job_id = {}
+		job_states = {}
+		log_finalized = {}
 	end
 	render()
 	sync_live_updates()

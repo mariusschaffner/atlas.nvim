@@ -36,17 +36,37 @@ function M.state_hl(state)
 	return STATE_HL[tostring(state or "UNKNOWN"):upper()] or STATE_HL.UNKNOWN
 end
 
+---@param pstate PipelineState|string|nil
+---@return boolean
+local function is_running(pstate)
+	return tostring(pstate or ""):upper() == "INPROGRESS"
+end
+
+--- A running job's box shows "Live" instead of a duration (which wouldn't be
+--- final yet anyway); once it finishes, its title switches over to the
+--- duration -- same idea as the job-log box's own "Live" indicator, just
+--- static here rather than spinner-animated, so the graph doesn't need
+--- redrawing on every animation tick.
+---@param job PipelineJob
+---@return string
+local function job_box_title(job)
+	if is_running(job.state) then
+		return "Live"
+	end
+	return utils.human_duration(job.duration)
+end
+
 ---@param stage PipelineStage
 ---@return integer
 local function stage_content_width(stage)
 	local width = MIN_JOB_CONTENT_WIDTH
 	for _, job in ipairs(stage.jobs or {}) do
 		width = math.max(width, vim.fn.strdisplaywidth(tostring(job.name or "")))
-		local duration_text = utils.human_duration(job.duration)
-		if duration_text ~= "" then
+		local title_text = job_box_title(job)
+		if title_text ~= "" then
 			-- bordered_box's top border needs interior_width >= title_w + 3
 			-- (see bordered_box.lua's build_top) for the title to fit unclipped.
-			width = math.max(width, ui_utils.text_width(duration_text) + 3)
+			width = math.max(width, ui_utils.text_width(title_text) + 3)
 		end
 	end
 	return math.min(width, MAX_JOB_CONTENT_WIDTH)
@@ -58,11 +78,12 @@ end
 ---@return table[] highlights
 local function render_job_box(job, content_width)
 	local box_width = content_width + 2
-	local duration_text = utils.human_duration(job.duration)
+	local title_text = job_box_title(job)
 	return bordered_box.render({
 		width = box_width,
 		box_width = box_width,
-		title = duration_text ~= "" and duration_text or nil,
+		title = title_text ~= "" and title_text or nil,
+		title_highlights = is_running(job.state) and { { start_col = 0, end_col = #title_text, hl_group = "AtlasTextWarning" } } or nil,
 		border_hl = M.state_hl(job.state),
 		content_lines = { tostring(job.name or "") },
 	})

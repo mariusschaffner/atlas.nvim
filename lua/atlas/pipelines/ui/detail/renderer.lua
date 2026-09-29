@@ -183,32 +183,12 @@ local function render_job_log(pipeline, ensure_job_log)
 			utils.push(lines, highlights, "(empty log)", "AtlasTextMuted")
 		else
 			show_line_numbers = true
-			-- Only the leading timestamp (if any) gets its own color; the
-			-- message always stays the buffer's plain foreground -- classifying
-			-- the message itself (error/warning/etc.) used to make lines look
-			-- inconsistently colored depending on content. A raw line without
-			-- its own timestamp (e.g. a `\r`-continuation of a progress line,
-			-- or plain job-script output the runner didn't stamp) inherits the
-			-- most recently seen one instead of showing no timestamp at all,
-			-- so every line reads consistently.
-			local last_ts = nil
-			for i, line in ipairs(log_lines) do
-				local row = i - 1
-				local ts_end = pipeline_logs.timestamp_end(line)
-				local display_line = line
-				local ts_len = ts_end and ts_end > 0 and ts_end or nil
-
-				if ts_len then
-					last_ts = line:sub(1, ts_len)
-				elseif last_ts then
-					display_line = last_ts .. " " .. line
-					ts_len = #last_ts
-				end
-
-				table.insert(lines, display_line)
-				if ts_len then
-					table.insert(highlights, { line = row, start_col = 0, end_col = ts_len, hl_group = "AtlasTextMuted" })
-				end
+			-- Plain foreground for every line, no per-line timestamp -- GitLab
+			-- traces don't timestamp most lines anyway (only some
+			-- runner-generated ones do), so showing it for a few lines and not
+			-- others just looked inconsistent. Raw output, as-is.
+			for _, line in ipairs(log_lines) do
+				table.insert(lines, line)
 			end
 		end
 	end
