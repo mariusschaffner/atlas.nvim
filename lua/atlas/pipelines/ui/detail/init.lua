@@ -325,6 +325,30 @@ function M.previous_job()
 	change_job(-1)
 end
 
+--- Toggles the GitLab CI section (if any) at or above the cursor in the
+--- job-log content window. `state.section_headers` maps buffer line ->
+--- fold key and is rebuilt on every render (see renderer.lua's
+--- `render_job_log`/`append_log_tree`).
+function M.toggle_fold()
+	local win = state.win
+	if not win or not vim.api.nvim_win_is_valid(win) then
+		return
+	end
+	local cursor_line = vim.api.nvim_win_get_cursor(win)[1]
+	local key
+	for line = cursor_line, 1, -1 do
+		key = state.section_headers[line]
+		if key then
+			break
+		end
+	end
+	if not key then
+		return
+	end
+	state.collapsed_sections[key] = state.collapsed_sections[key] ~= true
+	render()
+end
+
 ---@param pipeline Pipeline
 ---@param opts { provider: PipelinesProvider|nil, force_refresh: boolean|nil }|nil
 function M.open(pipeline, opts)

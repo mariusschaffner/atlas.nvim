@@ -77,6 +77,21 @@ function M.register(buf)
 		})
 	)
 
+	-- Same action id as the PR-tab pipeline/job boxes' fold toggle (different
+	-- buffer, no clash) -- repurposed here to collapse/expand a GitLab CI
+	-- section in the job log under/above the cursor.
+	utils.insert_if(
+		items,
+		resolver.item("ui.toggle_fold", {
+			desc = "Toggle log section",
+			hint = true,
+			opts = { nowait = true, silent = true },
+			callback = function()
+				require("atlas.pipelines.ui.detail").toggle_fold()
+			end,
+		})
+	)
+
 	M.remove(buf)
 	help.register("General", items, { index = 300, buffer = buf })
 end
@@ -89,6 +104,7 @@ function M.remove(buf)
 	utils.insert_if(general, resolver.remove_item("ui.next_page"))
 	utils.insert_if(general, resolver.remove_item("ui.next_panel_tab"))
 	utils.insert_if(general, resolver.remove_item("ui.previous_panel_tab"))
+	utils.insert_if(general, resolver.remove_item("ui.toggle_fold"))
 	help.remove("General", general, { buffer = buf })
 end
 

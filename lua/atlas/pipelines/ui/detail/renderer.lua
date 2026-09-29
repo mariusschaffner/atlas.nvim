@@ -116,6 +116,44 @@ local function job_log_title(tab_items, active_job_id, border_hl, streaming, wid
 	return chunks
 end
 
+--- Appends a parsed log tree to `lines`/`highlights`, rendering GitLab CI
+--- sections as collapsible headers (fold icon + name + duration) using
+--- `state.collapsed_sections`, and recording each header's buffer line in
+--- `state.section_headers` so the toggle-fold keymap can find it from the
+--- cursor. `path_prefix` is the section-key path down to this point (joined
+--- with the job id it belongs to forms the fold key).
+---@param entries AtlasLogEntry[]
+---@param job_id string
+---@param path_prefix string
+---@param depth integer
+---@param lines string[]
+---@param highlights table[]
+local function append_log_tree(entries, job_id, path_prefix, depth, lines, highlights)
+	local indent = string.rep("  ", depth)
+	for _, entry in ipairs(entries) do
+		if entry.kind == "group" then
+			local path = path_prefix .. "/" .. entry.key
+			local key = job_id .. "\0" .. path
+			local collapsed = state.collapsed_sections[key] == true
+			local duration_text = entry.duration and (" (" .. pipeline_logs.format_duration(entry.duration) .. ")") or ""
+			local text = indent .. (collapsed and "▸ " or "▾ ") .. entry.name .. duration_text
+			table.insert(lines, text)
+			table.insert(highlights, { line = #lines - 1, start_col = 0, end_col = #text, hl_group = "AtlasColumnHeader" })
+			state.section_headers[#lines] = key
+			if not collapsed then
+				append_log_tree(entry.entries, job_id, path, depth + 1, lines, highlights)
+			end
+		else
+			local text = indent .. entry.text
+			table.insert(lines, text)
+			local hl = pipeline_logs.classify_log_line(entry.text)
+			if hl then
+				table.insert(highlights, { line = #lines - 1, start_col = #indent, end_col = #text, hl_group = hl })
+			end
+		end
+	end
+end
+
 --- Renders the bottom part: the active stage's jobs as tabs (shown in the
 --- content window's own native title, like the issue/pulls detail views'
 --- top-level tabs), and the active job's log as the window's plain buffer
@@ -171,6 +209,10 @@ local function render_job_log(pipeline, ensure_job_log)
 	ensure_job_log(pipeline, job)
 	local log_entry = state.log_by_job_id[tostring(job.id)]
 
+	-- Rebuilt below if the log renders successfully -- cleared unconditionally
+	-- first so a stale mapping from a previous job/render never lingers.
+	state.section_headers = {}
+
 	local lines, highlights = {}, {}
 	local show_line_numbers = false
 	if log_entry == nil or log_entry.status == "loading" then
@@ -178,18 +220,12 @@ local function render_job_log(pipeline, ensure_job_log)
 	elseif log_entry.status == "error" then
 		utils.push(lines, highlights, tostring(log_entry.text or "Failed to load job log"), "AtlasLogError")
 	else
-		local log_lines = pipeline_logs.split_log_lines(log_entry.text)
-		if #log_lines == 0 then
+		local entries = pipeline_logs.parse(log_entry.text)
+		if #entries == 0 then
 			utils.push(lines, highlights, "(empty log)", "AtlasTextMuted")
 		else
 			show_line_numbers = true
-			-- Plain foreground for every line, no per-line timestamp -- GitLab
-			-- traces don't timestamp most lines anyway (only some
-			-- runner-generated ones do), so showing it for a few lines and not
-			-- others just looked inconsistent. Raw output, as-is.
-			for _, line in ipairs(log_lines) do
-				table.insert(lines, line)
-			end
+			append_log_tree(entries, tostring(job.id), "", 0, lines, highlights)
 		end
 	end
 
@@ -255,8 +291,20 @@ function M.render(ensure_job_log)
 	detail_ui.set_content_border(border_hl)
 	vim.api.nvim_set_option_value("number", show_line_numbers, { win = win, scope = "local" })
 
+	-- Content is fully replaced on every render (streaming polls included),
+	-- which would otherwise reset scroll position -- most noticeably when
+	-- toggling a fold shifts the line count out from under the cursor.
+	local view
+	pcall(vim.api.nvim_win_call, win, function()
+		view = vim.fn.winsaveview()
+	end)
 	set_lines(buf, lines)
 	utils.apply_spans(buf, ns, spans)
+	if view then
+		pcall(vim.api.nvim_win_call, win, function()
+			vim.fn.winrestview(view)
+		end)
+	end
 end
 
 --- Re-applies just the job-log box's native title (job tabs + the "Live"

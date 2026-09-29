@@ -13,6 +13,8 @@ local request_scope = require("atlas.core.requests")
 ---@field active_job_by_stage table<integer, integer> 1-based active job tab index, keyed by stage index; remembers the last job picked per stage.
 ---@field log_by_job_id table<string, { status: "loading"|"loaded"|"error", text: string|nil }>
 ---@field log_requests AtlasRequestScope Separate from `requests` (pipeline details) so switching jobs doesn't cancel an in-flight details fetch and vice versa.
+---@field collapsed_sections table<string, boolean> Keyed by `"<job id>\0<section path>"` (see renderer.lua's `append_log_tree`); presence+true means collapsed, absent/false means expanded -- same convention as `atlas.issues.state`'s `collapsed_issue_keys`.
+---@field section_headers table<integer, string> 1-indexed content-buffer line -> fold key, rebuilt on every render; lets the toggle-fold keymap find the section under/above the cursor.
 local M = {
 	win = nil,
 	buf = nil,
@@ -26,6 +28,8 @@ local M = {
 	active_job_by_stage = {},
 	log_by_job_id = {},
 	log_requests = request_scope.new(),
+	collapsed_sections = {},
+	section_headers = {},
 }
 
 function M.reset()
@@ -43,6 +47,8 @@ function M.reset()
 	M.log_by_job_id = {}
 	M.log_requests.cancel()
 	M.log_requests = request_scope.new()
+	M.collapsed_sections = {}
+	M.section_headers = {}
 end
 
 ---@param stage_index integer
