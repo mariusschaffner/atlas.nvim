@@ -32,6 +32,11 @@ local M = {}
 ---@field show_details? AtlasKeymapValue
 ---@field filter? AtlasKeymapValue
 ---@field clear_filter? AtlasKeymapValue Resets the dashboard's active filter back to its default (issues/pulls only), shown as a footer hint only while a non-default filter is active.
+---@field create? AtlasUICreateKeymaps
+
+---@class AtlasUICreateKeymaps
+---@field field_type? AtlasKeymapValue Edits the "Type" field (issue|milestone|merge_request) on the unified create view. Cross-domain, so it lives under `ui.create` rather than any one domain's namespace.
+---@field field_title? AtlasKeymapValue Edits the "Title" field on the unified create view -- shared by every type, so it doesn't reuse any one domain's own title-edit action id.
 
 ---@class AtlasUICommentKeymaps
 ---@field add? AtlasKeymapValue
@@ -106,6 +111,9 @@ local M = {}
 ---@field edit_assignees? AtlasKeymapValue
 ---@field edit_labels? AtlasKeymapValue
 ---@field toggle_remove_source_branch? AtlasKeymapValue
+---@field edit_target_branch? AtlasKeymapValue Edits an existing MR's target branch (real detail view) -- same id/key as the create view's own Target branch field, since it's the same field either way.
+---@field create_field_source_branch? AtlasKeymapValue Edits the "Source branch" field on the unified create view (merge_request type only). No real-detail-view equivalent -- GitLab has no way to change an existing MR's source branch, ever.
+---@field create_field_draft? AtlasKeymapValue Toggles the "Draft" field on the unified create view (merge_request type only).
 ---@field review? AtlasPullsReviewKeymaps
 
 ---@class AtlasIssuesKeymaps
@@ -121,7 +129,6 @@ local M = {}
 ---@field change_due_date? AtlasKeymapValue
 ---@field edit_issue? AtlasKeymapValue
 ---@field create_issue? AtlasKeymapValue
----@field create_field_type? AtlasKeymapValue Edits the "Type" field (issue|milestone) on the unified issue/milestone create view. No equivalent elsewhere -- every other create-view field reuses its detail-view action id.
 ---@field create_field_templates? AtlasKeymapValue Browses/inserts a GitLab issue template into the Description field, on the create view's issue-type Description field only.
 ---@field toggle_description_mode? AtlasKeymapValue
 ---@field create_branch? AtlasKeymapValue
@@ -174,6 +181,8 @@ local M = {}
 ---| "ui.show_details"
 ---| "ui.filter"
 ---| "ui.clear_filter"
+---| "ui.create.field_type"
+---| "ui.create.field_title"
 ---| "picker.next_item"
 ---| "picker.previous_item"
 ---| "picker.select"
@@ -191,6 +200,9 @@ local M = {}
 ---| "pulls.edit_assignees"
 ---| "pulls.edit_labels"
 ---| "pulls.toggle_remove_source_branch"
+---| "pulls.edit_target_branch"
+---| "pulls.create_field_source_branch"
+---| "pulls.create_field_draft"
 ---| "pulls.review.approve"
 ---| "pulls.review.request_changes"
 ---| "pulls.review.submit_review"
@@ -232,7 +244,6 @@ local M = {}
 ---| "issues.change_due_date"
 ---| "issues.edit_issue"
 ---| "issues.create_issue"
----| "issues.create_field_type"
 ---| "issues.create_field_templates"
 ---| "issues.toggle_description_mode"
 ---| "issues.create_branch"
@@ -410,7 +421,15 @@ function M.validate()
 		-- change_milestone_title (milestone detail buffer) and edit_issue
 		-- (issue detail buffer) are separate panels that are never open at
 		-- once, so sharing "gt" is safe.
-		{ "issues.change_milestone_title", "issues.edit_issue" },
+		{ "issues.change_milestone_title", "issues.edit_issue", "pulls.edit_title", "ui.create.field_title" },
+		-- review.explorer.toggle_grouping (the review explorer, a separate
+		-- buffer) and the create view's own field_type are never open at
+		-- once, so sharing "T" is safe.
+		{ "pulls.review.explorer.toggle_grouping", "ui.create.field_type" },
+		-- review.submit_review (the review-diff UI, a separate buffer) and
+		-- the create view's own create_field_source_branch are never open at
+		-- once, so sharing "gs" is safe.
+		{ "pulls.review.submit_review", "pulls.create_field_source_branch" },
 		-- edit_description (Description tab) and add_comment (Activity tab,
 		-- issues.add_comment/ui.comments.add) are different tabs of the same
 		-- detail view, never active at once; ui.inspect is the dashboard's

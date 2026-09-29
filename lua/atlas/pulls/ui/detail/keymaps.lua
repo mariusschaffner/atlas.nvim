@@ -290,6 +290,30 @@ function M.register(buf, opts)
 		)
 	end
 
+	if supports_action("edit_target_branch") then
+		utils.insert_if(
+			items,
+			resolver.item("pulls.edit_target_branch", {
+				desc = "Edit target branch",
+				hint = false,
+				opts = { nowait = true, silent = true },
+				callback = function()
+					local pr = state.current_pr
+					if pr == nil then
+						return
+					end
+					local current = action_context(pr)
+					if current then
+						local on_update = state.on_update
+						actions.run("edit_target_branch", current, function(result)
+							complete_action(pr, on_update, result)
+						end)
+					end
+				end,
+			})
+		)
+	end
+
 	local core = state.provider and state.provider.capabilities.core
 
 	if core and core.update_remove_source_branch then
@@ -407,6 +431,7 @@ function M.remove(buf)
 	utils.insert_if(general, resolver.remove_item("pulls.edit_reviewers"))
 	utils.insert_if(general, resolver.remove_item("pulls.edit_assignees"))
 	utils.insert_if(general, resolver.remove_item("pulls.edit_labels"))
+	utils.insert_if(general, resolver.remove_item("pulls.edit_target_branch"))
 	utils.insert_if(general, resolver.remove_item("pulls.toggle_remove_source_branch"))
 	utils.insert_if(general, resolver.remove_item("ui.next_panel_tab"))
 	utils.insert_if(general, resolver.remove_item("ui.previous_panel_tab"))

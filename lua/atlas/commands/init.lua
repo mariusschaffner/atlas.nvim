@@ -141,7 +141,7 @@ M.register({
 	run = function(args)
 		local function start(kind)
 			if kind == "pr" then
-				require("atlas.pulls.create.pr").start()
+				require("atlas.pulls.create.gitlab").start()
 			elseif kind == "issue" then
 				require("atlas.issues.create").start()
 			elseif kind == "milestone" then

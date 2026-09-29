@@ -377,6 +377,89 @@ local function edit_labels(ctx, done)
 end
 
 ---@param ctx AtlasPullActionContext
+---@return boolean, string|nil
+local function edit_target_branch_available(ctx)
+	if not is_open_or_draft(ctx) then
+		return false, "MR is not open"
+	end
+	return true, nil
+end
+
+---@param ctx AtlasPullActionContext
+---@param done fun(result: PullsActionResult|nil, err: string|nil)
+local function edit_target_branch(ctx, done)
+	local pr = ctx.pr
+
+	local header_win = detail_state.header_win
+	local region = detail_state.header_regions and detail_state.header_regions.target_branch
+	if header_win == nil or not vim.api.nvim_win_is_valid(header_win) or region == nil then
+		local message = "Target branch field is not visible"
+		notify(ctx, "warn", message)
+		done(nil, message)
+		return
+	end
+
+	local current = tostring(pr.destination.branch or "")
+
+	local completion = {
+		fetch = function(query, on_items)
+			pullrequests_api.list_branches(pr, function(names, err)
+				if err or names == nil then
+					on_items({})
+					return
+				end
+				local q = vim.trim(query):lower()
+				local items = {}
+				for _, name in ipairs(names) do
+					if q == "" or name:lower():find(q, 1, true) == 1 then
+						table.insert(items, { name = name })
+					end
+				end
+				on_items(items)
+			end)
+		end,
+	}
+
+	inline_field_edit.start({
+		anchor_win = header_win,
+		row = region.row,
+		col = region.col,
+		width = region.width,
+		height = region.height,
+		seed_text = current,
+		seed_resolved = current ~= "" and { current } or {},
+		completion = completion,
+		on_save = function(text, save_done)
+			local branch = vim.trim(text)
+			if branch == current then
+				save_done(true)
+				done({ changed_pr = false, message = "No changes" }, nil)
+				return
+			end
+			if branch == "" then
+				save_done(false, "Target branch cannot be empty")
+				return
+			end
+
+			notify(ctx, "loading", string.format("Updating target branch on %s...", pr_label(pr)))
+			pullrequests_api.update_target_branch(pr, branch, function(ok, set_err)
+				if not ok then
+					save_done(false, set_err or "Failed")
+					return
+				end
+				notify(ctx, "success", "Target branch updated", 1200)
+				save_done(true)
+				done({ changed_pr = true, message = "Target branch updated" }, nil)
+			end)
+		end,
+		on_cancel = function()
+			done({ changed_pr = false, message = "Cancelled" }, nil)
+		end,
+		on_done = function() end,
+	})
+end
+
+---@param ctx AtlasPullActionContext
 ---@param done fun(result: PullsActionResult|nil, err: string|nil)
 local function search(ctx, done)
 	picker.search({
@@ -557,6 +640,15 @@ register({
 	-- state (open, draft, merged, or declined) -- only requires a PR to exist.
 	is_available = has_pr,
 	run = edit_labels,
+})
+
+register({
+	id = "edit_target_branch",
+	label = "Edit target branch",
+	-- Reachable via the Target Branch field's own "gB" hint; redundant in the picker.
+	hidden = true,
+	is_available = edit_target_branch_available,
+	run = edit_target_branch,
 })
 
 register({

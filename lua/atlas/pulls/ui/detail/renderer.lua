@@ -189,9 +189,12 @@ local function render_header(pr, tab_items, width)
 	local middle_fields = {}
 	utils.insert_if(middle_fields, provider_fields.labels)
 
+	local core = state.provider and state.provider.capabilities.core
+	local can_edit_target = core and core.update_target_branch ~= nil
+
 	local branch_fields = {}
 	table.insert(branch_fields, header.source_branch_field(pr.source.branch, state.diffstat))
-	table.insert(branch_fields, header.target_branch_field(pr.destination.branch))
+	table.insert(branch_fields, header.target_branch_field(pr.destination.branch, can_edit_target))
 
 	local readiness_fields = {}
 	utils.insert_if(readiness_fields, merge_readiness_field(provider_fields.delete_source_branch))

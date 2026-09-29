@@ -240,6 +240,8 @@ return {
 			update_reviewers = pullrequests_api.update_reviewers,
 			update_title = pullrequests_api.update_title,
 			update_description = pullrequests_api.update_description,
+			update_target_branch = pullrequests_api.update_target_branch,
+			list_branches = pullrequests_api.list_branches,
 			set_draft = pullrequests_api.set_draft,
 			update_remove_source_branch = pullrequests_api.update_remove_source_branch,
 			decline = pullrequests_api.decline,

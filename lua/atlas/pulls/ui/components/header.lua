@@ -146,15 +146,22 @@ function M.source_branch_field(src, diffstat)
 end
 
 ---@param dst string
+---@param editable boolean|nil
 ---@return PullsDetailHeaderField
-function M.target_branch_field(dst)
+function M.target_branch_field(dst, editable)
 	local branch_icon = icons.pulls("branch")
 	local value = string.format("%s %s", branch_icon, dst)
 	local dst_start = #branch_icon + 1
 	return {
-		label = utils.field_hint_label("pulls.open_diff", "Target Branch", true),
+		id = "target_branch",
+		label = utils.field_hint_label(
+			editable and { "pulls.edit_target_branch", "pulls.open_diff" } or "pulls.open_diff",
+			"Target Branch",
+			true
+		),
 		value = value,
 		hl = { { start_col = dst_start, end_col = dst_start + #dst, hl_group = highlights.dynamic_for(dst) or "AtlasTextMuted" } },
+		editable = editable,
 	}
 end
 

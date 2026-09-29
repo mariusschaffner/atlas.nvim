@@ -545,7 +545,7 @@ local function create_issue(ctx, done)
 	end
 
 	local function open_editor(path)
-		local create_ui = require("atlas.issues.create.gitlab")
+		local create_ui = require("atlas.ui.create")
 		create_ui.open({
 			project_path = path,
 			initial_type = ctx.initial_type,

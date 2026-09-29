@@ -1,26 +1,29 @@
--- Renders the unified issue/milestone create view: a required Type+Title row
--- (30/70 split, red border while empty, blue once filled -- see
--- `field_box.render_row`), then, once `Type` is chosen, the subset of the
--- real milestone/issue detail view's header fields that are actually
--- settable at creation time -- all optional, so they stay grey regardless of
--- whether they're filled (unlike the real detail views' "editable = blue"
--- convention). Description lives in the content area below, exactly like
--- the milestone/issue detail views' own Description tab.
+-- Renders the unified issue/milestone/merge-request create view: a required
+-- Type+Title row (30/70 split, red border while empty, blue once filled --
+-- see `field_box.render_row`), then, once `Type` is chosen, the subset of
+-- the matching real detail view's header fields that are actually settable
+-- at creation time. Required fields (Type, Title, and -- for merge_request
+-- -- Source/Target branch) get the red/blue treatment; everything else stays
+-- grey regardless of whether it's filled (unlike the real detail views'
+-- "editable = blue" convention). Description lives in the content area
+-- below, exactly like the milestone/issue/PR detail views' own Description
+-- tab.
 local M = {}
 
 local utils = require("atlas.ui.shared.utils")
 local icons = require("atlas.ui.shared.icons")
 local highlights = require("atlas.ui.shared.highlights")
 local presentation = require("atlas.issues.ui.presentation")
+local pulls_presentation = require("atlas.pulls.ui.presentation")
 local spinner = require("atlas.ui.components.spinner")
 local field_box = require("atlas.ui.components.field_box")
 local tabs = require("atlas.ui.components.tabs")
 local detail_ui = require("atlas.ui.detail")
 local inline_edit = require("atlas.ui.inline_edit")
-local state = require("atlas.issues.create.state")
+local state = require("atlas.ui.create.state")
 
-local ns = vim.api.nvim_create_namespace("atlas.issues.create")
-local header_ns = vim.api.nvim_create_namespace("atlas.issues.create.header")
+local ns = vim.api.nvim_create_namespace("atlas.ui.create")
+local header_ns = vim.api.nvim_create_namespace("atlas.ui.create.header")
 local PADDING_X = 1
 local TYPE_WIDTH_RATIO = 0.3
 local ROW_GAP = 2
@@ -55,7 +58,7 @@ end
 local function type_field()
 	return {
 		id = "type",
-		label = utils.field_hint_label("issues.create_field_type", "Type", true) .. " - (*)",
+		label = utils.field_hint_label("ui.create.field_type", "Type", true) .. " - (*)",
 		value = state.type,
 		border_hl = required_border(state.type),
 	}
@@ -65,7 +68,7 @@ end
 local function title_field()
 	return {
 		id = "title",
-		label = utils.field_hint_label("issues.edit_issue", "Title", true) .. " - (*)",
+		label = utils.field_hint_label("ui.create.field_title", "Title", true) .. " - (*)",
 		value = state.fields.title,
 		border_hl = required_border(state.fields.title),
 	}
@@ -191,6 +194,115 @@ local function milestone_field()
 	}
 end
 
+---@return AtlasFieldBoxField
+local function source_branch_field()
+	local value = state.fields.source_branch
+	return {
+		id = "source_branch",
+		label = utils.field_hint_label("pulls.create_field_source_branch", "Source branch", true) .. " - (*)",
+		value = value ~= "" and value or "",
+		border_hl = required_border(value),
+	}
+end
+
+---@return AtlasFieldBoxField
+local function target_branch_field()
+	local value = state.fields.target_branch
+	return {
+		id = "target_branch",
+		label = utils.field_hint_label("pulls.edit_target_branch", "Target branch", true) .. " - (*)",
+		value = value ~= "" and value or "",
+		border_hl = required_border(value),
+	}
+end
+
+---@return AtlasFieldBoxField
+local function mr_assignees_field()
+	local assignees = state.fields.assignees
+	local label = utils.field_hint_label("pulls.edit_assignees", "Assignees", true)
+	if #assignees == 0 then
+		return {
+			id = "assignee",
+			label = label,
+			value = string.format("%s Unassigned", icons.general("user")),
+			hl = "AtlasTextMuted",
+			border_hl = "AtlasFieldBoxBorder",
+		}
+	end
+
+	local names = {}
+	for _, a in ipairs(assignees) do
+		table.insert(names, tostring(a.name or a.username or ""))
+	end
+	return {
+		id = "assignee",
+		label = label,
+		value = string.format("%s %s", icons.general("user"), table.concat(names, ", ")),
+		hl = pulls_presentation.author_hl(assignees[1].username),
+		border_hl = "AtlasFieldBoxBorder",
+	}
+end
+
+---@return AtlasFieldBoxField
+local function mr_labels_field()
+	local labels = state.fields.labels
+	local label = utils.field_hint_label("pulls.edit_labels", "Labels", true)
+	if #labels == 0 then
+		return { id = "labels", label = label, value = "None", hl = "AtlasTextMuted", border_hl = "AtlasFieldBoxBorder" }
+	end
+
+	local names, spans, cursor = {}, {}, 0
+	for _, item in ipairs(labels) do
+		local name = tostring(item.name or "")
+		if name ~= "" then
+			table.insert(spans, {
+				start_col = cursor,
+				end_col = cursor + #name,
+				hl_group = highlights.dynamic_for(name) or "AtlasTextMuted",
+			})
+			table.insert(names, name)
+			cursor = cursor + #name + 2
+		end
+	end
+	return {
+		id = "labels",
+		label = label,
+		value = table.concat(names, ", "),
+		hl = spans,
+		border_hl = "AtlasFieldBoxBorder",
+	}
+end
+
+---@return AtlasFieldBoxField
+local function reviewers_field()
+	local reviewers = state.fields.reviewers
+	local label = utils.field_hint_label("pulls.edit_reviewers", "Reviewers", true)
+	if #reviewers == 0 then
+		return { id = "reviewers", label = label, value = "None", hl = "AtlasTextMuted", border_hl = "AtlasFieldBoxBorder" }
+	end
+	local names = {}
+	for _, r in ipairs(reviewers) do
+		table.insert(names, tostring(r.label or ""))
+	end
+	return {
+		id = "reviewers",
+		label = label,
+		value = table.concat(names, ", "),
+		hl = "AtlasText",
+		border_hl = "AtlasFieldBoxBorder",
+	}
+end
+
+---@return AtlasFieldBoxField
+local function draft_field()
+	return {
+		id = "draft",
+		kind = "toggle",
+		label = utils.field_hint_label("pulls.create_field_draft", "Draft", true),
+		enabled = state.fields.draft == true,
+	}
+end
+
 ---@param width integer
 ---@return string[] lines
 ---@return table[] highlights
@@ -219,6 +331,12 @@ local function render_header(width)
 				optional_date_field("due_date", "issues.change_due_date", "Due date", state.fields.due_date),
 			},
 		}
+	elseif state.type == "merge_request" then
+		columns = {
+			{ source_branch_field(), target_branch_field() },
+			{ mr_assignees_field(), mr_labels_field() },
+			{ reviewers_field(), draft_field() },
+		}
 	end
 
 	if columns then
@@ -233,9 +351,9 @@ local function render_header(width)
 	return lines, spans, regions
 end
 
---- Description is always optional, for either type, so its idle border
---- stays grey -- only actively editing it (via `inline_edit`, which owns the
---- whole content buffer) escalates to orange.
+--- Description is always optional, for every type, so its idle border stays
+--- grey -- only actively editing it (via `inline_edit`, which owns the whole
+--- content buffer) escalates to orange.
 ---@return string
 local function content_border_hl()
 	return inline_edit.is_active(state.buf) and "AtlasFieldBoxBorderEditing" or "AtlasFieldBoxBorder"

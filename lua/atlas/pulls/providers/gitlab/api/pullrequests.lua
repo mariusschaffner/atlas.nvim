@@ -356,6 +356,50 @@ function M.update_description(pr, description, on_done)
 end
 
 ---@param pr PullRequest
+---@param branch string
+---@param on_done fun(ok: boolean, err: string|nil)
+---@return { cancel: fun() }|nil
+function M.update_target_branch(pr, branch, on_done)
+	return update(pr, { target_branch = branch }, function(ok, err)
+		if not ok then
+			on_done(false, err)
+			return
+		end
+		pr.destination.branch = branch
+		on_done(true, nil)
+	end)
+end
+
+---@param pr PullRequest
+---@param on_done fun(branches: string[]|nil, err: string|nil)
+---@return { cancel: fun() }|nil
+function M.list_branches(pr, on_done)
+	local path = tostring(pr.repo_full_name or "")
+	if path == "" then
+		on_done(nil, "Missing project path")
+		return nil
+	end
+	local endpoint = string.format("/projects/%s/repository/branches?per_page=100", service.url_encode(path))
+	return service.request("GET", endpoint, nil, function(result, err)
+		if err then
+			on_done(nil, err)
+			return
+		end
+		local names = {}
+		for _, entry in ipairs(json.safe_table(result)) do
+			local name = json.safe_str(json.safe_table(entry).name)
+			if name then
+				table.insert(names, name)
+			end
+		end
+		on_done(names, nil)
+	end, {
+		action = "List branches",
+		project_path = path,
+	})
+end
+
+---@param pr PullRequest
 ---@param diff { add?: string[], remove?: string[] }
 ---@param on_done fun(ok: boolean, err: string|nil)
 ---@return { cancel: fun() }|nil
@@ -604,6 +648,12 @@ function M.create_pr(opts, on_done)
 	end
 	if #reviewer_ids > 0 then
 		payload.reviewer_ids = reviewer_ids
+	end
+	if opts.assignee_ids and #opts.assignee_ids > 0 then
+		payload.assignee_ids = opts.assignee_ids
+	end
+	if opts.labels and #opts.labels > 0 then
+		payload.labels = table.concat(opts.labels, ",")
 	end
 
 	local endpoint = string.format("/projects/%s/merge_requests", service.url_encode(path))

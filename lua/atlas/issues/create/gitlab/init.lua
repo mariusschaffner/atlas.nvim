@@ -1,21 +1,18 @@
--- GitLab-specific half of the unified issue/milestone create view: owns the
--- per-field inline editors (writing into the draft in `create.state` instead
--- of PUTing to GitLab, unlike every other caller of `inline_field_edit`/
--- `inline_edit`), the `:w`/`:q` interception that turns the draft into an
--- actual `POST`, and the final API calls themselves.
+-- Issue/milestone-specific half of the unified create view: owns the
+-- Assignee/Labels/Milestone/Start-Due-date field editors (writing into the
+-- draft in `ui.create.state` instead of PUTing to GitLab, unlike every other
+-- caller of `inline_field_edit`) and the final `create_issue`/
+-- `create_milestone` API calls. The generic shell (`:w`/`:q`, Type/Title/
+-- Description editing) lives in `atlas.ui.create`.
 local M = {}
 
-local detail_ui = require("atlas.ui.detail")
-local state = require("atlas.issues.create.state")
-local renderer = require("atlas.issues.create.renderer")
-local keymaps = require("atlas.issues.create.keymaps")
+local shell = require("atlas.ui.create")
+local state = require("atlas.ui.create.state")
 local notify = require("atlas.core.notify")
-local inline_field_edit = require("atlas.ui.inline_field_edit")
-local inline_edit = require("atlas.ui.inline_edit")
-local users_api = require("atlas.issues.providers.gitlab.api.users")
-local labels_api = require("atlas.issues.providers.gitlab.api.labels")
 local milestones_api = require("atlas.issues.providers.gitlab.api.milestones")
 local issues_api = require("atlas.issues.providers.gitlab.api.issues")
+local users_api = require("atlas.issues.providers.gitlab.api.users")
+local labels_api = require("atlas.issues.providers.gitlab.api.labels")
 local users_completion = require("atlas.providers.gitlab.completion.users")
 local labels_completion = require("atlas.providers.gitlab.completion.labels")
 local milestones_completion = require("atlas.providers.gitlab.completion.milestones")
@@ -25,228 +22,12 @@ local assignee_by_username = {}
 ---@type table<string, IssueMilestone>
 local milestone_by_title = {}
 
-local function render()
-	renderer.render()
-end
-
-local function render_if_open()
-	if detail_ui.is_showing("create") then
-		render()
-	end
-end
-
----@return boolean
-function M.is_open()
-	return detail_ui.is_showing("create")
-end
-
-function M.rerender()
-	render_if_open()
-end
-
-function M.close()
-	if M.is_open() then
-		detail_ui.close()
-	end
-end
-
-local TYPE_COMPLETION = {
-	fetch = function(query, on_items)
-		local q = vim.trim(query):lower()
-		local items = {}
-		for _, name in ipairs({ "issue", "milestone" }) do
-			if q == "" or name:find(q, 1, true) == 1 then
-				table.insert(items, { name = name })
-			end
-		end
-		on_items(items)
-	end,
-}
-
---- Edits the `Type` field. No-op while another field is already being
---- edited. Switching to a genuinely new type clears every other draft field
---- (title survives) and re-renders with that type's field set.
-function M.edit_type()
-	local buf = state.buf
-	local header_win = state.header_win
-	local region = state.header_regions and state.header_regions.type
-	if
-		buf == nil
-		or not vim.api.nvim_buf_is_valid(buf)
-		or header_win == nil
-		or not vim.api.nvim_win_is_valid(header_win)
-		or region == nil
-	then
-		notify.warn("Type field is not visible")
-		return
-	end
-	if inline_field_edit.is_active() then
-		return
-	end
-
-	local current = state.type
-	keymaps.remove(buf)
-	inline_field_edit.start({
-		anchor_win = header_win,
-		row = region.row,
-		col = region.col,
-		width = region.width,
-		height = region.height,
-		seed_text = current,
-		seed_resolved = current ~= "" and { current } or {},
-		completion = TYPE_COMPLETION,
-		on_save = function(text, done)
-			local value = vim.trim(text):lower()
-			if value == current then
-				done(true)
-				return
-			end
-			if value ~= "issue" and value ~= "milestone" then
-				local message = 'Type must be "issue" or "milestone"'
-				notify.warn(message)
-				done(false, message)
-				return
-			end
-			state.type = value
-			state.clear_type_fields()
-			done(true)
-		end,
-		on_cancel = function()
-			notify.info("Type unchanged", { timeout = 1200 })
-		end,
-		on_done = function()
-			if buf and vim.api.nvim_buf_is_valid(buf) then
-				keymaps.register(buf)
-			end
-			render_if_open()
-		end,
-	})
-end
-
---- Edits the `Title` field. Required, but (like every other field here)
---- leaving it empty is allowed mid-draft -- only `:w` enforces it.
-function M.edit_title()
-	local buf = state.buf
-	local header_win = state.header_win
-	local region = state.header_regions and state.header_regions.title
-	if
-		buf == nil
-		or not vim.api.nvim_buf_is_valid(buf)
-		or header_win == nil
-		or not vim.api.nvim_win_is_valid(header_win)
-		or region == nil
-	then
-		notify.warn("Title field is not visible")
-		return
-	end
-	if inline_field_edit.is_active() then
-		return
-	end
-
-	local current = state.fields.title
-	keymaps.remove(buf)
-	inline_field_edit.start({
-		anchor_win = header_win,
-		row = region.row,
-		col = region.col,
-		width = region.width,
-		height = region.height,
-		seed_text = current,
-		seed_resolved = current ~= "" and { current } or {},
-		on_save = function(text, done)
-			state.fields.title = vim.trim(text)
-			done(true)
-		end,
-		on_cancel = function() end,
-		on_done = function()
-			if buf and vim.api.nvim_buf_is_valid(buf) then
-				keymaps.register(buf)
-			end
-			render_if_open()
-		end,
-	})
-end
-
----@param field "start_date"|"due_date"
----@param label string
-local function edit_date_field(field, label)
-	local buf = state.buf
-	local header_win = state.header_win
-	local region = state.header_regions and state.header_regions[field]
-	if
-		buf == nil
-		or not vim.api.nvim_buf_is_valid(buf)
-		or header_win == nil
-		or not vim.api.nvim_win_is_valid(header_win)
-		or region == nil
-	then
-		notify.warn(label .. " field is not visible")
-		return
-	end
-	if inline_field_edit.is_active() then
-		return
-	end
-
-	local current = state.fields[field]
-	keymaps.remove(buf)
-	inline_field_edit.start({
-		anchor_win = header_win,
-		row = region.row,
-		col = region.col,
-		width = region.width,
-		height = region.height,
-		seed_text = current,
-		seed_resolved = current ~= "" and { current } or {},
-		on_save = function(text, done)
-			state.fields[field] = vim.trim(text)
-			done(true)
-		end,
-		on_cancel = function() end,
-		on_done = function()
-			if buf and vim.api.nvim_buf_is_valid(buf) then
-				keymaps.register(buf)
-			end
-			render_if_open()
-		end,
-	})
-end
-
 function M.edit_start_date()
-	edit_date_field("start_date", "Start date")
+	shell.edit_text_field("start_date", "Start date")
 end
 
 function M.edit_due_date()
-	edit_date_field("due_date", "Due date")
-end
-
---- Edits the Description content box (whole content buffer, like the real
---- milestone/issue detail views' Description tab), for either type.
-function M.edit_description()
-	local buf = state.buf
-	if buf == nil or not vim.api.nvim_buf_is_valid(buf) then
-		return
-	end
-	if inline_edit.is_active(buf) then
-		return
-	end
-
-	local current = state.fields.description
-	keymaps.remove(buf)
-	inline_edit.start({
-		buf = buf,
-		text = current,
-		on_save = function(text, done)
-			state.fields.description = text or ""
-			done(true)
-		end,
-		on_cancel = function() end,
-		on_done = function()
-			if buf and vim.api.nvim_buf_is_valid(buf) then
-				keymaps.register(buf)
-			end
-			render_if_open()
-		end,
-	})
+	shell.edit_text_field("due_date", "Due date")
 end
 
 --- Browses/inserts a GitLab issue template into the Description field.
@@ -261,7 +42,7 @@ function M.edit_templates()
 		end,
 		set_description = function(description)
 			state.fields.description = description or ""
-			render_if_open()
+			shell.render_if_open()
 		end,
 		menu_kind = "atlas_gitlab_templates_menu",
 	})
@@ -272,23 +53,9 @@ end
 --- completion source, but `on_save` writes into the draft instead of
 --- PUTing to GitLab.
 function M.edit_assignees()
-	local buf = state.buf
 	local path = state.project_path
-	local header_win = state.header_win
-	local region = state.header_regions and state.header_regions.assignee
-	if
-		buf == nil
-		or not vim.api.nvim_buf_is_valid(buf)
-		or not path
-		or path == ""
-		or header_win == nil
-		or not vim.api.nvim_win_is_valid(header_win)
-		or region == nil
-	then
+	if not path or path == "" then
 		notify.warn("Assignee field is not visible")
-		return
-	end
-	if inline_field_edit.is_active() then
 		return
 	end
 
@@ -320,13 +87,8 @@ function M.edit_assignees()
 		end
 	end)
 
-	keymaps.remove(buf)
-	inline_field_edit.start({
-		anchor_win = header_win,
-		row = region.row,
-		col = region.col,
-		width = region.width,
-		height = region.height,
+	shell.edit_completion_field("assignee", {
+		label = "Assignee",
 		seed_text = table.concat(seed_names, ", "),
 		multi_value = true,
 		seed_resolved = seed_names,
@@ -345,35 +107,14 @@ function M.edit_assignees()
 			state.fields.assignees = selected
 			done(true)
 		end,
-		on_cancel = function() end,
-		on_done = function()
-			if buf and vim.api.nvim_buf_is_valid(buf) then
-				keymaps.register(buf)
-			end
-			render_if_open()
-		end,
 	})
 end
 
 --- Edits the Labels field (issue-type only).
 function M.edit_labels()
-	local buf = state.buf
 	local path = state.project_path
-	local header_win = state.header_win
-	local region = state.header_regions and state.header_regions.labels
-	if
-		buf == nil
-		or not vim.api.nvim_buf_is_valid(buf)
-		or not path
-		or path == ""
-		or header_win == nil
-		or not vim.api.nvim_win_is_valid(header_win)
-		or region == nil
-	then
+	if not path or path == "" then
 		notify.warn("Labels field is not visible")
-		return
-	end
-	if inline_field_edit.is_active() then
 		return
 	end
 
@@ -387,13 +128,8 @@ function M.edit_labels()
 
 	local completion = labels_completion.for_project(labels_api.list, path)
 
-	keymaps.remove(buf)
-	inline_field_edit.start({
-		anchor_win = header_win,
-		row = region.row,
-		col = region.col,
-		width = region.width,
-		height = region.height,
+	shell.edit_completion_field("labels", {
+		label = "Labels",
 		seed_text = table.concat(seed_names, ", "),
 		multi_value = true,
 		seed_resolved = seed_names,
@@ -409,36 +145,15 @@ function M.edit_labels()
 			state.fields.labels = selected
 			done(true)
 		end,
-		on_cancel = function() end,
-		on_done = function()
-			if buf and vim.api.nvim_buf_is_valid(buf) then
-				keymaps.register(buf)
-			end
-			render_if_open()
-		end,
 	})
 end
 
 --- Edits the Milestone field (issue-type only) -- attaches the new issue to
 --- an *existing* milestone. Unrelated to the create view's own `Type` field.
 function M.edit_milestone()
-	local buf = state.buf
 	local path = state.project_path
-	local header_win = state.header_win
-	local region = state.header_regions and state.header_regions.milestone
-	if
-		buf == nil
-		or not vim.api.nvim_buf_is_valid(buf)
-		or not path
-		or path == ""
-		or header_win == nil
-		or not vim.api.nvim_win_is_valid(header_win)
-		or region == nil
-	then
+	if not path or path == "" then
 		notify.warn("Milestone field is not visible")
-		return
-	end
-	if inline_field_edit.is_active() then
 		return
 	end
 
@@ -454,13 +169,8 @@ function M.edit_milestone()
 		end
 	end)
 
-	keymaps.remove(buf)
-	inline_field_edit.start({
-		anchor_win = header_win,
-		row = region.row,
-		col = region.col,
-		width = region.width,
-		height = region.height,
+	shell.edit_completion_field("milestone", {
+		label = "Milestone",
 		seed_text = current_title,
 		seed_resolved = current_title ~= "" and { current_title } or {},
 		completion = completion,
@@ -479,26 +189,7 @@ function M.edit_milestone()
 			state.fields.milestone = milestone
 			done(true)
 		end,
-		on_cancel = function() end,
-		on_done = function()
-			if buf and vim.api.nvim_buf_is_valid(buf) then
-				keymaps.register(buf)
-			end
-			render_if_open()
-		end,
 	})
-end
-
----@return string[]
-local function missing_required()
-	local missing = {}
-	if state.type == "" then
-		table.insert(missing, "Type")
-	end
-	if vim.trim(state.fields.title) == "" then
-		table.insert(missing, "Title")
-	end
-	return missing
 end
 
 ---@return table
@@ -530,7 +221,7 @@ local function finish_issue_created(result)
 	state.submitting = false
 	local on_done = state.on_done
 	notify.success("Issue created: " .. tostring(result.key), { timeout = 1200 })
-	M.close()
+	shell.close()
 	if on_done then
 		on_done({ issue_key = result.key, refresh = true }, nil)
 	end
@@ -564,21 +255,11 @@ local function apply_start_date_then_finish(result)
 	end)
 end
 
---- `:w` handler: validates the two required fields, then fires the actual
---- `create_issue`/`create_milestone` API call. Leaves the view open (and
---- 'modified') on failure so the user can fix something and `:w` again.
-local function attempt_submit()
-	if not M.is_open() or state.submitting then
-		return
-	end
-
-	local missing = missing_required()
-	if #missing > 0 then
-		local plural = #missing > 1 and "are" or "is"
-		notify.warn(table.concat(missing, ", ") .. " " .. plural .. " required")
-		return
-	end
-
+--- Fires the actual `create_issue`/`create_milestone` API call, based on
+--- `state.type`. Called by `atlas.ui.create`'s `:w` handler after it's
+--- already validated the required fields. Leaves the view open on failure
+--- so the user can fix something and `:w` again.
+function M.submit()
 	state.submitting = true
 
 	if state.type == "milestone" then
@@ -598,7 +279,7 @@ local function attempt_submit()
 			end
 			local on_done = state.on_done
 			notify.success("Milestone created: " .. tostring(milestone.title), { timeout = 1200 })
-			M.close()
+			shell.close()
 			if on_done then
 				on_done({ refresh = true }, nil)
 			end
@@ -620,74 +301,6 @@ local function attempt_submit()
 			end
 		end)
 	end
-end
-
----@param buf integer
-local function setup_write_cmd(buf)
-	local group = vim.api.nvim_create_augroup("AtlasCreateWrite" .. tostring(buf), { clear = true })
-	vim.api.nvim_create_autocmd("BufWriteCmd", { group = group, buffer = buf, callback = attempt_submit })
-end
-
----@param buf integer
-local function setup_quit_cmd(buf)
-	pcall(vim.api.nvim_buf_del_user_command, buf, "AtlasCreateQuit")
-	vim.api.nvim_buf_create_user_command(buf, "AtlasCreateQuit", M.close, { desc = "Discard Atlas creation draft" })
-	vim.api.nvim_buf_call(buf, function()
-		vim.cmd("silent! cunabbrev <buffer> q")
-		vim.cmd("silent! cunabbrev <buffer> quit")
-		vim.cmd("cnoreabbrev <buffer> q AtlasCreateQuit")
-		vim.cmd("cnoreabbrev <buffer> quit AtlasCreateQuit")
-	end)
-end
-
-local function cleanup()
-	local buf = state.buf
-	if buf and vim.api.nvim_buf_is_valid(buf) then
-		keymaps.remove(buf)
-	end
-	state.reset()
-end
-
----@param opts { project_path: string, initial_type: (""|"issue"|"milestone")|nil, on_done: (fun(result: table|nil, err: string|nil))|nil }
-function M.open(opts)
-	opts = opts or {}
-	local project_path = tostring(opts.project_path or "")
-	if project_path == "" then
-		notify.error("create.open: project_path is required", { vim_notify = true })
-		return
-	end
-
-	require("atlas.ui.shared.highlights").setup()
-	require("atlas.issues.providers.gitlab.highlights").setup()
-
-	assignee_by_username = {}
-	milestone_by_title = {}
-
-	state.reset()
-	state.win, state.buf, state.header_win, state.header_buf = detail_ui.open("create", cleanup, render)
-	state.project_path = project_path
-	state.type = (opts.initial_type == "issue" or opts.initial_type == "milestone") and opts.initial_type or ""
-	state.on_done = opts.on_done
-
-	if state.buf and vim.api.nvim_buf_is_valid(state.buf) then
-		vim.bo[state.buf].buftype = "acwrite"
-		setup_write_cmd(state.buf)
-		setup_quit_cmd(state.buf)
-		keymaps.register(state.buf)
-	end
-
-	render()
-
-	state.current_user_loading = true
-	state.requests.run(function(done)
-		return users_api.get_user(done)
-	end, function(user, err)
-		state.current_user_loading = false
-		if not err and user then
-			state.current_user = user
-		end
-		render_if_open()
-	end)
 end
 
 return M

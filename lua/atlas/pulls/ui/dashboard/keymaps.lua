@@ -83,11 +83,11 @@ function M.register(buf, views)
 		utils.insert_if(
 			items,
 			resolver.item("pulls.create_pr", {
-				desc = "Create pull request",
+				desc = "Create merge request",
 				hint_desc = "Create",
 				index = 30,
 				callback = function()
-					require("atlas.pulls.create.pr").start()
+					require("atlas.pulls.create.gitlab").start()
 				end,
 			})
 		)

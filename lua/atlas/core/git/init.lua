@@ -367,6 +367,23 @@ function M.list_remote_branches(root, remote)
 end
 
 ---@param root string
+---@return string[] branches
+function M.list_local_branches(root)
+	local res = run_sync({ "-C", root, "branch", "--format=%(refname:short)" }, { text = true })
+	if res.code ~= 0 then
+		return {}
+	end
+	local out = {}
+	for line in (res.stdout or ""):gmatch("[^\r\n]+") do
+		local name = trim(line)
+		if name ~= "" then
+			table.insert(out, name)
+		end
+	end
+	return out
+end
+
+---@param root string
 ---@param branch string
 ---@param remote string|nil
 ---@param on_done fun(exists: boolean)
