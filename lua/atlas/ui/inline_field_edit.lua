@@ -155,7 +155,19 @@ local function current_word_segment(text)
 	local start_col = last_space or 0
 	local segment = text:sub(start_col + 1)
 	local leading = segment:match("^%s*") or ""
-	return segment:sub(#leading + 1), start_col + #leading
+	local word_start = start_col + #leading
+	local word = segment:sub(#leading + 1)
+
+	-- The only current word_segment consumer is the filter bar's `key:value`
+	-- tokens (e.g. `assignee:john`). `query` stays the full word so the
+	-- completion source can still see the key, but once a `key:` prefix is
+	-- present, the replacement range must start *after* the colon -- keyed
+	-- purely off `word_start`, it would otherwise start at the word's
+	-- beginning and accepting a value candidate (e.g. bare "johndoe") would
+	-- wipe out the already-typed "assignee:" prefix along with it.
+	local colon = word:find(":", 1, true)
+	local replace_start = colon and (word_start + colon) or word_start
+	return word, replace_start
 end
 
 local function stop_debounce()
@@ -489,7 +501,15 @@ function M.start(opts)
 			end, { buffer = buf, nowait = true, silent = true })
 		end
 
-		vim.api.nvim_create_autocmd("TextChangedI", {
+		-- `TextChangedI` is explicitly *not* fired while the completion popup
+		-- is visible -- that's what `TextChangedP` is for (`:h TextChangedP`).
+		-- Since selecting a key candidate (e.g. `assignee:`) leaves the popup
+		-- open, typing the value right after it would otherwise never
+		-- re-trigger a fetch: the popup would keep showing the stale
+		-- key-candidate list, and accepting one would overwrite what was
+		-- just typed. Both events must be handled to keep completion live
+		-- while cycling.
+		vim.api.nvim_create_autocmd({ "TextChangedI", "TextChangedP" }, {
 			group = augroup,
 			buffer = buf,
 			callback = function()
