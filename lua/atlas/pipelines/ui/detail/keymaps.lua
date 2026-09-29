@@ -84,7 +84,7 @@ function M.register(buf)
 		items,
 		resolver.item("ui.toggle_fold", {
 			desc = "Toggle log section",
-			hint = true,
+			hint = false,
 			opts = { nowait = true, silent = true },
 			callback = function()
 				require("atlas.pipelines.ui.detail").toggle_fold()

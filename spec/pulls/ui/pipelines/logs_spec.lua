@@ -110,7 +110,7 @@ describe("atlas.pulls.ui.pipelines.logs.parse GitLab sections", function()
 		assert.same({ kind = "line", text = "outer line" }, outer.entries[2])
 	end)
 
-	it("surfaces an unmatched section_end as a plain line instead of corrupting the stack", function()
+	it("drops an unmatched section_end instead of corrupting the stack or showing raw marker text", function()
 		local raw = table.concat({
 			"section_start:1000:a\rA",
 			"section_end:1010:not_open",
@@ -122,10 +122,42 @@ describe("atlas.pulls.ui.pipelines.logs.parse GitLab sections", function()
 		assert.equal(1, #entries)
 		assert.equal("A", entries[1].name)
 		assert.equal(20, entries[1].duration)
-		assert.same({
-			{ kind = "line", text = "section_end:1010:not_open" },
-			{ kind = "line", text = "line inside a" },
-		}, entries[1].entries)
+		assert.same({ { kind = "line", text = "line inside a" } }, entries[1].entries)
+	end)
+
+	it("recovers a title split into its own stream-continuation frame with no real newline between markers", function()
+		-- Reproduces a real GitLab trace: every line (control lines included)
+		-- carries a leading ISO-8601 timestamp, and a `section_end`/
+		-- `section_start` pair emitted back to back arrives as a single
+		-- stream's "+"-continuation with no `\r`/`\n` of its own -- exactly
+		-- the shape that used to leak raw `section_start:`/`section_end:`
+		-- text and misclassify the whole job log as a (grey) header line.
+		local raw = table.concat({
+			"2026-08-17T10:03:33.152370Z 00O Running with gitlab-runner 18.7.0",
+			"2026-08-17T10:03:33.152896Z 00O section_start:1786961013:prepare_executor",
+			'2026-08-17T10:03:33.152896Z 00O+Preparing the "shell" executor',
+			"2026-08-17T10:03:33.153969Z 00O Using Shell (powershell) executor...",
+			"2026-08-17T10:03:33.153969Z 00O section_end:1786961013:prepare_executor",
+			"2026-08-17T10:03:33.153969Z 00O+section_start:1786961013:prepare_script",
+			"2026-08-17T10:03:33.155027Z 00O+Preparing environment",
+			"2026-08-17T10:03:34.487210Z 00O section_end:1786961014:prepare_script",
+			"",
+		}, "\n")
+
+		local flat = logs.flatten(logs.parse(raw))
+
+		for _, line in ipairs(flat) do
+			assert.is_nil(line:match("section_start:"))
+			assert.is_nil(line:match("section_end:"))
+			if not line:match("^▸") then
+				assert.are_not.equal("AtlasColumnHeader", logs.classify_log_line(line))
+			end
+		end
+
+		local joined = table.concat(flat, "\n")
+		assert.truthy(joined:find('Preparing the "shell" executor', 1, true))
+		assert.truthy(joined:find("Preparing environment", 1, true))
+		assert.truthy(joined:find("Running with gitlab%-runner 18%.7%.0"))
 	end)
 end)
 

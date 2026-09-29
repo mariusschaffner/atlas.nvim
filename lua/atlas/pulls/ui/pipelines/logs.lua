@@ -140,18 +140,6 @@ local function strip_dangling_escape(line)
 	return (line:gsub("\27%[[0-?]*[ -/]*$", ""))
 end
 
----@param line string
----@return string
-local function collapse_carriage_returns(line)
-	-- A bare `\r` mid-line is a terminal "return to column 0, overwrite"
-	-- request -- progress bars from docker/npm/apt/curl/etc. use this
-	-- extensively. Keep only what a real terminal would end up showing: the
-	-- text after the *last* `\r` on the line. (A `\r` immediately before a
-	-- real newline can't survive to this point -- `\r\n` was already folded
-	-- into `\n` before splitting -- so this never eats a trailing line.)
-	return (line:gsub("^.*\r", ""))
-end
-
 --- Strips ANSI/OSC escape sequences and control characters, normalizes line
 --- endings, and splits into lines. Deliberately leaves bare `\r` characters
 --- (mid-line progress redraws) and GitLab's `section_start`/`section_end`/
@@ -179,10 +167,49 @@ function M.clean_lines(raw)
 	return lines
 end
 
---- Joins GitLab's job-trace stream multiplexing: progress redraws that
---- would otherwise appear as one all-consuming `\r` are instead sent as
---- discrete `<hex-stream-id><O|E><+| ><text>` lines, where `+` means
---- "append to this stream's current line" and ` ` starts a new one.
+--- Splits off a leading ISO-8601 timestamp (GitLab's "full" trace format
+--- stamps *every* line, control lines included -- `FF_USE_FASTZIP`-era
+--- runners enable this per-runner, so some jobs in an otherwise plain,
+--- untimestamped pipeline can still have it).
+---@param text string
+---@return string|nil prefix Includes one trailing separating space/tab, if any.
+---@return string rest
+local function strip_leading_timestamp(text)
+	local timestamp_end = log_timestamp_end(text)
+	if not timestamp_end then
+		return nil, text
+	end
+	local separator_len = 0
+	local next_char = text:sub(timestamp_end + 1, timestamp_end + 1)
+	if next_char == " " or next_char == "\t" then
+		separator_len = 1
+	end
+	return text:sub(1, timestamp_end + separator_len), text:sub(timestamp_end + separator_len + 1)
+end
+
+---@param text string
+---@return boolean
+local function looks_like_section_marker(text)
+	local _, rest = strip_leading_timestamp(text)
+	return rest:match("^section_start:%d+:") ~= nil or rest:match("^section_end:%d+:") ~= nil
+end
+
+---@param text string
+---@return string
+local function last_segment(text)
+	return text:match("\r([^\r]*)$") or text
+end
+
+--- Joins GitLab's job-trace stream multiplexing: discrete
+--- `[<timestamp> ]<hex-stream-id><O|E><+| ><text>` lines, where `+` means
+--- "this continues the current stream buffer" and ` ` starts a new one.
+--- Most continuations are ordinary transport chunking (a long line split
+--- mid-word across frames) and get concatenated with nothing, exactly like
+--- upstream -- but a `section_end`/`section_start` pair emitted back to back
+--- with no real newline between them also arrives this way, and *those* need
+--- the `\r` GitLab would otherwise have used to separate them (so `M.parse`'s
+--- `\r`-segment handling below can tell them apart). Detected by checking
+--- whether either side of the join looks like a section marker.
 ---@param lines string[]
 ---@return string[]
 local function coalesce_streams(lines)
@@ -190,13 +217,17 @@ local function coalesce_streams(lines)
 	---@type table<string, table>
 	local streams = {}
 	for _, line in ipairs(lines) do
-		local stream, separator, message = line:match("^(%x%x[OE])([+ ])(.*)$")
+		local prefix, rest = strip_leading_timestamp(line)
+		local stream, separator, message = rest:match("^(%x%x[OE])([+ ])(.*)$")
 		if stream then
 			local previous = streams[stream]
 			if separator == "+" and previous then
-				previous.text = previous.text .. message
+				local joiner = (looks_like_section_marker(last_segment(previous.text)) or looks_like_section_marker(message))
+						and "\r"
+					or ""
+				previous.text = previous.text .. joiner .. message
 			else
-				local entry = { text = message }
+				local entry = { text = (prefix or "") .. message }
 				table.insert(out, entry)
 				streams[stream] = entry
 			end
@@ -212,32 +243,37 @@ local function coalesce_streams(lines)
 	return flat
 end
 
----@param text string
+---@param text string A single `\r`-free segment.
 ---@return integer|nil epoch
 ---@return string|nil key
----@return string|nil title
 local function match_section_start(text)
-	local epoch, key, flags, title = text:match("^section_start:(%d+):([%w_.%-]+)([^\r]*)\r?(.*)$")
+	local epoch, key, flags = text:match("^section_start:(%d+):([%w_.%-]+)(.*)$")
 	if epoch and (flags == "" or flags:match("^%[.-%]$")) then
-		return tonumber(epoch), key, (title ~= "" and title or key)
+		return tonumber(epoch), key
 	end
 end
 
----@param text string
+---@param text string A single `\r`-free segment.
 ---@return integer|nil epoch
 ---@return string|nil key
 local function match_section_end(text)
-	local epoch, key = text:match("^section_end:(%d+):([%w_.%-]+)\r?%s*$")
+	local epoch, key = text:match("^section_end:(%d+):([%w_.%-]+)%s*$")
 	if epoch then
 		return tonumber(epoch), key
 	end
 end
 
---- Parses a raw job trace into a tree of lines and GitLab CI section groups
---- (`section_start:<epoch>:<key>[flags]\r<title>` / `section_end:<epoch>:<key>`),
---- coalescing stream-multiplexed progress redraws along the way. Unmatched/
---- unbalanced `section_end` markers are ignored rather than corrupting the
---- nesting stack.
+--- Parses a raw job trace into a tree of lines and GitLab CI section groups,
+--- coalescing stream-multiplexed frames first (see `coalesce_streams`).
+--- Each resulting line is then split on `\r`: a bare `section_start:<epoch>
+--- :<key>[flags]` segment takes its title from the *next* segment (GitLab's
+--- own `section_start:...\r<title>` convention) unless that segment is
+--- itself a marker; any other segment only survives if it's the last one in
+--- the line (a real terminal only ever shows what the final `\r` in a burst
+--- left behind -- earlier segments were overwritten). A segment that merely
+--- *looks* like a section marker but doesn't parse cleanly is still dropped
+--- rather than shown as raw control text. Unmatched/unbalanced `section_end`
+--- markers are ignored rather than corrupting the nesting stack.
 ---@param raw string
 ---@return AtlasLogEntry[]
 function M.parse(raw)
@@ -249,41 +285,48 @@ function M.parse(raw)
 	local stack = {}
 
 	for _, line in ipairs(lines) do
-		local parent = stack[#stack]
-		local current = parent and parent.group.entries or entries
+		local prefix, rest = strip_leading_timestamp(line)
+		local parts = vim.split(rest, "\r", { plain = true })
 
-		local start_epoch, start_key, title = match_section_start(line)
-		if start_epoch then
-			---@type AtlasLogGroup
-			local group = {
-				kind = "group",
-				name = collapse_carriage_returns(title),
-				key = start_key,
-				entries = {},
-			}
-			table.insert(current, group)
-			table.insert(stack, { group = group, key = start_key, epoch = start_epoch })
-		else
-			local end_epoch, end_key = match_section_end(line)
-			local closed = false
-			if end_epoch then
-				for index = #stack, 1, -1 do
-					local frame = stack[index]
-					if frame.key == end_key then
-						if end_epoch >= frame.epoch then
-							frame.group.duration = end_epoch - frame.epoch
+		local index = 1
+		while index <= #parts do
+			local part = parts[index]
+			local parent = stack[#stack]
+			local current = parent and parent.group.entries or entries
+
+			local start_epoch, start_key = match_section_start(part)
+			if start_epoch then
+				local title = start_key
+				local next_part = parts[index + 1]
+				if next_part and next_part ~= "" and not looks_like_section_marker(next_part) then
+					title = next_part
+					index = index + 1
+				end
+				---@type AtlasLogGroup
+				local group = { kind = "group", name = title, key = start_key, entries = {} }
+				table.insert(current, group)
+				table.insert(stack, { group = group, key = start_key, epoch = start_epoch })
+			else
+				local end_epoch, end_key = match_section_end(part)
+				if end_epoch then
+					for stack_index = #stack, 1, -1 do
+						local frame = stack[stack_index]
+						if frame.key == end_key then
+							if end_epoch >= frame.epoch then
+								frame.group.duration = end_epoch - frame.epoch
+							end
+							for last = #stack, stack_index, -1 do
+								stack[last] = nil
+							end
+							break
 						end
-						for last = #stack, index, -1 do
-							stack[last] = nil
-						end
-						closed = true
-						break
 					end
+				elseif index == #parts and part ~= "" and not looks_like_section_marker(part) then
+					table.insert(current, { kind = "line", text = (prefix or "") .. part })
 				end
 			end
-			if not closed then
-				table.insert(current, { kind = "line", text = collapse_carriage_returns(line) })
-			end
+
+			index = index + 1
 		end
 	end
 
