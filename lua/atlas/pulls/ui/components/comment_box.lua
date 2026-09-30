@@ -194,6 +194,8 @@ end
 ---@field bottom_hint_highlights table[]|nil
 ---@field extra_content_lines string[]|nil Appended after the body/reactions (e.g. a "N replies" summary).
 ---@field extra_content_highlights table[]|nil
+---@field status_text string|nil Right-aligned segment on the top border (e.g. "resolved by @user", an outdated marker) -- only the diff view's review-comment rendering populates this; Activity/Review tab call sites leave it nil and render unchanged.
+---@field status_highlights table[]|nil
 
 ---@param opts AtlasCommentBoxOpts
 ---@return string[] lines
@@ -226,6 +228,8 @@ function M.render(opts)
 		box_width = box_width,
 		title = title,
 		title_highlights = title_highlights,
+		title_right = opts.status_text,
+		title_right_highlights = opts.status_highlights,
 		content_lines = framed_lines,
 		content_highlights = framed_highlights,
 		border_hl = opts.border_hl or "AtlasFieldBoxBorder",

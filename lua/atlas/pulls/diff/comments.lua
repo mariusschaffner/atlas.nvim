@@ -2,11 +2,13 @@ local M = {}
 
 local actions = require("atlas.pulls.actions.review")
 local code_preview = require("atlas.ui.components.code_preview")
-local keymaps = require("atlas.core.keymaps")
+local inline_field_edit = require("atlas.ui.inline_field_edit")
 local position = require("atlas.pulls.diff.position")
+local presentation = require("atlas.pulls.ui.presentation")
 local review = require("atlas.pulls.diff.review")
 local review_threads = require("atlas.pulls.ui.components.review_threads")
 local ui = require("atlas.pulls.diff.ui.comments")
+local virt_line_anchor = require("atlas.pulls.diff.ui.virt_line_anchor")
 
 local ACTIONS = {
 	add_comment = function(context, comment, on_done)
@@ -43,6 +45,10 @@ local function render_context(session)
 		old_path = current.document.old.path,
 		new_path = current.document.new.path,
 		reaction_options = capability and capability.reaction_options,
+		comments_capability = capability,
+		current_user = current_review.current_user,
+		reviewable = presentation.is_open_or_draft(current_review.pr),
+		session = session,
 	}
 end
 
@@ -270,6 +276,34 @@ local function buffer_context(session, buf)
 	return nil, nil
 end
 
+---@param session AtlasDiffSession
+---@param buf integer
+---@return integer|nil
+local function window_for_buf(session, buf)
+	local current = session.current
+	if not current then
+		return nil
+	end
+	if buf == current.left.buf then
+		return current.left.win
+	end
+	if buf == current.right.buf then
+		return current.right.win
+	end
+	return nil
+end
+
+---@param session AtlasDiffSession
+---@param comment PullsComment
+---@return boolean
+local function is_own_comment(session, comment)
+	local current_user = session.review and session.review.current_user
+	if not current_user or not comment or not comment.author then
+		return false
+	end
+	return tostring(current_user.id) == tostring(comment.author.id)
+end
+
 ---@param start_line integer|nil
 ---@param end_line integer|nil
 ---@return integer, integer
@@ -403,23 +437,47 @@ function M.open_at_cursor(session, buf)
 		return false
 	end
 	local owner = session.id
-	local function open(current_nodes)
-		local current_review = session.review
-		local capability = current_review and current_review.provider.capabilities.comments
-		ui.open_popup({
-			nodes = current_nodes,
-			owner = owner,
-			title = popup_title(current_nodes),
-			toggle_resolved_keys = keymaps.resolve("pulls.review.diff.toggle_resolved"),
-			reaction_options = capability and capability.reaction_options,
-			on_action = function(action, comment, close)
-				M.run_action(session, action, comment, function()
-					close()
-				end)
-			end,
-		})
+	local context = render_context(session)
+	if not context then
+		return false
 	end
-	open(nodes)
+	ui.open_popup({
+		nodes = nodes,
+		owner = owner,
+		title = popup_title(nodes),
+		context = context,
+		on_action = function(action, comment, close)
+			M.run_action(session, action, comment, function()
+				close()
+			end)
+		end,
+		on_reply = function(parent, text, done)
+			local action_context = review.action_context(session, parent)
+			if not action_context then
+				done(false, "No context")
+				return
+			end
+			actions.add_comment_inline(action_context, { parent = parent, pending = true }, text, function(ok, err)
+				if ok then
+					session:render()
+				end
+				done(ok, err)
+			end)
+		end,
+		on_edit = function(comment, text, done)
+			local action_context = review.action_context(session, comment)
+			if not action_context then
+				done(false, "No context")
+				return
+			end
+			actions.edit_comment_inline(action_context, comment, text, function(ok, err)
+				if ok then
+					session:render()
+				end
+				done(ok, err)
+			end)
+		end,
+	})
 	return true
 end
 
@@ -578,13 +636,195 @@ function M.add_to_file(session, file, pending)
 	end)
 end
 
+---@param win integer
+---@param region table `session.diff_regions`/`session.diff_regions.composing`-shaped geometry (anchor_line/above/block_row/col/width/height).
+---@param seed_text string
+---@param on_save fun(text: string, done: fun(ok: boolean, err: string|nil))
+---@param on_done fun()
+---@return boolean opened
+local function open_inline_overlay(win, region, seed_text, on_save, on_done)
+	virt_line_anchor.ensure_visible(win, region.anchor_line)
+	local screen_row = virt_line_anchor.screen_row(win, {
+		anchor_line = region.anchor_line,
+		above = region.above,
+		block_row = region.block_row,
+	})
+	if not screen_row then
+		return false
+	end
+	inline_field_edit.start({
+		anchor_win = win,
+		screen_row = screen_row,
+		col = region.col,
+		width = region.width,
+		height = region.height,
+		seed_text = seed_text,
+		close_on_win_event = true,
+		on_save = on_save,
+		on_cancel = function() end,
+		on_done = on_done,
+	})
+	return true
+end
+
+--- Reply/edit/add-new-thread for a plain comment, driven directly through
+--- the inline overlay (`atlas.ui.inline_field_edit`), matching the Activity
+--- tab. Tasks and suggestions are out of scope (kept on the pre-existing
+--- popup-editor flow: `M.add_suggestion`, and edit/delete for tasks via
+--- `M.run_action`) -- see the module doc in `atlas/pulls/diff/ui/comments.lua`.
+
+---@param session AtlasDiffSession
+---@param buf integer
+function M.edit_at_cursor(session, buf)
+	local nodes = at_cursor(session, buf)
+	if #nodes > 1 then
+		M.open_at_cursor(session, buf)
+		return
+	end
+	if #nodes == 0 then
+		return
+	end
+	local comment = nodes[1].comment
+	if comment.is_task or not is_own_comment(session, comment) then
+		return
+	end
+	local context = review.action_context(session, comment)
+	local win = window_for_buf(session, buf)
+	if not context or not win then
+		return
+	end
+	local key = review_threads.comment_key(comment)
+	session.diff_editing_id = key
+	session:render()
+	local region = session.diff_regions[key]
+	-- `region.anchor_line` is absent for comments rendered through the
+	-- "deleted lines" virt-text path (`inline_deleted_lines` mode) -- those
+	-- aren't addressable by `virt_line_anchor`, so fall through to the popup
+	-- below rather than attempt (and fail) an inline overlay.
+	local opened = region
+		and region.anchor_line
+		and open_inline_overlay(win, region, tostring(comment.content_raw or ""), function(text, done)
+			actions.edit_comment_inline(context, comment, text, done)
+		end, function()
+			session.diff_editing_id = nil
+			session:render()
+		end)
+	if not opened then
+		session.diff_editing_id = nil
+		session:render()
+		M.open_at_cursor(session, buf)
+	end
+end
+
+---@param session AtlasDiffSession
+---@param buf integer
+---@param pending boolean|nil
+function M.reply_at_cursor(session, buf, pending)
+	local nodes = at_cursor(session, buf)
+	if #nodes > 1 then
+		M.open_at_cursor(session, buf)
+		return
+	end
+	if #nodes == 0 then
+		return
+	end
+	local comment = nodes[1].comment
+	if comment.is_task then
+		return
+	end
+	local context = review.action_context(session, comment)
+	local win = window_for_buf(session, buf)
+	local parent_key = review_threads.comment_key(comment)
+	local parent_region = session.diff_regions[parent_key]
+	if not context or not win then
+		return
+	end
+	if not parent_region or not parent_region.anchor_line then
+		-- Same "deleted lines" caveat as `edit_at_cursor` -- no addressable
+		-- inline anchor for this comment, so fall back to the popup.
+		M.open_at_cursor(session, buf)
+		return
+	end
+	session.diff_composing = {
+		kind = "reply",
+		buf = buf,
+		line = parent_region.anchor_line,
+		above = parent_region.above,
+		parent = comment,
+	}
+	session:render()
+	local region = session.diff_regions["composing:" .. parent_key]
+	local opened = region
+		and open_inline_overlay(win, region, "", function(text, done)
+			actions.add_comment_inline(context, { parent = comment, pending = pending }, text, done)
+		end, function()
+			session.diff_composing = nil
+			session:render()
+		end)
+	if not opened then
+		session.diff_composing = nil
+		session:render()
+		M.open_at_cursor(session, buf)
+	end
+end
+
+---@param session AtlasDiffSession
+---@param buf integer
+---@param pending boolean
+---@param start_line integer|nil
+---@param end_line integer|nil
+function M.add_at_cursor(session, buf, pending, start_line, end_line)
+	local context = review.action_context(session)
+	local win = window_for_buf(session, buf)
+	if not context or not win then
+		return
+	end
+	start_line, end_line = selected_range(start_line, end_line)
+	local inline, err = inline_position(session, buf, start_line, end_line)
+	if not inline then
+		notify(session, "info", err or "Cannot comment on this line")
+		return
+	end
+	session.diff_composing = { kind = "add", buf = buf, line = end_line, above = false }
+	session:render()
+	local region = session.diff_regions.composing
+	local opened = region
+		and open_inline_overlay(win, region, "", function(text, done)
+			actions.add_comment_inline(context, { inline = inline, pending = pending }, text, done)
+		end, function()
+			session.diff_composing = nil
+			session:render()
+		end)
+	if not opened then
+		session.diff_composing = nil
+		session:render()
+	end
+end
+
+--- `c`/`C` on a single existing (non-task) thread replies to it inline;
+--- ambiguous (multiple threads at this spot) falls back to the popup, same
+--- escape hatch `delete_at_cursor`/`toggle_resolved_at_cursor` already use;
+--- otherwise it's a brand-new top-level thread. Only ever called for a plain
+--- comment -- see `M.add_suggestion` for the suggestion (`s`/`S`) flow, which
+--- stays on the editor-popup path since it needs the fenced ```suggestion
+--- block this inline overlay doesn't support.
 ---@param session AtlasDiffSession
 ---@param buf integer
 ---@param pending boolean
 ---@param start_line integer|nil
 ---@param end_line integer|nil
 function M.add_comment(session, buf, pending, start_line, end_line)
-	add(session, buf, pending, start_line, end_line, false)
+	if start_line == nil and end_line == nil then
+		local nodes = at_cursor(session, buf)
+		if #nodes > 1 then
+			M.open_at_cursor(session, buf)
+			return
+		elseif #nodes == 1 and not nodes[1].comment.is_task then
+			M.reply_at_cursor(session, buf, pending)
+			return
+		end
+	end
+	M.add_at_cursor(session, buf, pending, start_line, end_line)
 end
 
 ---@param session AtlasDiffSession

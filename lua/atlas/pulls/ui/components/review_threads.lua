@@ -144,6 +144,24 @@ function M.status_marker(comment)
 	return "", "AtlasTextMuted"
 end
 
+--- Combined status marker + "resolved by @user" text for a root comment, as
+--- shown on its own line in the tree renderer's `right_text` -- exposed so
+--- the diff view can put the same text on `comment_box.lua`'s top-border
+--- `status_text` instead, once it stops going through `threadsv2` directly.
+--- Always returns spans (never a bare hl_group string), matching the
+--- `title_right_highlights` contract `bordered_box.lua` expects.
+---@param comment PullsComment
+---@return string text
+---@return table[]|nil highlights
+function M.status_line(comment)
+	local marker, marker_hl = M.status_marker(comment)
+	local text, hl = resolution_status(comment, marker, marker_hl)
+	if type(hl) == "string" and hl ~= "" then
+		hl = { { start_col = 0, end_col = #text, hl_group = hl } }
+	end
+	return text, hl
+end
+
 ---@param comment PullsComment
 ---@return string|nil, AtlasThreadContentBlock|nil
 local function suggestion_content(comment)

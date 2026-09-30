@@ -80,8 +80,10 @@ end
 
 ---@class AtlasInlineFieldEditOptions
 ---@field anchor_win integer Window the overlay is positioned relative to (`relative = "win"`).
----@field row integer 0-indexed row of the field's interior, within `anchor_win`'s buffer.
----@field col integer 0-indexed col where the field's interior starts.
+---@field row integer 0-indexed row of the field's interior, within `anchor_win`'s buffer. Ignored when `screen_row` is set.
+---@field col integer 0-indexed col where the field's interior starts. Used as-is (no leftcol adjustment) when `screen_row` is set and `screen_col` is omitted.
+---@field screen_row integer|nil Pre-resolved 0-indexed window-relative screen row, bypassing the buffer-line lookup `row` normally drives (e.g. from `atlas.pulls.diff.ui.virt_line_anchor.screen_row`, for content that isn't a real buffer line -- a diff buffer's virt_lines-rendered comment box). Also skips the border-recolor step below, since virt_lines text isn't real buffer content an extmark can highlight; such callers are expected to already bake an "editing" border color into their own render before opening the overlay (e.g. via `comment_box.render`'s `border_hl`).
+---@field screen_col integer|nil Paired with `screen_row`; defaults to `col` when omitted.
 ---@field width integer Interior width (fixed; overlay never grows).
 ---@field height integer|nil Interior height, default 1.
 ---@field seed_text string
@@ -94,13 +96,23 @@ end
 ---@field on_save fun(text: string, done: fun(ok: boolean, err: string|nil))
 ---@field on_cancel (fun())|nil
 ---@field on_done fun()
+---@field close_on_win_event boolean|nil Closes the overlay on `WinScrolled`/`WinResized` for `anchor_win` (which also fires on fold toggle). Needed by callers whose anchor region can move under the overlay after it opens (e.g. a diff buffer's virt_lines-anchored comment box); every other caller positions against a stable real-buffer line and leaves this unset.
 
----@type { win: integer, buf: integer, anchor_buf: integer, restore_win: integer|nil, resolved_by_lower: table<string, string>, saving: boolean, augroup: integer, debounce: uv.uv_timer_t|nil, request: AtlasRequestScope|nil, saved_completeopt: string|nil }|nil
+---@type { win: integer, buf: integer, anchor_buf: integer, restore_win: integer|nil, resolved_by_lower: table<string, string>, saving: boolean, augroup: integer, debounce: uv.uv_timer_t|nil, request: AtlasRequestScope|nil, saved_completeopt: string|nil, cancel_fn: fun()|nil }|nil
 local active = nil
 
 ---@return boolean
 function M.is_active()
 	return active ~= nil
+end
+
+--- No-op if no overlay is active. Lets a caller defensively close a stray
+--- overlay (e.g. before re-rendering its host) without tracking its own
+--- reference to the active edit.
+function M.cancel()
+	if active and active.cancel_fn then
+		active.cancel_fn()
+	end
 end
 
 ---@param text string
@@ -319,14 +331,21 @@ function M.start(opts)
 	-- screen row, and a line-count delta silently drifts low by exactly that
 	-- many extra rows. `screenpos()` reports the two rows' actual on-screen
 	-- position, so the delta stays correct regardless of wrapping above.
-	local topline = vim.fn.line("w0", opts.anchor_win)
-	local leftcol = vim.api.nvim_win_call(opts.anchor_win, function()
-		return vim.fn.winsaveview().leftcol
-	end)
-	local top_screen_row = vim.fn.screenpos(opts.anchor_win, topline, 1).row
-	local target_screen_row = vim.fn.screenpos(opts.anchor_win, opts.row + 1, 1).row
-	local screen_row = target_screen_row - top_screen_row
-	local screen_col = opts.col - leftcol
+	local screen_row, screen_col
+	local use_screen_pos = opts.screen_row ~= nil
+	if use_screen_pos then
+		screen_row = opts.screen_row
+		screen_col = opts.screen_col or opts.col
+	else
+		local topline = vim.fn.line("w0", opts.anchor_win)
+		local leftcol = vim.api.nvim_win_call(opts.anchor_win, function()
+			return vim.fn.winsaveview().leftcol
+		end)
+		local top_screen_row = vim.fn.screenpos(opts.anchor_win, topline, 1).row
+		local target_screen_row = vim.fn.screenpos(opts.anchor_win, opts.row + 1, 1).row
+		screen_row = target_screen_row - top_screen_row
+		screen_col = opts.col - leftcol
+	end
 	local win = vim.api.nvim_open_win(buf, true, {
 		relative = "win",
 		win = opts.anchor_win,
@@ -359,7 +378,9 @@ function M.start(opts)
 	end
 
 	local anchor_buf = vim.api.nvim_win_get_buf(opts.anchor_win)
-	highlight_border(anchor_buf, opts.row, opts.col, opts.width, opts.height or 1)
+	if not use_screen_pos then
+		highlight_border(anchor_buf, opts.row, opts.col, opts.width, opts.height or 1)
+	end
 
 	-- 'completeopt' is global-only, so force a known-good value for the life
 	-- of this field edit (restored in finish()) instead of trusting whatever
@@ -387,6 +408,7 @@ function M.start(opts)
 		saving = false,
 		augroup = augroup,
 		saved_completeopt = saved_completeopt,
+		skip_border_highlight = use_screen_pos,
 	}
 
 	vim.api.nvim_win_set_cursor(win, { 1, #(opts.seed_text or "") })
@@ -413,7 +435,9 @@ function M.start(opts)
 		cancel_request()
 		pcall(vim.api.nvim_del_augroup_by_id, augroup)
 		unbind()
-		clear_border_highlight(anchor_buf)
+		if not use_screen_pos then
+			clear_border_highlight(anchor_buf)
+		end
 		if active and active.saved_completeopt ~= nil then
 			vim.o.completeopt = active.saved_completeopt
 		end
@@ -468,6 +492,17 @@ function M.start(opts)
 			opts.on_cancel()
 		end
 		finish()
+	end
+	active.cancel_fn = cancel
+
+	if opts.close_on_win_event then
+		vim.api.nvim_create_autocmd({ "WinScrolled", "WinResized" }, {
+			group = augroup,
+			pattern = tostring(opts.anchor_win),
+			callback = function()
+				cancel()
+			end,
+		})
 	end
 
 	for _, key in ipairs(submit_keys) do
@@ -530,7 +565,9 @@ function M.start(opts)
 				stop_debounce()
 				cancel_request()
 				pcall(vim.api.nvim_del_augroup_by_id, augroup)
-				clear_border_highlight(anchor_buf)
+				if not use_screen_pos then
+					clear_border_highlight(anchor_buf)
+				end
 				if active.saved_completeopt ~= nil then
 					vim.o.completeopt = active.saved_completeopt
 				end

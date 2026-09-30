@@ -76,6 +76,9 @@ local review_progress = { "󰝦", "󰪞", "󰪟", "󰪠", "󰪡", "󰪢", "󰪣"
 ---@field viewer_state table
 ---@field expanded_threads table<string, boolean>
 ---@field expanded_overlays boolean
+---@field diff_regions table<string, table> Per-comment inline-edit-overlay geometry (keyed by `review_threads.comment_key`), refreshed on every render -- see `atlas.pulls.diff.ui.virt_line_anchor` for what a "below"/"above" entry means.
+---@field diff_editing_id string|nil `review_threads.comment_key` of the comment currently shown with an inline-edit overlay open.
+---@field diff_composing { kind: "add"|"reply", buf: integer, line: integer, above: boolean, parent: PullsComment|nil }|nil A pending add/reply composing box; `parent` is set for "reply", unset for a brand-new top-level thread.
 ---@field help_key string|nil
 ---@field review_attached boolean
 ---@field closed boolean
@@ -177,6 +180,9 @@ function M.new(opts)
 		review_request = nil,
 		viewer_state = {},
 		expanded_threads = {},
+		diff_regions = {},
+		diff_editing_id = nil,
+		diff_composing = nil,
 		expanded_overlays = ((config.options.pulls or {}).diff or {}).comment_display == "virtual_lines",
 		help_key = help_key,
 		review_attached = false,

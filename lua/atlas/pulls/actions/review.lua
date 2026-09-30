@@ -191,6 +191,62 @@ function M.add_comment(context, opts, on_done)
 	return true
 end
 
+--- Inline-overlay counterpart of `M.add_comment`: same validation/provider
+--- call/notification behavior, minus the editor popup (no completion, no
+--- quoted-parent preview) -- for callers driving text through
+--- `atlas.ui.inline_field_edit` directly. Suggestions stay on `M.add_comment`
+--- (the editor popup) since they need the fenced ```suggestion block and
+--- aren't part of this path.
+---@param context AtlasReviewActionContext
+---@param opts { parent: PullsComment|nil, inline: PullsInlineCommentPosition|nil, file: PullsFileCommentPosition|nil, pending: boolean|nil }|nil
+---@param text string
+---@param done fun(ok: boolean, err: string|nil)
+function M.add_comment_inline(context, opts, text, done)
+	opts = opts or {}
+	if vim.trim(text) == "" then
+		done(false, "Empty comment")
+		return
+	end
+	local parent = opts.parent
+	if parent and parent.is_task then
+		local message = "Tasks do not support replies"
+		notify(context, "error", message)
+		done(false, message)
+		return
+	end
+	local comments = context.provider.capabilities.comments
+	local add = comments and comments.add_comment
+	if not add then
+		local message = "Provider does not support comments"
+		notify(context, "error", message)
+		done(false, message)
+		return
+	end
+	local pending = opts.pending == true or (parent ~= nil and parent.state == "PENDING")
+	notify(context, "loading", parent and "Sending reply..." or "Adding comment...")
+	add(context.pr, text, {
+		parent = parent,
+		inline = opts.inline,
+		file = opts.file,
+		pending = pending,
+		review = context.data and context.data.review,
+	}, function(created, err)
+		if err then
+			notify(context, "error", (parent and "Reply failed: " or "Add comment failed: ") .. err)
+			done(false, err)
+			return
+		end
+		if created then
+			upsert_comment(context, created)
+		end
+		if pending and context.data then
+			context.data.review.pending = true
+		end
+		notify(context, "success", parent and "Reply added" or "Comment added", 1200)
+		done(true, nil)
+	end)
+end
+
 ---@param context AtlasReviewActionContext
 ---@param comment PullsComment
 local function remove_comment(context, comment)
@@ -268,6 +324,52 @@ function M.edit_comment(context, comment, on_done)
 		end,
 	})
 	return true
+end
+
+--- Inline-overlay counterpart of `M.edit_comment`: same validation/provider
+--- call/notification behavior, minus the editor popup.
+---@param context AtlasReviewActionContext
+---@param comment PullsComment
+---@param text string
+---@param done fun(ok: boolean, err: string|nil)
+function M.edit_comment_inline(context, comment, text, done)
+	if vim.trim(text) == "" then
+		done(false, "Empty comment")
+		return
+	end
+	local update
+	if comment.is_task then
+		local tasks = context.provider.capabilities.tasks
+		update = tasks and tasks.edit_task
+	else
+		local comments = context.provider.capabilities.comments
+		update = comments and comments.edit_comment
+	end
+	if not update then
+		local message = "Provider does not support editing this item"
+		notify(context, "error", message)
+		done(false, message)
+		return
+	end
+	notify(context, "loading", comment.is_task and "Editing task..." or "Editing comment...")
+	local desired = vim.tbl_extend("force", {}, comment, { content_raw = text })
+	local callback = function(updated, err)
+		if err then
+			notify(context, "error", "Edit failed: " .. err)
+			done(false, err)
+			return
+		end
+		notify(context, "success", comment.is_task and "Task updated" or "Comment updated", 1200)
+		if updated then
+			upsert_comment(context, updated)
+		end
+		done(true, nil)
+	end
+	if comment.is_task then
+		update(desired, callback)
+	else
+		update(context.pr, desired, callback)
+	end
 end
 
 ---@param context AtlasReviewActionContext
