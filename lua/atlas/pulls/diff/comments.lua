@@ -789,6 +789,17 @@ end
 ---@param on_done fun()
 ---@return boolean opened
 local function open_inline_overlay(win, region, seed_text, on_save, on_done)
+	-- `'scrolloff'` fights `ensure_visible`'s `zt`/`zb`: with it set (a very
+	-- common user config), Vim refuses to put the anchor line flush against
+	-- the window edge and leaves `scrolloff` lines of padding instead --
+	-- which is exactly the room `zt`/`zb` exist to reclaim for the comment
+	-- box. That shows up as "it scrolls, but not quite enough." Override it
+	-- window-locally to 0 for as long as the overlay is open (restored in
+	-- `on_done`/on failure below) so the anchor can actually reach the edge;
+	-- harmless since the user's attention is on the floating overlay, not
+	-- scrolling the content window, while it's up.
+	local saved_scrolloff = vim.wo[win].scrolloff
+	vim.wo[win].scrolloff = 0
 	virt_line_anchor.ensure_visible(win, region.anchor_line, region.above)
 	local screen_row = virt_line_anchor.screen_row(win, {
 		anchor_line = region.anchor_line,
@@ -796,6 +807,9 @@ local function open_inline_overlay(win, region, seed_text, on_save, on_done)
 		block_row = region.block_row,
 	})
 	if not screen_row then
+		if vim.api.nvim_win_is_valid(win) then
+			vim.wo[win].scrolloff = saved_scrolloff
+		end
 		return false
 	end
 	inline_field_edit.start({
@@ -808,7 +822,12 @@ local function open_inline_overlay(win, region, seed_text, on_save, on_done)
 		close_on_win_event = true,
 		on_save = on_save,
 		on_cancel = function() end,
-		on_done = on_done,
+		on_done = function()
+			if vim.api.nvim_win_is_valid(win) then
+				vim.wo[win].scrolloff = saved_scrolloff
+			end
+			on_done()
+		end,
 	})
 	return true
 end
