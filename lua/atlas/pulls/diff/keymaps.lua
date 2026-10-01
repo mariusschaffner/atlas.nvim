@@ -153,15 +153,32 @@ function M.register(session, opts)
 					-- re-renders (picking up the blue "active" border + its hints
 					-- on whichever thread the cursor now sits over) only when the
 					-- active thread(s) actually changed, not on every cursor tick.
+					-- Also proactively scrolls a newly-active thread's anchor line
+					-- to the top of the window (`ensure_comment_visible`) so
+					-- there's always room below for the inline reply/edit overlay
+					-- by the time it's actually requested, instead of trying (and
+					-- sometimes failing) to scroll at that later point.
 					local last_active_signature = comments.active_signature(session)
 					vim.api.nvim_create_autocmd("CursorMoved", {
 						group = active_comment_augroup,
 						buffer = buf,
 						callback = function()
 							local signature = comments.active_signature(session)
-							if signature ~= last_active_signature then
-								last_active_signature = signature
-								session:render()
+							if signature == last_active_signature then
+								return
+							end
+							last_active_signature = signature
+							if signature ~= "" then
+								-- The full bordered-box render (not the compact
+								-- one-line hint) is what actually records the
+								-- region `ensure_comment_visible` needs.
+								session.expanded_overlays = true
+							end
+							session:render()
+							if signature ~= "" then
+								comments.ensure_comment_visible(session, buf)
+							else
+								comments.restore_scroll_behavior(session)
 							end
 						end,
 					})

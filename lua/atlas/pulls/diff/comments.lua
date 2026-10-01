@@ -496,6 +496,64 @@ function M.active_signature(session)
 	return table.concat(list, ",")
 end
 
+--- Scrolls the active thread's anchor line to the TOP of the window the
+--- moment the cursor reaches it (see the `CursorMoved` autocmd in
+--- `pulls/diff/keymaps.lua`) -- proactively, before any reply/edit is ever
+--- requested, so there's always room below for the inline overlay when the
+--- user does press `c`/`gE`. Doing this on arrival rather than at
+--- open-the-overlay time also sidesteps a real failure mode that reactive
+--- scrolling had: scrolling the window exactly as the overlay opens can fire
+--- a `WinScrolled` event the overlay's own `close_on_win_event` autocmd
+--- (registered moments earlier) reacts to, closing the overlay it was just
+--- about to show. Scrolling here means the window is typically already
+--- correctly positioned by the time an overlay opens, so `open_inline_overlay`'s
+--- own `ensure_visible` call is a no-op (no scroll, no event, nothing to
+--- race against).
+---@param session AtlasDiffSession
+---@param buf integer
+function M.ensure_comment_visible(session, buf)
+	local nodes = at_cursor(session, buf)
+	if #nodes == 0 then
+		return
+	end
+	local win = window_for_buf(session, buf)
+	if not win then
+		return
+	end
+	local comment = selected_comment(session, nodes[1])
+	local region = session.diff_regions[review_threads.comment_key(comment)]
+	if not region or not region.anchor_line then
+		return
+	end
+	-- `'scrolloff'` fights pinning the anchor flush against the window edge
+	-- (Vim insists on leaving that many lines of padding instead), and a
+	-- redraw re-applies that constraint continuously -- not just once, at
+	-- the moment of the scroll -- so the override has to stay in place for
+	-- as long as the cursor stays parked here, or the very next redraw
+	-- (cursor blink, an unrelated UI update, anything) silently un-does it
+	-- before the user ever gets to press `c`/`gE`. Restored by
+	-- `M.restore_scroll_behavior` once the cursor actually leaves.
+	if session.diff_scrolloff_overrides[win] == nil then
+		session.diff_scrolloff_overrides[win] = vim.wo[win].scrolloff
+		vim.wo[win].scrolloff = 0
+	end
+	virt_line_anchor.ensure_visible(win, region.anchor_line, region.above)
+end
+
+--- Restores `'scrolloff'` on any window `M.ensure_comment_visible` zeroed
+--- out, once the cursor has moved off of every active comment (the
+--- `CursorMoved` autocmd calls this when `active_signature` goes back to
+--- `""`). Safe to call unconditionally -- a no-op when nothing is overridden.
+---@param session AtlasDiffSession
+function M.restore_scroll_behavior(session)
+	for win, original in pairs(session.diff_scrolloff_overrides) do
+		if vim.api.nvim_win_is_valid(win) then
+			vim.wo[win].scrolloff = original
+		end
+	end
+	session.diff_scrolloff_overrides = {}
+end
+
 ---@param nodes AtlasReviewThreadNode[]
 ---@return string
 local function popup_title(nodes)

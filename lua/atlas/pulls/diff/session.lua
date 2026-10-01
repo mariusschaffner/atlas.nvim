@@ -80,6 +80,7 @@ local review_progress = { "󰝦", "󰪞", "󰪟", "󰪠", "󰪡", "󰪢", "󰪣"
 ---@field diff_editing_id string|nil `review_threads.comment_key` of the comment currently shown with an inline-edit overlay open.
 ---@field diff_selected_comment_id any|nil Id of the specific comment (root or reply) within the thread at the cursor that `]c`/`[c` has navigated to -- edit/reply/delete/toggle-resolved act on this one instead of the thread root when set. `nil` (the default) means "the root". Reset implicitly: resolving it against a different thread's nodes (cursor moved elsewhere) falls back to that thread's root.
 ---@field diff_composing { kind: "add"|"reply", buf: integer, line: integer, above: boolean, parent: PullsComment|nil }|nil A pending add/reply composing box; `parent` is set for "reply", unset for a brand-new top-level thread.
+---@field diff_scrolloff_overrides table<integer, integer> Per-window original `'scrolloff'`, saved while parked on an active comment (`comments.ensure_comment_visible` zeroes it so the anchor can actually reach the window edge; redraws re-clamp the scroll position to whatever `'scrolloff'` currently is, so it has to stay zeroed, not just be zeroed once, for the pinned position to survive). Restored by `comments.restore_scroll_behavior` once the cursor leaves the comment, and defensively on session detach.
 ---@field help_key string|nil
 ---@field review_attached boolean
 ---@field closed boolean
@@ -185,6 +186,7 @@ function M.new(opts)
 		diff_editing_id = nil,
 		diff_composing = nil,
 		diff_selected_comment_id = nil,
+		diff_scrolloff_overrides = {},
 		expanded_overlays = ((config.options.pulls or {}).diff or {}).comment_display == "virtual_lines",
 		help_key = help_key,
 		review_attached = false,
@@ -314,6 +316,12 @@ function M.detach(session, reason)
 		ui_comments.clear(session.current)
 		hints.clear(session.current)
 	end
+	for win, original in pairs(session.diff_scrolloff_overrides) do
+		if vim.api.nvim_win_is_valid(win) then
+			vim.wo[win].scrolloff = original
+		end
+	end
+	session.diff_scrolloff_overrides = {}
 	review_panel.delete(session.review_panel)
 	session.statusline:dispose()
 	if session.tabpage and sessions[session.tabpage] == session then
