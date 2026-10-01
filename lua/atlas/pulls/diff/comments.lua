@@ -30,6 +30,52 @@ local function notify(session, level, message, duration)
 	require("atlas.pulls.diff.session").notify(session, level, message, duration)
 end
 
+---@param node AtlasReviewThreadNode
+---@param id any
+---@return PullsComment|nil
+local function find_in_thread(node, id)
+	if tostring(node.comment.id) == tostring(id) then
+		return node.comment
+	end
+	for _, child in ipairs(node.children) do
+		local found = find_in_thread(child, id)
+		if found then
+			return found
+		end
+	end
+	return nil
+end
+
+--- The specific comment (root or a reply) within `node`'s thread that
+--- `]c`/`[c` has navigated to via `session.diff_selected_comment_id` -- or
+--- the root when unset, not a task, or it belongs to a different thread
+--- than `node` (cursor moved elsewhere since it was set).
+---@param session AtlasDiffSession
+---@param node AtlasReviewThreadNode
+---@return PullsComment
+local function selected_comment(session, node)
+	local selected_id = session.diff_selected_comment_id
+	if selected_id == nil then
+		return node.comment
+	end
+	return find_in_thread(node, selected_id) or node.comment
+end
+
+--- Root + every non-task reply, depth-first, in the same order they render
+--- in -- what `]c`/`[c` cycles `session.diff_selected_comment_id` through
+--- once the cursor is already on a thread's line.
+---@param node AtlasReviewThreadNode
+---@return PullsComment[]
+local function flatten_thread(node)
+	local out = { node.comment }
+	for _, child in ipairs(node.children) do
+		if not child.comment.is_task then
+			vim.list_extend(out, flatten_thread(child))
+		end
+	end
+	return out
+end
+
 -- Forward-declared: assigned further down, after `visible_threads` --
 -- `active_keys` calls `at_cursor`, which itself calls `render_context`, so
 -- `render_context` must NOT compute `active_keys` itself (that would recurse
@@ -413,8 +459,9 @@ function M.has_at_cursor(session, buf)
 	return #at_cursor(session, buf) > 0
 end
 
---- The root comment(s) whose thread is anchored at the CURRENT window's
---- cursor position -- drives the "active" highlight (`AtlasCommentRendererContext.active_keys`).
+--- The comment(s) (root, or the `]c`/`[c`-selected reply within it) whose
+--- thread is anchored at the CURRENT window's cursor position -- drives the
+--- "active" highlight (`AtlasCommentRendererContext.active_keys`).
 --- Deliberately separate from `render_context`: this calls `at_cursor`, which
 --- itself calls `render_context`, so `render_context` must never compute this
 --- on its own (infinite recursion) -- callers that render (currently just
@@ -429,7 +476,7 @@ active_keys = function(session)
 	local buf = vim.api.nvim_win_get_buf(win)
 	local keys = {}
 	for _, node in ipairs(at_cursor(session, buf)) do
-		keys[review_threads.comment_key(node.comment)] = true
+		keys[review_threads.comment_key(selected_comment(session, node))] = true
 	end
 	return keys
 end
@@ -554,6 +601,43 @@ end
 ---@param buf integer
 ---@param direction 1|-1
 function M.jump(session, buf, direction)
+	-- If the cursor is already on a single, unambiguous (non-task) thread,
+	-- cycle through ITS replies first -- only falling through to jumping at
+	-- a different code line once past either end of that list. This is the
+	-- only way to select a specific reply for edit/reply/delete/toggle:
+	-- virt_lines aren't individually cursor-addressable, so there's no other
+	-- way to move "into" a thread.
+	local cursor_nodes = at_cursor(session, buf)
+	if #cursor_nodes == 1 and not cursor_nodes[1].comment.is_task then
+		local flat = flatten_thread(cursor_nodes[1])
+		if #flat > 1 then
+			local selected_id = session.diff_selected_comment_id
+			local current_index = 1
+			if selected_id ~= nil then
+				for i, c in ipairs(flat) do
+					if tostring(c.id) == tostring(selected_id) then
+						current_index = i
+						break
+					end
+				end
+			end
+			local next_index = current_index + direction
+			if next_index >= 1 and next_index <= #flat then
+				-- NOT `next_index == 1 and nil or flat[next_index].id`: with
+				-- `nil` (falsy) as the "then" value, that idiom always falls
+				-- through to the "or" branch regardless of the condition.
+				if next_index == 1 then
+					session.diff_selected_comment_id = nil
+				else
+					session.diff_selected_comment_id = flat[next_index].id
+				end
+				session:render()
+				return
+			end
+		end
+	end
+	session.diff_selected_comment_id = nil
+
 	local _, current_side = buffer_context(session, buf)
 	local context = render_context(session)
 	if not current_side or not context then
@@ -730,7 +814,7 @@ function M.edit_at_cursor(session, buf)
 	if #nodes == 0 then
 		return
 	end
-	local comment = nodes[1].comment
+	local comment = selected_comment(session, nodes[1])
 	if comment.is_task or not is_own_comment(session, comment) then
 		return
 	end
@@ -781,7 +865,7 @@ function M.reply_at_cursor(session, buf, pending)
 	if #nodes == 0 then
 		return
 	end
-	local comment = nodes[1].comment
+	local comment = selected_comment(session, nodes[1])
 	if comment.is_task then
 		return
 	end
@@ -902,7 +986,7 @@ end
 function M.delete_at_cursor(session, buf)
 	local nodes = at_cursor(session, buf)
 	if #nodes == 1 then
-		M.run_action(session, "delete", nodes[1].comment)
+		M.run_action(session, "delete", selected_comment(session, nodes[1]))
 	elseif #nodes > 1 then
 		M.open_at_cursor(session, buf)
 	end
@@ -913,7 +997,7 @@ end
 function M.toggle_resolved_at_cursor(session, buf)
 	local nodes = at_cursor(session, buf)
 	if #nodes == 1 then
-		local comment = nodes[1].comment
+		local comment = selected_comment(session, nodes[1])
 		M.run_action(session, comment.is_task and "toggle_task" or "toggle_resolved", comment)
 	elseif #nodes > 1 then
 		M.open_at_cursor(session, buf)

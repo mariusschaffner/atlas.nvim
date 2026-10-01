@@ -51,7 +51,7 @@ local popup = { buf = nil, win = nil, owner = nil, editing_id = nil, composing =
 ---@field comments_capability table|nil
 ---@field current_user PullsUser|nil
 ---@field reviewable boolean
----@field active_keys table<string, boolean>|nil `review_threads.comment_key`s of the root comment(s) at the current cursor position -- drives the "active" blue border + visible hints, mirroring the Activity tab's `state.active_id`. Only meaningful for the inline (virt_lines) path; the popup has no cursor-driven "active" concept of its own.
+---@field active_keys table<string, boolean>|nil `review_threads.comment_key`s of the comment(s) (root, or the `]c`/`[c`-selected reply) at the current cursor position -- drives the "active" blue border + visible hints, mirroring the Activity tab's `state.active_id`. Only meaningful for the inline (virt_lines) path; the popup has no cursor-driven "active" concept of its own.
 ---@field session AtlasDiffSession|nil Only set for the inline (virt_lines) rendering path -- lets `M.thread_lines` read/write session-scoped editing/composing/region state. The popup keeps its own local state instead (see `popup` above) since it isn't tied to any one buffer line.
 
 ---@param buf integer
@@ -71,12 +71,16 @@ local function is_own_comment(current_user, comment)
 	return tostring(current_user.id) == tostring(comment.author.id)
 end
 
+--- The active box's hint, whether it's the thread root or a reply the user
+--- navigated to via `]c`/`[c`: resolve/reopen is a thread-level action in the
+--- provider API regardless of which comment within the discussion it's
+--- issued against, so it's offered here unconditionally (no `is_root` gate)
+--- rather than only on the root.
 ---@param context AtlasCommentRendererContext
 ---@param comment PullsComment
----@param is_root boolean
 ---@return string|nil text
 ---@return table[]|nil highlights
-local function bottom_hint_for(context, comment, is_root)
+local function bottom_hint_for(context, comment)
 	local capability = context.comments_capability
 	if not capability or not context.reviewable then
 		return nil, nil
@@ -92,7 +96,7 @@ local function bottom_hint_for(context, comment, is_root)
 	if own and capability.delete_comment then
 		table.insert(segments, { action_id = "ui.delete", label = "Delete", hl = "AtlasFooterError" })
 	end
-	if is_root and capability.set_thread_resolved then
+	if capability.set_thread_resolved then
 		table.insert(segments, {
 			action_id = "pulls.review.diff.toggle_resolved",
 			label = comment.state == "RESOLVED" and "Reopen" or "Resolve",
@@ -220,12 +224,13 @@ local function render_thread_list(context, width, list, opts)
 			and #node.children > 0
 			and not review_threads.is_thread_expanded(comment, context.expanded_threads)
 
-		-- "Active" only ever applies to the root box: the cursor sits on a
-		-- real code line, not on any one reply inside the thread, so that's
-		-- the only granularity available here (interacting with a specific
-		-- reply stays popup-only -- see the module doc).
+		-- "Active" can land on a reply, not just the root: `]c`/`[c` lets the
+		-- user navigate into a thread's replies (`session.diff_selected_comment_id`,
+		-- resolved into `context.active_keys` by `diff/comments.lua`'s
+		-- `selected_comment`) since virt_lines have no cursor-addressable
+		-- lines of their own to pick a reply by just moving the cursor.
 		local is_editing = opts.editing_id == key
-		local is_active = is_root and not is_editing and context.active_keys and context.active_keys[key] == true
+		local is_active = not is_editing and context.active_keys and context.active_keys[key] == true
 		local border_hl = is_editing and "AtlasFieldBoxBorderEditing"
 			or (is_active and "AtlasFieldBoxBorderEditable")
 			or "AtlasFieldBoxBorder"
@@ -233,7 +238,7 @@ local function render_thread_list(context, width, list, opts)
 		if is_editing then
 			bottom_hint, bottom_hint_highlights = editing_hint()
 		elseif is_active then
-			bottom_hint, bottom_hint_highlights = bottom_hint_for(context, comment, is_root)
+			bottom_hint, bottom_hint_highlights = bottom_hint_for(context, comment)
 		end
 		local status_text, status_highlights
 		if is_root then
@@ -282,11 +287,16 @@ local function render_thread_list(context, width, list, opts)
 			for _, child in ipairs(node.children) do
 				render_node(child, depth + 1, root)
 			end
-			local composing = opts.composing
-			if composing and composing.kind == "reply" and composing.parent and tostring(composing.parent.id) == tostring(comment.id) then
-				append_connector()
-				render_composing(depth + 1, composing.parent)
-			end
+		end
+		-- Deliberately OUTSIDE the `collapsed` guard: replying to a thread
+		-- whose existing replies are hidden must still show the compose box,
+		-- or `reply_at_cursor` sets `diff_composing` but the region it looks
+		-- for is never rendered -- silently "failing" into the popup
+		-- fallback with no indication why.
+		local composing = opts.composing
+		if composing and composing.kind == "reply" and composing.parent and tostring(composing.parent.id) == tostring(comment.id) then
+			append_connector()
+			render_composing(depth + 1, composing.parent)
 		end
 	end
 

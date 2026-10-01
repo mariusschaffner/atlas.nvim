@@ -494,7 +494,10 @@ function M.is_thread_expanded(comment, expanded)
 	if comment.is_task then
 		return true
 	end
-	return expanded[M.comment_key(comment)] == true
+	-- Expanded by default: `expanded` only ever needs to record an explicit
+	-- *collapse* (`false`); a key that was never touched, or was toggled back
+	-- open (removed via `M.toggle_all_threads`), reads as expanded.
+	return expanded[M.comment_key(comment)] ~= false
 end
 
 ---@param node AtlasReviewThreadNode
@@ -517,9 +520,18 @@ function M.toggle_all_threads(nodes, expanded)
 			end
 		end
 	end
+	-- `nil` (expand) just drops the key -- expanded is already the default;
+	-- collapsing needs the explicit `false` marker. NOT written as
+	-- `should_expand and nil or false`: with `nil` (falsy) as the "then"
+	-- value, that idiom always falls through to `false` regardless of
+	-- `should_expand`.
 	for _, node in ipairs(collapsible) do
 		local key = M.comment_key(node.comment)
-		expanded[key] = should_expand or nil
+		if should_expand then
+			expanded[key] = nil
+		else
+			expanded[key] = false
+		end
 	end
 	return #collapsible > 0, should_expand
 end

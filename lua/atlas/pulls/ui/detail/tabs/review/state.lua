@@ -98,13 +98,23 @@ end
 ---@param root PullsComment
 ---@return boolean
 function M.is_thread_expanded(root)
-	return M.expanded_threads[tostring(root.id)] == true
+	-- Expanded by default -- see `review_threads.is_thread_expanded` (the
+	-- diff view's equivalent); this tab has always had its own separate
+	-- tracking table but should behave the same way.
+	return M.expanded_threads[tostring(root.id)] ~= false
 end
 
 ---@param root PullsComment
 ---@param expanded boolean
 local function set_expanded(root, expanded)
-	M.expanded_threads[tostring(root.id)] = expanded and true or nil
+	-- NOT `expanded and nil or false`: with `nil` (falsy) as the "then"
+	-- value, that idiom always falls through to `false` regardless of
+	-- `expanded`.
+	if expanded then
+		M.expanded_threads[tostring(root.id)] = nil
+	else
+		M.expanded_threads[tostring(root.id)] = false
+	end
 end
 
 ---@param roots PullsComment[]
