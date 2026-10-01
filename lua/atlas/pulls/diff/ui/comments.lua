@@ -51,6 +51,7 @@ local popup = { buf = nil, win = nil, owner = nil, editing_id = nil, composing =
 ---@field comments_capability table|nil
 ---@field current_user PullsUser|nil
 ---@field reviewable boolean
+---@field active_keys table<string, boolean>|nil `review_threads.comment_key`s of the root comment(s) at the current cursor position -- drives the "active" blue border + visible hints, mirroring the Activity tab's `state.active_id`. Only meaningful for the inline (virt_lines) path; the popup has no cursor-driven "active" concept of its own.
 ---@field session AtlasDiffSession|nil Only set for the inline (virt_lines) rendering path -- lets `M.thread_lines` read/write session-scoped editing/composing/region state. The popup keeps its own local state instead (see `popup` above) since it isn't tied to any one buffer line.
 
 ---@param buf integer
@@ -174,6 +175,7 @@ local function render_thread_list(context, width, list, opts)
 			depth = depth,
 			padding_x = 1,
 			width = width,
+			full_width = true,
 			bottom_hint = bottom_hint,
 			bottom_hint_highlights = bottom_hint_highlights,
 		})
@@ -218,12 +220,19 @@ local function render_thread_list(context, width, list, opts)
 			and #node.children > 0
 			and not review_threads.is_thread_expanded(comment, context.expanded_threads)
 
+		-- "Active" only ever applies to the root box: the cursor sits on a
+		-- real code line, not on any one reply inside the thread, so that's
+		-- the only granularity available here (interacting with a specific
+		-- reply stays popup-only -- see the module doc).
 		local is_editing = opts.editing_id == key
-		local border_hl = is_editing and "AtlasFieldBoxBorderEditing" or "AtlasFieldBoxBorder"
+		local is_active = is_root and not is_editing and context.active_keys and context.active_keys[key] == true
+		local border_hl = is_editing and "AtlasFieldBoxBorderEditing"
+			or (is_active and "AtlasFieldBoxBorderEditable")
+			or "AtlasFieldBoxBorder"
 		local bottom_hint, bottom_hint_highlights
 		if is_editing then
 			bottom_hint, bottom_hint_highlights = editing_hint()
-		else
+		elseif is_active then
 			bottom_hint, bottom_hint_highlights = bottom_hint_for(context, comment, is_root)
 		end
 		local status_text, status_highlights
@@ -244,6 +253,7 @@ local function render_thread_list(context, width, list, opts)
 			depth = depth,
 			padding_x = 1,
 			width = width,
+			full_width = true,
 			reaction_options = context.reaction_options,
 			border_hl = border_hl,
 			bottom_hint = bottom_hint,

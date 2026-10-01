@@ -196,6 +196,7 @@ end
 ---@field extra_content_highlights table[]|nil
 ---@field status_text string|nil Right-aligned segment on the top border (e.g. "resolved by @user", an outdated marker) -- only the diff view's review-comment rendering populates this; Activity/Review tab call sites leave it nil and render unchanged.
 ---@field status_highlights table[]|nil
+---@field full_width boolean|nil Use the full available width instead of the default 80% ratio -- the diff view sets this so a comment box matches the width of the code above it; Activity/Review tab call sites leave it unset.
 
 ---@param opts AtlasCommentBoxOpts
 ---@return string[] lines
@@ -208,7 +209,7 @@ function M.render(opts)
 	local padding_x = opts.padding_x or 1
 	local indent = padding_x + depth * 2
 	local available = math.max(MIN_BOX_WIDTH, opts.width - indent)
-	local box_width = M.box_width(available)
+	local box_width = opts.full_width and available or M.box_width(available)
 	local wrap_width = math.max(1, box_width - 2 - #CONTENT_PAD)
 
 	local content_lines, content_highlights, body_start, body_line_count =
@@ -256,6 +257,7 @@ end
 ---@field content_height integer|nil Blank content rows reserved for typing; default 3.
 ---@field bottom_hint string|nil
 ---@field bottom_hint_highlights table[]|nil
+---@field full_width boolean|nil See `AtlasCommentBoxOpts.full_width`.
 
 --- An empty, orange-bordered box ("New Comment" while composing) -- the
 --- placeholder an inline-edit overlay gets anchored onto while adding a new
@@ -269,7 +271,7 @@ function M.render_composing(opts)
 	local padding_x = opts.padding_x or 1
 	local indent = padding_x + depth * 2
 	local available = math.max(MIN_BOX_WIDTH, opts.width - indent)
-	local box_width = M.box_width(available)
+	local box_width = opts.full_width and available or M.box_width(available)
 
 	local content_lines = {}
 	for _ = 1, (opts.content_height or 3) do

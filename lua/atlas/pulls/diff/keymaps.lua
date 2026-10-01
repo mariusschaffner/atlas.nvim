@@ -69,6 +69,9 @@ function M.register(session, opts)
 	local pending = session.review and session.review.data.review.pending == true
 	local can_complete = reviewable and (not pending or reviews.submit_review ~= nil)
 	local has_review_items = session.review ~= nil
+	-- Recreated (not cleared piecemeal) each time buffers are (re)registered,
+	-- e.g. on file navigation -- drops autocmds on any now-stale buffers.
+	local active_comment_augroup = vim.api.nvim_create_augroup("AtlasDiffActiveComment" .. session.id, { clear = true })
 	local file_buffers = {}
 	for _, buf in ipairs(opts.file_buffers or {}) do
 		file_buffers[buf] = true
@@ -145,6 +148,24 @@ function M.register(session, opts)
 						comments.open_at_cursor(session, buf)
 					end)
 				end)
+				do
+					-- Mirrors the Activity tab's cursor-driven `state.active_id`:
+					-- re-renders (picking up the blue "active" border + its hints
+					-- on whichever thread the cursor now sits over) only when the
+					-- active thread(s) actually changed, not on every cursor tick.
+					local last_active_signature = comments.active_signature(session)
+					vim.api.nvim_create_autocmd("CursorMoved", {
+						group = active_comment_augroup,
+						buffer = buf,
+						callback = function()
+							local signature = comments.active_signature(session)
+							if signature ~= last_active_signature then
+								last_active_signature = signature
+								session:render()
+							end
+						end,
+					})
+				end
 				if session.review then
 					add_range(
 						items,

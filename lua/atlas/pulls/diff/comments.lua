@@ -30,6 +30,14 @@ local function notify(session, level, message, duration)
 	require("atlas.pulls.diff.session").notify(session, level, message, duration)
 end
 
+-- Forward-declared: assigned further down, after `visible_threads` --
+-- `active_keys` calls `at_cursor`, which itself calls `render_context`, so
+-- `render_context` must NOT compute `active_keys` itself (that would recurse
+-- forever); callers that need it call `active_keys(session)` separately and
+-- merge it in (see `M.render`/`M.open_at_cursor`).
+local at_cursor
+local active_keys
+
 ---@param session AtlasDiffSession
 ---@return AtlasCommentRendererContext|nil
 local function render_context(session)
@@ -222,6 +230,7 @@ function M.render(session, inline_deleted_lines)
 	if not current or not context then
 		return {}
 	end
+	context.active_keys = active_keys(session)
 	local placed = placed_threads(session, context, inline_deleted_lines)
 	local deleted = {}
 	for line, list in pairs(placed.deleted) do
@@ -382,7 +391,7 @@ end
 ---@param session AtlasDiffSession
 ---@param buf integer
 ---@return AtlasReviewThreadNode[]
-local function at_cursor(session, buf)
+at_cursor = function(session, buf)
 	local path, side = buffer_context(session, buf)
 	local context = render_context(session)
 	if not path or not side or not context then
@@ -402,6 +411,42 @@ end
 ---@return boolean
 function M.has_at_cursor(session, buf)
 	return #at_cursor(session, buf) > 0
+end
+
+--- The root comment(s) whose thread is anchored at the CURRENT window's
+--- cursor position -- drives the "active" highlight (`AtlasCommentRendererContext.active_keys`).
+--- Deliberately separate from `render_context`: this calls `at_cursor`, which
+--- itself calls `render_context`, so `render_context` must never compute this
+--- on its own (infinite recursion) -- callers that render (currently just
+--- `M.render` and `M.open_at_cursor`) fetch it explicitly and merge it in.
+---@param session AtlasDiffSession
+---@return table<string, boolean>
+active_keys = function(session)
+	local win = vim.api.nvim_get_current_win()
+	if not vim.api.nvim_win_is_valid(win) then
+		return {}
+	end
+	local buf = vim.api.nvim_win_get_buf(win)
+	local keys = {}
+	for _, node in ipairs(at_cursor(session, buf)) do
+		keys[review_threads.comment_key(node.comment)] = true
+	end
+	return keys
+end
+
+--- A stable, sorted signature of `active_keys(session)` -- cheap to compare
+--- across cursor moves so callers (the `CursorMoved` autocmd in
+--- `pulls/diff/keymaps.lua`) can skip re-rendering when the active thread(s)
+--- haven't actually changed.
+---@param session AtlasDiffSession
+---@return string
+function M.active_signature(session)
+	local list = {}
+	for key in pairs(active_keys(session)) do
+		table.insert(list, key)
+	end
+	table.sort(list)
+	return table.concat(list, ",")
 end
 
 ---@param nodes AtlasReviewThreadNode[]
@@ -441,6 +486,7 @@ function M.open_at_cursor(session, buf)
 	if not context then
 		return false
 	end
+	context.active_keys = active_keys(session)
 	ui.open_popup({
 		nodes = nodes,
 		owner = owner,
@@ -695,6 +741,13 @@ function M.edit_at_cursor(session, buf)
 	end
 	local key = review_threads.comment_key(comment)
 	session.diff_editing_id = key
+	-- Editing needs the full bordered box on screen (with the "editing"
+	-- border baked in and `session.diff_regions` populated) -- the compact
+	-- "hints" display mode (`session.expanded_overlays == false`, the
+	-- default) never renders comment boxes or their regions at all, which
+	-- otherwise makes every inline edit/reply/add silently fail to find a
+	-- region and fall back to the popup.
+	session.expanded_overlays = true
 	session:render()
 	local region = session.diff_regions[key]
 	-- `region.anchor_line` is absent for comments rendered through the
@@ -734,11 +787,16 @@ function M.reply_at_cursor(session, buf, pending)
 	end
 	local context = review.action_context(session, comment)
 	local win = window_for_buf(session, buf)
-	local parent_key = review_threads.comment_key(comment)
-	local parent_region = session.diff_regions[parent_key]
 	if not context or not win then
 		return
 	end
+	-- Same "compact display mode never populates regions" reasoning as
+	-- `edit_at_cursor` -- force expanded and render once before reading the
+	-- parent's region, or `session.diff_regions` may still be empty.
+	session.expanded_overlays = true
+	session:render()
+	local parent_key = review_threads.comment_key(comment)
+	local parent_region = session.diff_regions[parent_key]
 	if not parent_region or not parent_region.anchor_line then
 		-- Same "deleted lines" caveat as `edit_at_cursor` -- no addressable
 		-- inline anchor for this comment, so fall back to the popup.
@@ -786,6 +844,9 @@ function M.add_at_cursor(session, buf, pending, start_line, end_line)
 		return
 	end
 	session.diff_composing = { kind = "add", buf = buf, line = end_line, above = false }
+	-- Same "compact display mode never populates regions" reasoning as
+	-- `edit_at_cursor`.
+	session.expanded_overlays = true
 	session:render()
 	local region = session.diff_regions.composing
 	local opened = region
