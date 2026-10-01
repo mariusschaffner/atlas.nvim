@@ -789,7 +789,7 @@ end
 ---@param on_done fun()
 ---@return boolean opened
 local function open_inline_overlay(win, region, seed_text, on_save, on_done)
-	virt_line_anchor.ensure_visible(win, region.anchor_line)
+	virt_line_anchor.ensure_visible(win, region.anchor_line, region.above)
 	local screen_row = virt_line_anchor.screen_row(win, {
 		anchor_line = region.anchor_line,
 		above = region.above,
@@ -814,17 +814,20 @@ local function open_inline_overlay(win, region, seed_text, on_save, on_done)
 end
 
 --- `open_inline_overlay`, with one scheduled retry if the first attempt
---- can't resolve a screen position. That first attempt reads window/fold
---- state (`virt_line_anchor.screen_row`) immediately after `session:render()`
---- added the very extmark it needs to measure against -- occasionally still
---- unsettled in a real (non-headless) session, which read as an
---- intermittent "sometimes it opens the popup instead" bug: moving to
---- another comment or reopening the diff forced a fresh render that
---- happened to land after things settled, masking it as "it just needed a
---- nudge." A single `vim.schedule` + `redraw` tick is that same nudge,
---- applied automatically instead of making the user do it by hand -- and
---- `region_fn` re-reads `session.diff_regions` for the retry rather than
---- reusing the first attempt's (possibly stale) table.
+--- can't resolve a screen position. `virt_line_anchor.ensure_visible` already
+--- scrolls to give the comment box the most room it can get (pinned to
+--- whichever window edge its virt_lines actually grow away from), so the
+--- retry here is only for a second, narrower failure mode: the first
+--- attempt reads window/fold state (`virt_line_anchor.screen_row`)
+--- immediately after `session:render()` added the very extmark it needs to
+--- measure against, which can occasionally still be unsettled in a real
+--- (non-headless) session. A single `vim.schedule` + `redraw` tick covers
+--- that; `region_fn` re-reads `session.diff_regions` for the retry rather
+--- than reusing the first attempt's (possibly stale) table. Between the
+--- scroll-to-fit and this retry, `on_fail` should only ever fire for a
+--- comment box that's taller than the entire window -- genuinely nothing
+--- left to automatically fix, so it just quietly drops back to read-only
+--- (no popup, no notification).
 ---@param win integer
 ---@param region_fn fun(): table|nil
 ---@param seed_text string
@@ -899,7 +902,6 @@ function M.edit_at_cursor(session, buf)
 	end, function()
 		session.diff_editing_id = nil
 		session:render()
-		notify(session, "warn", "Comment isn't fully visible -- scroll it into view and try again")
 	end)
 end
 
@@ -956,7 +958,6 @@ function M.reply_at_cursor(session, buf, pending)
 	end, function()
 		session.diff_composing = nil
 		session:render()
-		notify(session, "warn", "Comment isn't fully visible -- scroll it into view and try again")
 	end)
 end
 
@@ -992,7 +993,6 @@ function M.add_at_cursor(session, buf, pending, start_line, end_line)
 	end, function()
 		session.diff_composing = nil
 		session:render()
-		notify(session, "warn", "Comment isn't fully visible -- scroll it into view and try again")
 	end)
 end
 
