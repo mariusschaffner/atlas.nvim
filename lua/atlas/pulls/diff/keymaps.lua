@@ -167,6 +167,36 @@ function M.register(session, opts)
 					})
 				end
 				if session.review then
+					-- Deliberate override of the native `j`/`k` motions (not a
+					-- configurable Atlas action): while on a thread with replies,
+					-- they step through root -> each reply first, falling through
+					-- to the normal line motion once past either end -- so a
+					-- reply reads as "part of" the comment you're on rather than
+					-- a separate code line to jump to (that's what `]c`/`[c` are
+					-- for). `comments.cycle_reply` returns false the moment there's
+					-- nothing left to cycle into, so the native motion still runs.
+					items[#items + 1] = {
+						key = "j",
+						desc = "Next reply in this thread, else next line",
+						callback = function()
+							if not comments.cycle_reply(session, buf, 1) then
+								vim.cmd("normal! j")
+							end
+						end,
+						opts = { nowait = true, silent = true },
+					}
+					items[#items + 1] = {
+						key = "k",
+						desc = "Previous reply in this thread, else previous line",
+						callback = function()
+							if not comments.cycle_reply(session, buf, -1) then
+								vim.cmd("normal! k")
+							end
+						end,
+						opts = { nowait = true, silent = true },
+					}
+				end
+				if session.review then
 					add_range(
 						items,
 						"pulls.review.diff.add_comment",

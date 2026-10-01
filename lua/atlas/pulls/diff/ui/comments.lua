@@ -71,16 +71,18 @@ local function is_own_comment(current_user, comment)
 	return tostring(current_user.id) == tostring(comment.author.id)
 end
 
---- The active box's hint, whether it's the thread root or a reply the user
---- navigated to via `]c`/`[c`: resolve/reopen is a thread-level action in the
---- provider API regardless of which comment within the discussion it's
---- issued against, so it's offered here unconditionally (no `is_root` gate)
---- rather than only on the root.
+--- The active box's hint. Reply/Edit/Delete apply to whichever comment is
+--- active, root or a reply navigated to via `j`/`k`; Resolve/Reopen stays
+--- root-only (`is_root`) -- it reads as a thread-level action, so showing it
+--- on a reply would be misleading even though the provider API itself
+--- happens to resolve the whole discussion regardless of which comment it's
+--- issued against.
 ---@param context AtlasCommentRendererContext
 ---@param comment PullsComment
+---@param is_root boolean
 ---@return string|nil text
 ---@return table[]|nil highlights
-local function bottom_hint_for(context, comment)
+local function bottom_hint_for(context, comment, is_root)
 	local capability = context.comments_capability
 	if not capability or not context.reviewable then
 		return nil, nil
@@ -96,7 +98,7 @@ local function bottom_hint_for(context, comment)
 	if own and capability.delete_comment then
 		table.insert(segments, { action_id = "ui.delete", label = "Delete", hl = "AtlasFooterError" })
 	end
-	if capability.set_thread_resolved then
+	if is_root and capability.set_thread_resolved then
 		table.insert(segments, {
 			action_id = "pulls.review.diff.toggle_resolved",
 			label = comment.state == "RESOLVED" and "Reopen" or "Resolve",
@@ -238,7 +240,7 @@ local function render_thread_list(context, width, list, opts)
 		if is_editing then
 			bottom_hint, bottom_hint_highlights = editing_hint()
 		elseif is_active then
-			bottom_hint, bottom_hint_highlights = bottom_hint_for(context, comment)
+			bottom_hint, bottom_hint_highlights = bottom_hint_for(context, comment, is_root)
 		end
 		local status_text, status_highlights
 		if is_root then

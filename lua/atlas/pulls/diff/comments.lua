@@ -597,45 +597,61 @@ function M.toggle_all(session)
 	return true
 end
 
+--- If the cursor is on a single, unambiguous (non-task) thread with more
+--- than one comment, moves `session.diff_selected_comment_id` to the
+--- next/previous comment in it (root first, then each reply in order) and
+--- re-renders. This is the only way to select a specific reply for
+--- edit/reply/delete/toggle-resolved: virt_lines aren't individually
+--- cursor-addressable, so there's no other way to move "into" a thread.
+--- Bound to plain `j`/`k` (see `pulls/diff/keymaps.lua`) so replies read as
+--- "part of" the comment you're already on; falls through (returns `false`,
+--- doing nothing itself) once past either end, or when there's nothing to
+--- cycle into, so the caller's native `j`/`k` can take over moving the
+--- cursor to the next real line.
+---@param session AtlasDiffSession
+---@param buf integer
+---@param direction 1|-1
+---@return boolean consumed
+function M.cycle_reply(session, buf, direction)
+	local nodes = at_cursor(session, buf)
+	if #nodes ~= 1 or nodes[1].comment.is_task then
+		session.diff_selected_comment_id = nil
+		return false
+	end
+	local flat = flatten_thread(nodes[1])
+	if #flat <= 1 then
+		return false
+	end
+	local selected_id = session.diff_selected_comment_id
+	local current_index = 1
+	if selected_id ~= nil then
+		for i, c in ipairs(flat) do
+			if tostring(c.id) == tostring(selected_id) then
+				current_index = i
+				break
+			end
+		end
+	end
+	local next_index = current_index + direction
+	if next_index < 1 or next_index > #flat then
+		return false
+	end
+	-- NOT `next_index == 1 and nil or flat[next_index].id`: with `nil`
+	-- (falsy) as the "then" value, that idiom always falls through to the
+	-- "or" branch regardless of the condition.
+	if next_index == 1 then
+		session.diff_selected_comment_id = nil
+	else
+		session.diff_selected_comment_id = flat[next_index].id
+	end
+	session:render()
+	return true
+end
+
 ---@param session AtlasDiffSession
 ---@param buf integer
 ---@param direction 1|-1
 function M.jump(session, buf, direction)
-	-- If the cursor is already on a single, unambiguous (non-task) thread,
-	-- cycle through ITS replies first -- only falling through to jumping at
-	-- a different code line once past either end of that list. This is the
-	-- only way to select a specific reply for edit/reply/delete/toggle:
-	-- virt_lines aren't individually cursor-addressable, so there's no other
-	-- way to move "into" a thread.
-	local cursor_nodes = at_cursor(session, buf)
-	if #cursor_nodes == 1 and not cursor_nodes[1].comment.is_task then
-		local flat = flatten_thread(cursor_nodes[1])
-		if #flat > 1 then
-			local selected_id = session.diff_selected_comment_id
-			local current_index = 1
-			if selected_id ~= nil then
-				for i, c in ipairs(flat) do
-					if tostring(c.id) == tostring(selected_id) then
-						current_index = i
-						break
-					end
-				end
-			end
-			local next_index = current_index + direction
-			if next_index >= 1 and next_index <= #flat then
-				-- NOT `next_index == 1 and nil or flat[next_index].id`: with
-				-- `nil` (falsy) as the "then" value, that idiom always falls
-				-- through to the "or" branch regardless of the condition.
-				if next_index == 1 then
-					session.diff_selected_comment_id = nil
-				else
-					session.diff_selected_comment_id = flat[next_index].id
-				end
-				session:render()
-				return
-			end
-		end
-	end
 	session.diff_selected_comment_id = nil
 
 	local _, current_side = buffer_context(session, buf)
@@ -797,6 +813,42 @@ local function open_inline_overlay(win, region, seed_text, on_save, on_done)
 	return true
 end
 
+--- `open_inline_overlay`, with one scheduled retry if the first attempt
+--- can't resolve a screen position. That first attempt reads window/fold
+--- state (`virt_line_anchor.screen_row`) immediately after `session:render()`
+--- added the very extmark it needs to measure against -- occasionally still
+--- unsettled in a real (non-headless) session, which read as an
+--- intermittent "sometimes it opens the popup instead" bug: moving to
+--- another comment or reopening the diff forced a fresh render that
+--- happened to land after things settled, masking it as "it just needed a
+--- nudge." A single `vim.schedule` + `redraw` tick is that same nudge,
+--- applied automatically instead of making the user do it by hand -- and
+--- `region_fn` re-reads `session.diff_regions` for the retry rather than
+--- reusing the first attempt's (possibly stale) table.
+---@param win integer
+---@param region_fn fun(): table|nil
+---@param seed_text string
+---@param on_save fun(text: string, done: fun(ok: boolean, err: string|nil))
+---@param on_done fun()
+---@param on_fail fun() Called only if the retry also fails.
+local function open_inline_overlay_resilient(win, region_fn, seed_text, on_save, on_done, on_fail)
+	local region = region_fn()
+	if region and open_inline_overlay(win, region, seed_text, on_save, on_done) then
+		return
+	end
+	vim.schedule(function()
+		if not vim.api.nvim_win_is_valid(win) then
+			on_fail()
+			return
+		end
+		vim.cmd("redraw")
+		local retry_region = region_fn()
+		if not (retry_region and open_inline_overlay(win, retry_region, seed_text, on_save, on_done)) then
+			on_fail()
+		end
+	end)
+end
+
 --- Reply/edit/add-new-thread for a plain comment, driven directly through
 --- the inline overlay (`atlas.ui.inline_field_edit`), matching the Activity
 --- tab. Tasks and suggestions are out of scope (kept on the pre-existing
@@ -829,28 +881,26 @@ function M.edit_at_cursor(session, buf)
 	-- border baked in and `session.diff_regions` populated) -- the compact
 	-- "hints" display mode (`session.expanded_overlays == false`, the
 	-- default) never renders comment boxes or their regions at all, which
-	-- otherwise makes every inline edit/reply/add silently fail to find a
-	-- region and fall back to the popup.
+	-- would otherwise make every inline edit/reply/add silently fail to find
+	-- a region.
 	session.expanded_overlays = true
 	session:render()
-	local region = session.diff_regions[key]
-	-- `region.anchor_line` is absent for comments rendered through the
-	-- "deleted lines" virt-text path (`inline_deleted_lines` mode) -- those
-	-- aren't addressable by `virt_line_anchor`, so fall through to the popup
-	-- below rather than attempt (and fail) an inline overlay.
-	local opened = region
-		and region.anchor_line
-		and open_inline_overlay(win, region, tostring(comment.content_raw or ""), function(text, done)
-			actions.edit_comment_inline(context, comment, text, done)
-		end, function()
-			session.diff_editing_id = nil
-			session:render()
-		end)
-	if not opened then
+	open_inline_overlay_resilient(win, function()
+		local region = session.diff_regions[key]
+		-- `region.anchor_line` is absent for comments rendered through the
+		-- "deleted lines" virt-text path (`inline_deleted_lines` mode) --
+		-- those aren't addressable by `virt_line_anchor` at all, retry or not.
+		return region and region.anchor_line and region or nil
+	end, tostring(comment.content_raw or ""), function(text, done)
+		actions.edit_comment_inline(context, comment, text, done)
+	end, function()
 		session.diff_editing_id = nil
 		session:render()
-		M.open_at_cursor(session, buf)
-	end
+	end, function()
+		session.diff_editing_id = nil
+		session:render()
+		notify(session, "warn", "Comment isn't fully visible -- scroll it into view and try again")
+	end)
 end
 
 ---@param session AtlasDiffSession
@@ -895,19 +945,19 @@ function M.reply_at_cursor(session, buf, pending)
 		parent = comment,
 	}
 	session:render()
-	local region = session.diff_regions["composing:" .. parent_key]
-	local opened = region
-		and open_inline_overlay(win, region, "", function(text, done)
-			actions.add_comment_inline(context, { parent = comment, pending = pending }, text, done)
-		end, function()
-			session.diff_composing = nil
-			session:render()
-		end)
-	if not opened then
+	local composing_key = "composing:" .. parent_key
+	open_inline_overlay_resilient(win, function()
+		return session.diff_regions[composing_key]
+	end, "", function(text, done)
+		actions.add_comment_inline(context, { parent = comment, pending = pending }, text, done)
+	end, function()
 		session.diff_composing = nil
 		session:render()
-		M.open_at_cursor(session, buf)
-	end
+	end, function()
+		session.diff_composing = nil
+		session:render()
+		notify(session, "warn", "Comment isn't fully visible -- scroll it into view and try again")
+	end)
 end
 
 ---@param session AtlasDiffSession
@@ -932,18 +982,18 @@ function M.add_at_cursor(session, buf, pending, start_line, end_line)
 	-- `edit_at_cursor`.
 	session.expanded_overlays = true
 	session:render()
-	local region = session.diff_regions.composing
-	local opened = region
-		and open_inline_overlay(win, region, "", function(text, done)
-			actions.add_comment_inline(context, { inline = inline, pending = pending }, text, done)
-		end, function()
-			session.diff_composing = nil
-			session:render()
-		end)
-	if not opened then
+	open_inline_overlay_resilient(win, function()
+		return session.diff_regions.composing
+	end, "", function(text, done)
+		actions.add_comment_inline(context, { inline = inline, pending = pending }, text, done)
+	end, function()
 		session.diff_composing = nil
 		session:render()
-	end
+	end, function()
+		session.diff_composing = nil
+		session:render()
+		notify(session, "warn", "Comment isn't fully visible -- scroll it into view and try again")
+	end)
 end
 
 --- `c`/`C` on a single existing (non-task) thread replies to it inline;
