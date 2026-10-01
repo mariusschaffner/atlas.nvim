@@ -12,27 +12,6 @@ local session_api = require("atlas.pulls.diff.session")
 local ui_comments = require("atlas.pulls.diff.ui.comments")
 local adapter_helpers = require("atlas.pulls.diff.adapter_helpers")
 
--- `diff1_inline` (a single-pane unified-diff layout some Diffview forks/
--- configs add alongside the stock `diff2_*`/`diff1_plain` set) has no
--- real old-side window or buffer at all: the old content is rendered as
--- `inline_diff`'s own virt_lines directly inside the new-side buffer. Atlas's
--- `AtlasDiffWindow` shape wants a `buf` either way, so `current.left` gets
--- this sentinel instead of a real handle -- always invalid, so every
--- existing `vim.api.nvim_buf_is_valid(side.buf)` guard (clear/hints/etc.)
--- already treats it as "nothing there," and `placed.left` is never
--- populated for a non-"side-by-side" layout, so it's never dereferenced.
-local NO_LEFT_BUFFER = -1
-
---- Lazy, defensive: only forks/configs that actually ship the `diff1_inline`
---- layout have this module at all (stock diffview.nvim doesn't), so this
---- must never be a top-level `require` -- that would break the whole
---- integration (even plain side-by-side) for anyone without it.
----@return table|nil
-local function get_inline_diff()
-	local ok, mod = pcall(require, "diffview.scene.inline_diff")
-	return ok and mod or nil
-end
-
 ---@type table<string, DiffFileStatus>
 local FILE_STATUSES = {
 	["?"] = "added",
@@ -169,13 +148,6 @@ local function finish_pending_jump(session)
 	local side, line = position.comment(document, pending.comment)
 
 	local target = side == "LEFT" and current.left or current.right
-	if side == "LEFT" and current.layout == "inline" and type(line) == "number" then
-		-- No real old-side window to land in (see `NO_LEFT_BUFFER`) -- same
-		-- remap the native `atlas` backend's own `focus_item` does for its
-		-- inline layout.
-		target = current.right
-		line = position.opposite_line(document, "LEFT", line, vim.api.nvim_buf_line_count(current.right.buf))
-	end
 	if
 		not side
 		or not line
@@ -320,12 +292,11 @@ local function sync(session)
 	if not view.ready or not current or not layout then
 		return false
 	end
-	local layout_name = tostring(layout.name or "")
-	local is_side_by_side = layout_name:match("^diff2_") ~= nil
-	local inline_diff = (not is_side_by_side and layout_name:match("^diff1_inline")) and get_inline_diff() or nil
-	local is_inline = inline_diff ~= nil
-	if not is_side_by_side and not is_inline then
+	if not tostring(layout.name or ""):match("^diff2_") then
 		suspend(session)
+		return false
+	end
+	if not layout.a:is_file_open() or not layout.b:is_file_open() then
 		return false
 	end
 
@@ -346,83 +317,29 @@ local function sync(session)
 		return false
 	end
 	local status = FILE_STATUSES[tostring(current.status or ""):sub(1, 1)] or "modified"
-
-	local current_view, previous, buffers_changed
-	if is_inline then
-		if not layout.b or not layout.b:is_file_open() then
-			return false
-		end
-		local bufnr = layout.b.file.bufnr
-		if not bufnr or not vim.api.nvim_buf_is_valid(bufnr) then
-			return false
-		end
-		local new_lines = vim.api.nvim_buf_get_lines(bufnr, 0, -1, false)
-		-- No old-side buffer exists to read actual content from (see
-		-- `NO_LEFT_BUFFER`), but nothing downstream needs more than its
-		-- *length* for bounds-checking (`position.lua`, `threads_by_line`) --
-		-- confirmed by grepping every `.old.lines`/`.new.lines` read in this
-		-- module tree. `inline_diff.get_hunks` (public, cached per-buffer by
-		-- the inline renderer) gives the hunks already in Atlas's own
-		-- `{old_start, old_count, new_start, new_count}` shape; the old-side
-		-- length falls out of the same hunks via the standard
-		-- old = new - sum(new_count - old_count) identity.
-		local hunks = inline_diff.get_hunks(bufnr) or {}
-		local changes, old_count = {}, #new_lines
-		for _, h in ipairs(hunks) do
-			changes[#changes + 1] = { old_start = h[1], old_count = h[2], new_start = h[3], new_count = h[4] }
-			old_count = old_count - h[4] + h[2]
-		end
-		local old_lines = {}
-		for i = 1, math.max(0, old_count) do
-			old_lines[i] = ""
-		end
-		local binary = (status ~= "added" and layout.b.file.binary == true)
-			or (status ~= "deleted" and layout.a_file and layout.a_file.binary == true)
-		previous = session.current
-		buffers_changed = not previous or previous.left.buf ~= NO_LEFT_BUFFER or previous.right.buf ~= bufnr
-		current_view = {
-			layout = "inline",
-			document = {
-				status = status,
-				old = { path = old_path, lines = old_lines },
-				new = { path = path, lines = new_lines },
-				changes = binary and {} or changes,
-				binary = binary,
-			},
-			left = { buf = NO_LEFT_BUFFER, win = nil },
-			right = { buf = bufnr, win = layout.b.id },
-		}
-		state.suspended = false
-		session.statusline:attach(current_view.right.win)
-	else
-		if not layout.a:is_file_open() or not layout.b:is_file_open() then
-			return false
-		end
-		local old_lines = buffer_lines(layout.a)
-		local new_lines = buffer_lines(layout.b)
-		local binary = (status ~= "added" and layout.a.file.binary == true)
-			or (status ~= "deleted" and layout.b.file.binary == true)
-		previous = session.current
-		buffers_changed = not previous
-			or previous.left.buf ~= layout.a.file.bufnr
-			or previous.right.buf ~= layout.b.file.bufnr
-		current_view = {
-			layout = "side-by-side",
-			document = {
-				status = status,
-				old = { path = old_path, lines = old_lines },
-				new = { path = path, lines = new_lines },
-				changes = binary and {} or line_changes(old_lines, new_lines),
-				binary = binary,
-			},
-			left = { buf = layout.a.file.bufnr, win = layout.a.id },
-			right = { buf = layout.b.file.bufnr, win = layout.b.id },
-		}
-		state.suspended = false
-		session.statusline:attach(current_view.left.win)
-		session.statusline:attach(current_view.right.win)
-	end
-
+	local old_lines = buffer_lines(layout.a)
+	local new_lines = buffer_lines(layout.b)
+	local binary = (status ~= "added" and layout.a.file.binary == true)
+		or (status ~= "deleted" and layout.b.file.binary == true)
+	local previous = session.current
+	local buffers_changed = not previous
+		or previous.left.buf ~= layout.a.file.bufnr
+		or previous.right.buf ~= layout.b.file.bufnr
+	local current_view = {
+		layout = "side-by-side",
+		document = {
+			status = status,
+			old = { path = old_path, lines = old_lines },
+			new = { path = path, lines = new_lines },
+			changes = binary and {} or line_changes(old_lines, new_lines),
+			binary = binary,
+		},
+		left = { buf = layout.a.file.bufnr, win = layout.a.id },
+		right = { buf = layout.b.file.bufnr, win = layout.b.id },
+	}
+	state.suspended = false
+	session.statusline:attach(current_view.left.win)
+	session.statusline:attach(current_view.right.win)
 	session_api.set_current(session, current_view)
 	session_api.review_attached(session)
 	if buffers_changed then
