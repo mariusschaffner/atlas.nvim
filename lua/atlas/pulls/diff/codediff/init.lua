@@ -310,8 +310,10 @@ local function refresh_view(session)
 	local active_win = vim.api.nvim_get_current_win()
 	local diff_win = active_win == current.left.win or active_win == current.right.win
 	local leader = diff_win and active_win or current.right.win or current.left.win
-	if leader then
-		require("codediff.ui.scroll").refresh(state.tabpage, leader)
+	if leader and vim.api.nvim_win_is_valid(leader) then
+		vim.api.nvim_win_call(leader, function()
+			pcall(vim.cmd.syncbind)
+		end)
 	end
 end
 
