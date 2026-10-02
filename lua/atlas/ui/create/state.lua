@@ -10,7 +10,7 @@ local request_scope = require("atlas.core.requests")
 ---@field milestone IssueMilestone|nil issue-only: attaches to an *existing* milestone.
 ---@field source_branch string merge_request-only.
 ---@field target_branch string merge_request-only.
----@field reviewers PullsCreatePRReviewer[] merge_request-only.
+---@field reviewers PullsAuthor[] merge_request-only.
 ---@field draft boolean merge_request-only.
 
 ---@return CreateDraftFields

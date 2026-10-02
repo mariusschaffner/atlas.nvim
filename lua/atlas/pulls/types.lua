@@ -78,7 +78,7 @@
 ---@field base string
 ---@field draft boolean|nil
 ---@field repo_root string|nil
----@field reviewers PullsCreatePRReviewer[]|nil
+---@field reviewers PullsAuthor[]|nil
 ---@field assignee_ids integer[]|nil
 ---@field labels string[]|nil
 

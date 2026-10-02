@@ -409,9 +409,9 @@ local function render_thread_node(node, depth, width, lines, spans, line_map)
 	local extra_lines, extra_highlights
 	if collapsed_here then
 		local count = descendant_count(node)
-		local text = string.format("%d %s (za to expand)", count, count == 1 and "reply" or "replies")
+		local text = string.format("%d %s", count, count == 1 and "Reply" or "Replies")
 		extra_lines = { text }
-		extra_highlights = { { line = 0, start_col = 0, end_col = #text, hl_group = "AtlasLogInfo" } }
+		extra_highlights = { { line = 0, start_col = 0, end_col = #text, hl_group = "AtlasTextMuted" } }
 	end
 
 	if #lines > 0 then

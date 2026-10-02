@@ -554,8 +554,8 @@ local function build_item(node, opts, is_root, root)
 			item.footer_items = {}
 		elseif #node.children > 0 then
 			local count = descendant_count(node)
-			local label = string.format("%d %s", count, count == 1 and "reply" or "replies")
-			table.insert(item.footer_items, { text = label, hl_group = "AtlasLogInfo" })
+			local label = string.format("%d %s", count, count == 1 and "Reply" or "Replies")
+			table.insert(item.footer_items, { text = label, hl_group = "AtlasTextMuted" })
 		end
 		return item
 	end

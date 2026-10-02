@@ -641,7 +641,7 @@ function M.create_pr(opts, on_done)
 	}
 	local reviewer_ids = {}
 	for _, reviewer in ipairs(opts.reviewers or {}) do
-		local id = tonumber(reviewer.provider_id)
+		local id = tonumber(reviewer.id)
 		if id then
 			table.insert(reviewer_ids, id)
 		end

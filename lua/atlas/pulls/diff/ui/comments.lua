@@ -250,9 +250,9 @@ local function render_thread_list(context, width, list, opts)
 		local extra_lines, extra_highlights
 		if collapsed then
 			local count = descendant_count(node)
-			local text = string.format("%d %s (za to expand)", count, count == 1 and "reply" or "replies")
+			local text = string.format("%d %s", count, count == 1 and "Reply" or "Replies")
 			extra_lines = { text }
-			extra_highlights = { { line = 0, start_col = 0, end_col = #text, hl_group = "AtlasLogInfo" } }
+			extra_highlights = { { line = 0, start_col = 0, end_col = #text, hl_group = "AtlasTextMuted" } }
 		end
 
 		local box_lines, box_highlights, region = comment_box.render({
@@ -304,6 +304,7 @@ local function render_thread_list(context, width, list, opts)
 
 	for _, node in ipairs(list) do
 		render_node(node, 0)
+		table.insert(lines, "")
 	end
 
 	if opts.composing and opts.composing.kind == "add" then

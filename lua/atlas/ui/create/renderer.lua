@@ -282,13 +282,13 @@ local function reviewers_field()
 	end
 	local names = {}
 	for _, r in ipairs(reviewers) do
-		table.insert(names, tostring(r.label or ""))
+		table.insert(names, tostring(r.name or r.username or ""))
 	end
 	return {
 		id = "reviewers",
 		label = label,
 		value = table.concat(names, ", "),
-		hl = "AtlasText",
+		hl = pulls_presentation.author_hl(reviewers[1].username),
 		border_hl = "AtlasFieldBoxBorder",
 	}
 end

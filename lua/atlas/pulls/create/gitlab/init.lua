@@ -10,7 +10,6 @@ local shell = require("atlas.ui.create")
 local state = require("atlas.ui.create.state")
 local notify = require("atlas.core.notify")
 local logger = require("atlas.core.logger")
-local picker = require("atlas.ui.picker")
 local git_branch = require("atlas.core.git")
 local pullrequests_api = require("atlas.pulls.providers.gitlab.api.pullrequests")
 local users_api = require("atlas.pulls.providers.gitlab.api.users")
@@ -20,6 +19,9 @@ local labels_completion = require("atlas.providers.gitlab.completion.labels")
 
 ---@type table<string, PullsAuthor>
 local assignee_by_username = {}
+
+---@type table<string, PullsAuthor>
+local reviewer_by_username = {}
 
 ---@param root string
 ---@return AtlasFieldCompletionProvider
@@ -197,66 +199,65 @@ function M.edit_labels()
 	})
 end
 
---- Edits Reviewers. GitLab has no searchable "reviewer" endpoint -- like the
---- old tab-based form, the candidate list comes from `fetch_default_
---- reviewers` (project members + any already-selected reviewers) fetched
---- once, then toggled via a multi-select picker rather than typed
---- completion. Needs Source and Target branch set first (the endpoint is
---- keyed by the diff range).
+--- Edits the Reviewers field. Draft-local mirror of `M.edit_assignees`: same
+--- project-members completion source, typed and editable like every other
+--- field, writing into the draft instead of PUTing to GitLab.
 function M.edit_reviewers()
 	local path = state.project_path
 	if not path or path == "" then
 		notify.warn("Reviewers field is not visible")
 		return
 	end
-	if state.fields.source_branch == "" or state.fields.target_branch == "" then
-		notify.warn("Set source and target branch first")
-		return
+
+	local seed_names = {}
+	for _, r in ipairs(state.fields.reviewers) do
+		local username = tostring(r.username or "")
+		if username ~= "" then
+			table.insert(seed_names, username)
+			reviewer_by_username[username:lower()] = r
+		end
 	end
 
-	notify.loading("Loading reviewers...")
-	state.requests.run(function(done)
-		return pullrequests_api.fetch_default_reviewers({
-			repo_slug = path,
-			repo_root = state.repo_root,
-			head = state.fields.source_branch,
-			base = state.fields.target_branch,
-		}, done)
-	end, function(candidates, err)
-		if err or candidates == nil then
-			notify.error("Load reviewers failed: " .. tostring(err or "Unknown error"))
-			return
+	local completion = users_completion.for_project(users_api.list_members, path, function(user)
+		local username = tostring(user.username or "")
+		if username == "" then
+			return nil
 		end
-		notify.clear()
-
-		local selected_ids = {}
-		for _, r in ipairs(state.fields.reviewers) do
-			selected_ids[tostring(r.provider_id)] = true
-		end
-		local selected = {}
-		for _, candidate in ipairs(candidates) do
-			candidate.selected = selected_ids[tostring(candidate.provider_id)] == true
-			if candidate.selected then
-				table.insert(selected, candidate)
+		return {
+			name = username,
+			display = string.format("%s (@%s)", user.name or username, username),
+			menu = "member",
+		}
+	end, function(users)
+		for _, user in ipairs(users) do
+			local username = tostring(user.username or "")
+			if username ~= "" then
+				reviewer_by_username[username:lower()] = user
 			end
 		end
-
-		picker.multi_select({
-			items = candidates,
-			selected = selected,
-			key = function(item)
-				return item.provider_id
-			end,
-			format_item = function(item)
-				return item.label
-			end,
-			title = "Reviewers",
-			on_done = function(chosen)
-				state.fields.reviewers = chosen or {}
-				shell.render_if_open()
-			end,
-		})
 	end)
+
+	shell.edit_completion_field("reviewers", {
+		label = "Reviewers",
+		seed_text = table.concat(seed_names, ", "),
+		multi_value = true,
+		seed_resolved = seed_names,
+		completion = completion,
+		on_save = function(text, done)
+			local selected = {}
+			for _, segment in ipairs(vim.split(text, ",", { plain = true })) do
+				local trimmed = vim.trim(segment)
+				if trimmed ~= "" then
+					local user = reviewer_by_username[trimmed:lower()]
+					if user then
+						table.insert(selected, user)
+					end
+				end
+			end
+			state.fields.reviewers = selected
+			done(true)
+		end,
+	})
 end
 
 function M.toggle_draft()

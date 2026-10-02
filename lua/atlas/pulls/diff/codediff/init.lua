@@ -154,9 +154,6 @@ local function open_review_panel(session, focus)
 		return false
 	end
 	local win = review_panel.open(panel, anchor, focus)
-	if win then
-		session.statusline:attach(win)
-	end
 	return win ~= nil
 end
 
@@ -431,9 +428,6 @@ local function sync(session)
 		},
 	}
 
-	session.statusline:attach(left_win)
-	session.statusline:attach(right_win)
-	session.statusline:attach(explorer.winid)
 	session_api.set_current(session, current)
 	session_api.review_attached(session)
 	if buffers_changed then
@@ -585,13 +579,6 @@ local function attach(session, lifecycle, tabpage)
 
 	local codediff = lifecycle.get_session(tabpage)
 	local explorer = lifecycle.get_panel_view(tabpage)
-	for _, win in pairs({
-		codediff and codediff.original_win,
-		codediff and codediff.modified_win,
-		explorer and explorer.winid,
-	}) do
-		session.statusline:attach(win)
-	end
 	local buffers = panel and { panel.buf } or {}
 	for _, buf in pairs({
 		codediff and codediff.original_bufnr,
