@@ -45,18 +45,21 @@ local FILE_STATUSES = {
 ---@field status string|nil
 ---@field group string|nil
 
----@class AtlasCodeDiffExplorer
----@field bufnr integer|nil
----@field winid integer|nil
+---@class AtlasCodeDiffExplorerData
 ---@field current_selection AtlasCodeDiffSelection|nil
 ---@field current_file_path string|nil
 ---@field status_result table<string, AtlasCodeDiffSelection[]>|nil
+
+---@class AtlasCodeDiffExplorer
+---@field bufnr integer|nil
+---@field winid integer|nil
+---@field data AtlasCodeDiffExplorerData|nil
 ---@field tree table|nil
 ---@field on_file_select (fun(selection: AtlasCodeDiffSelection, opts: { no_jump: boolean }|nil))|nil
 
 ---@class AtlasCodeDiffLifecycle
 ---@field get_session fun(tabpage: integer): AtlasCodeDiffSession|nil
----@field get_explorer fun(tabpage: integer): AtlasCodeDiffExplorer|nil
+---@field get_panel_view fun(tabpage: integer): AtlasCodeDiffExplorer|nil
 ---@field close fun(tabpage: integer): boolean
 
 ---@class AtlasCodeDiffState
@@ -177,19 +180,20 @@ end
 local function find_review_file(session, path)
 	local state = session.viewer_state --[[@as AtlasCodeDiffState]]
 	path = relative_path(session.source.root, path)
-	local explorer = state.lifecycle.get_explorer(state.tabpage)
+	local explorer = state.lifecycle.get_panel_view(state.tabpage)
 	if not explorer then
 		return nil
 	end
+	local data = explorer.data or {}
 	local function matches(file)
 		return relative_path(session.source.root, file.path) == path
 			or relative_path(session.source.root, file.old_path) == path
 	end
-	if explorer.current_selection and matches(explorer.current_selection) then
-		return vim.deepcopy(explorer.current_selection)
+	if data.current_selection and matches(data.current_selection) then
+		return vim.deepcopy(data.current_selection)
 	end
 	for _, group in ipairs({ "unstaged", "staged", "conflicts" }) do
-		for _, file in ipairs((explorer.status_result or {})[group] or {}) do
+		for _, file in ipairs((data.status_result or {})[group] or {}) do
 			if matches(file) then
 				file = vim.deepcopy(file)
 				file.group = file.group or group
@@ -288,7 +292,7 @@ local function focus_item(session, item, focus_diff)
 		comment = comment,
 		focus_diff = focus_diff,
 	}
-	local explorer = state.lifecycle.get_explorer(state.tabpage)
+	local explorer = state.lifecycle.get_panel_view(state.tabpage)
 	if explorer and explorer.on_file_select then
 		explorer.on_file_select(file, { no_jump = true })
 	else
@@ -326,9 +330,9 @@ local function register_review_buffers(session, buffers)
 		buffers = valid,
 		reload = state.reload_view,
 		help_key = keymaps.resolve("pulls.external_help"),
-		file_buffers = { state.lifecycle.get_explorer(state.tabpage).bufnr },
+		file_buffers = { state.lifecycle.get_panel_view(state.tabpage).bufnr },
 		add_file_comment = function(pending)
-			local explorer = state.lifecycle.get_explorer(state.tabpage)
+			local explorer = state.lifecycle.get_panel_view(state.tabpage)
 			local node = explorer and explorer.tree and explorer.tree:get_node() or nil
 			local file = node and node.data or nil
 			if file and file.type ~= "group" and file.type ~= "directory" then
@@ -360,16 +364,17 @@ local function sync(session)
 	if not codediff or not codediff.stored_diff_result then
 		return false
 	end
-	local explorer = state.lifecycle.get_explorer(state.tabpage)
+	local explorer = state.lifecycle.get_panel_view(state.tabpage)
 	if not explorer then
 		return false
 	end
+	local data = explorer.data or {}
 
 	local old_path = relative_path(session.source.root, codediff.original and codediff.original.relative)
 	local new_path = relative_path(session.source.root, codediff.modified and codediff.modified.relative)
 	local path = new_path ~= "" and new_path or old_path
-	local selection = explorer.current_selection
-	local selected_path = relative_path(session.source.root, selection and selection.path or explorer.current_file_path)
+	local selection = data.current_selection
+	local selected_path = relative_path(session.source.root, selection and selection.path or data.current_file_path)
 	local status = FILE_STATUSES[tostring(selection and selection.status or ""):sub(1, 1)] or "modified"
 	if session.source.root == "" or path == "" then
 		return false
@@ -577,7 +582,7 @@ local function attach(session, lifecycle, tabpage)
 	register_events(session, state)
 
 	local codediff = lifecycle.get_session(tabpage)
-	local explorer = lifecycle.get_explorer(tabpage)
+	local explorer = lifecycle.get_panel_view(tabpage)
 	for _, win in pairs({
 		codediff and codediff.original_win,
 		codediff and codediff.modified_win,

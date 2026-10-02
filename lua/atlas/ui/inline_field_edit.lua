@@ -11,6 +11,7 @@ local M = {}
 
 local keymaps = require("atlas.core.keymaps")
 local notify = require("atlas.core.notify")
+local utils = require("atlas.ui.shared.utils")
 
 local border_ns = vim.api.nvim_create_namespace("AtlasInlineFieldEditBorder")
 
@@ -312,7 +313,14 @@ function M.start(opts)
 	vim.api.nvim_set_option_value("buftype", "nofile", { buf = buf })
 	vim.api.nvim_set_option_value("bufhidden", "wipe", { buf = buf })
 	vim.api.nvim_set_option_value("swapfile", false, { buf = buf })
-	vim.api.nvim_buf_set_lines(buf, 0, -1, false, { opts.seed_text or "" })
+	-- `nvim_buf_set_lines` rejects any line string containing an embedded
+	-- newline, so a multi-line `seed_text` (editing an existing multi-line
+	-- comment/description) must be split across real buffer lines here.
+	local seed_lines = vim.split(utils.normalize_newlines(opts.seed_text or ""), "\n", { plain = true })
+	if #seed_lines == 0 then
+		seed_lines = { "" }
+	end
+	vim.api.nvim_buf_set_lines(buf, 0, -1, false, seed_lines)
 
 	local restore_win = vim.api.nvim_get_current_win()
 	-- `row`/`col` are documented (and every caller treats them) as absolute
@@ -411,7 +419,7 @@ function M.start(opts)
 		skip_border_highlight = use_screen_pos,
 	}
 
-	vim.api.nvim_win_set_cursor(win, { 1, #(opts.seed_text or "") })
+	vim.api.nvim_win_set_cursor(win, { #seed_lines, #seed_lines[#seed_lines] })
 	vim.cmd("startinsert!")
 
 	local function unbind()
@@ -459,7 +467,16 @@ function M.start(opts)
 			return
 		end
 		active.saving = true
-		local raw = vim.api.nvim_buf_get_lines(buf, 0, 1, false)[1] or ""
+		-- `multi_value` fields (labels, assignees, ...) are comma-accumulated
+		-- on a single line by design, so only that line is read. Every other
+		-- field can span the box's full height (a comment, a description, ...)
+		-- -- reading just line 1 silently dropped every line after the first.
+		local raw
+		if opts.multi_value then
+			raw = vim.api.nvim_buf_get_lines(buf, 0, 1, false)[1] or ""
+		else
+			raw = table.concat(vim.api.nvim_buf_get_lines(buf, 0, -1, false), "\n")
+		end
 
 		local text
 		if opts.multi_value then
