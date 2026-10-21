@@ -159,6 +159,7 @@ local M = {
 			update_milestone_description = milestones_api.update_description,
 			update_milestone_start_date = milestones_api.update_start_date,
 			update_milestone_due_date = milestones_api.update_due_date,
+			set_milestone_state = milestones_api.set_state,
 			create_milestone = milestones_api.create,
 		},
 		comments = {

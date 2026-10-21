@@ -68,6 +68,7 @@
 ---@field update_milestone_description (fun(project_path: string, milestone_id: integer, description: string, on_done: fun(ok: boolean, err: string|nil)): { cancel: fun() }|nil)|nil
 ---@field update_milestone_start_date (fun(project_path: string, milestone_id: integer, value: string, on_done: fun(ok: boolean, err: string|nil)): { cancel: fun() }|nil)|nil
 ---@field update_milestone_due_date (fun(project_path: string, milestone_id: integer, value: string, on_done: fun(ok: boolean, err: string|nil)): { cancel: fun() }|nil)|nil
+---@field set_milestone_state (fun(project_path: string, milestone_id: integer, state_event: "close"|"activate", on_done: fun(ok: boolean, err: string|nil)): { cancel: fun() }|nil)|nil
 ---@field create_milestone (fun(project_path: string, opts: { title: string, description: string|nil, start_date: string|nil, due_date: string|nil }, on_done: fun(milestone: IssueMilestone|nil, err: string|nil)): { cancel: fun() }|nil)|nil
 ---@field refresh fun()|nil
 

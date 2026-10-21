@@ -58,7 +58,7 @@ end
 local function progress_gauge(completed, total, percent)
 	local filled = math.max(0, math.min(PROGRESS_BAR_WIDTH, math.floor((percent / 100) * PROGRESS_BAR_WIDTH + 0.5)))
 	local filled_str = string.rep("█", filled)
-	local empty_str = string.rep("░", PROGRESS_BAR_WIDTH - filled)
+	local empty_str = string.rep("█", PROGRESS_BAR_WIDTH - filled)
 
 	local spans = {}
 	local cursor = 0

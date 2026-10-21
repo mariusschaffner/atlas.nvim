@@ -262,4 +262,13 @@ function M.update_due_date(project_path, milestone_id, value, on_done)
 	return update_field(project_path, milestone_id, "due_date", "due date", value, on_done)
 end
 
+---@param project_path string
+---@param milestone_id integer
+---@param state_event "close"|"activate"
+---@param on_done fun(ok: boolean, err: string|nil)
+---@return { cancel: fun() }|nil
+function M.set_state(project_path, milestone_id, state_event, on_done)
+	return update_field(project_path, milestone_id, "state_event", "state", state_event, on_done)
+end
+
 return M

@@ -322,6 +322,70 @@ function M.edit_due_date()
 	edit_field("due_date", "Due date", core and core.update_milestone_due_date, false)
 end
 
+---@param state_event "close"|"activate"
+local function set_milestone_state(state_event)
+	local milestone = state.current_milestone
+	local core = state.provider and state.provider.capabilities.core
+	local set_state = core and core.set_milestone_state
+	if milestone == nil or milestone.id == nil or not set_state then
+		return
+	end
+	local milestone_id = milestone.id
+	local project_path = state.project_path
+	local label = state_event == "close" and "Closing" or "Reopening"
+	notify.loading(label .. " milestone...")
+	set_state(project_path, milestone_id, state_event, function(ok, err)
+		if not same_milestone(milestone_id) then
+			return
+		end
+		if not ok then
+			notify.error(label .. " failed: " .. tostring(err or "Unknown error"))
+			return
+		end
+		if state.current_milestone then
+			state.current_milestone.state = state_event == "close" and "closed" or "active"
+		end
+		notify.success(state_event == "close" and "Milestone closed" or "Milestone reopened", { timeout = 1200 })
+		render_if_open()
+	end)
+end
+
+--- Opens an action-picker menu for the current milestone, mirroring the
+--- issue detail view's "ui.open_actions" affordance. Currently offers a
+--- single action (close/reopen, whichever applies to the milestone's
+--- current state); structured as a picker so further milestone actions
+--- can be added here later without changing the keymap wiring.
+function M.open_actions()
+	local milestone = state.current_milestone
+	local core = state.provider and state.provider.capabilities.core
+	if milestone == nil or milestone.id == nil or not (core and core.set_milestone_state) then
+		notify.warn("No actions available")
+		return
+	end
+
+	local is_closed = milestone.state == "closed"
+	local items = {
+		{
+			label = is_closed and "Reopen Milestone" or "Close Milestone",
+			state_event = is_closed and "activate" or "close",
+		},
+	}
+
+	require("atlas.ui.picker").select({
+		title = string.format("Choose milestone action for #%s", tostring(milestone.id)),
+		items = items,
+		kind = "atlas_milestone_actions",
+		format_item = function(item)
+			return item.label
+		end,
+		on_select = function(item)
+			if item then
+				set_milestone_state(item.state_event)
+			end
+		end,
+	})
+end
+
 --- Opens the issue detail view for the Work Items row under the cursor.
 --- No-op off the Work Items tab, or when the cursor isn't on an issue row
 --- (header/blank rows aren't in `state.line_map`).

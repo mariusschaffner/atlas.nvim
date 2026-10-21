@@ -33,6 +33,20 @@ function M.register(buf)
 		})
 	)
 
+	local core = state.provider and state.provider.capabilities.core
+	if core and core.set_milestone_state then
+		utils.insert_if(
+			items,
+			resolver.item("ui.open_actions", {
+				desc = "Open milestone actions",
+				hint = false,
+				callback = function()
+					require("atlas.issues.ui.detail.milestone").open_actions()
+				end,
+			})
+		)
+	end
+
 	utils.insert_if(
 		items,
 		resolver.item("issues.change_milestone_title", {
@@ -146,6 +160,7 @@ function M.remove(buf)
 	local items = {}
 	utils.insert_if(items, resolver.remove_item("ui.next_panel_tab"))
 	utils.insert_if(items, resolver.remove_item("ui.previous_panel_tab"))
+	utils.insert_if(items, resolver.remove_item("ui.open_actions"))
 	utils.insert_if(items, resolver.remove_item("issues.change_milestone_title"))
 	utils.insert_if(items, resolver.remove_item("ui.edit_description"))
 	utils.insert_if(items, resolver.remove_item("ui.inspect"))

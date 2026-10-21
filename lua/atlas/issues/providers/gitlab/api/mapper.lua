@@ -75,7 +75,13 @@ local function milestone(raw)
 		local web_path = json.safe_str(raw.webPath)
 		web_url = web_path and (service.base_url() .. web_path) or nil
 	end
-	return { id = id, title = title, web_url = web_url, due_date = json.safe_str(raw.due_date) }
+	return {
+		id = id,
+		title = title,
+		web_url = web_url,
+		due_date = json.safe_str(raw.due_date),
+		state = json.safe_str(raw.state),
+	}
 end
 
 ---@param state string|nil
