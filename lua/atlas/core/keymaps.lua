@@ -136,6 +136,8 @@ local M = {}
 ---@field create_pull_for_issue? AtlasKeymapValue Opens the unified create view pre-filled with `Type=merge_request` and a "Closes <issue key>" description, from the issue detail view's Linked MR field.
 ---@field go_to_milestone? AtlasKeymapValue
 ---@field add_comment? AtlasKeymapValue Adds a new comment on the issue detail view's Activity tab (inline). Separate action id from the pulls detail view's equivalent (`ui.comments.add`), but they share the same default key.
+---@field comment? AtlasKeymapValue Jumps to the Activity tab (from any tab) and opens its comment composer -- distinct from `add_comment`, which is the Activity tab's own composer binding, reachable only while that tab is already active.
+---@field toggle_task_item? AtlasKeymapValue Toggles the `- [ ]`/`- [x]` task item under the cursor on the issue detail view's Description tab.
 
 ---@class AtlasKeymapsConfig
 ---@field ui? AtlasUIKeymaps
@@ -252,6 +254,8 @@ local M = {}
 ---| "issues.create_pull_for_issue"
 ---| "issues.go_to_milestone"
 ---| "issues.add_comment"
+---| "issues.comment"
+---| "issues.toggle_task_item"
 
 ---@param value AtlasKeymapValue
 ---@return string[]|nil

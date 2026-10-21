@@ -76,8 +76,13 @@ local function start_inline_edit(buf, refresh, opts)
 	refresh()
 end
 
+--- Opens the Activity tab's comment composer. Exported (rather than kept
+--- local) so the detail view's global `c` keymap (bound to `issues.comment`,
+--- reachable from any tab) can reuse it after switching here, instead of
+--- duplicating the composer-opening logic.
+---@param buf integer
 ---@param refresh fun()
-local function start_add(buf, refresh)
+function M.start_add(buf, refresh)
 	local issue = detail.current_issue
 	local comments = detail.provider and detail.provider.capabilities.comments
 	if not issue or not comments or not comments.add_comment then
@@ -276,7 +281,7 @@ function M.setup(buf, refresh)
 				hint = false,
 				opts = { nowait = true, silent = true },
 				callback = function()
-					start_add(buf, refresh)
+					M.start_add(buf, refresh)
 				end,
 			})
 		)

@@ -3,7 +3,6 @@ local M = {}
 
 local icons = require("atlas.ui.shared.icons")
 local helper = require("atlas.issues.ui.presentation")
-local spinner = require("atlas.ui.components.spinner")
 local highlights = require("atlas.ui.shared.highlights")
 local actions = require("atlas.issues.providers.gitlab.actions")
 local utils = require("atlas.ui.shared.utils")
@@ -19,129 +18,69 @@ local function supports(action_id)
 	return false
 end
 
----@param status_id string|nil
----@return string
-local function state_fg_hl(status_id)
-	if status_id == "closed" then
-		return "AtlasGLIssueClosed"
-	end
-	return "AtlasGLIssueOpen"
-end
-
 ---@param issue Issue
 ---@return IssuesTitleStatus
 function M.title_status(issue)
 	---@cast issue GitLabIssue
-	local label = string.format("Title - #%s", tostring(issue.iid))
+	local closed = issue.status_id == "closed"
 	return {
-		text = tostring(issue.status or "Open"),
-		hl = state_fg_hl(issue.status_id),
-		label = utils.field_hint_label("issues.edit_issue", label, supports("edit_title")),
+		text = tostring(issue.status or (closed and "Closed" or "Open")),
+		hl = closed and "AtlasGLIssueClosedPillChip" or "AtlasGLIssueOpenChip",
 	}
 end
 
 ---@param hex string|nil
 ---@return string
-local function label_fg_hl(hex)
-	return highlights.label_fg_hl(hex, "AtlasGLIssueLabelFg_", "AtlasChipActive")
+local function label_chip_hl(hex)
+	return highlights.label_hl(hex, "AtlasGLIssueLabelChip_", "AtlasChipActive")
 end
 
----@param details IssueDetails|nil
----@param loading boolean
----@return IssuesDetailHeaderField
-local function labels_field(details, loading)
-	local editable = supports("labels")
-	local label = utils.field_hint_label("issues.change_label", "Labels", editable)
-
-	if loading then
-		return {
-			id = "labels",
-			label = label,
-			value = spinner.with_text("Loading..."),
-			hl = "AtlasTextMuted",
-			editable = editable,
-		}
-	end
-
-	local names, spans, cursor = {}, {}, 0
-	for _, item in ipairs(details and details.labels or {}) do
-		local name = tostring(item.name or "")
-		if name ~= "" then
-			table.insert(spans, { start_col = cursor, end_col = cursor + #name, hl_group = label_fg_hl(item.color) })
-			table.insert(names, name)
-			cursor = cursor + #name + 2
-		end
-	end
-
-	if #names == 0 then
-		return { id = "labels", label = label, value = "None", hl = "AtlasTextMuted", editable = editable }
-	end
-
-	return {
-		id = "labels",
-		label = label,
-		value = table.concat(names, ", "),
-		hl = spans,
-		editable = editable,
-	}
-end
+---@class IssuesGitLabHeaderData
+---@field labels { name: string, color: string|nil }[]
+---@field labels_editable boolean
+---@field milestone { title: string, id: integer|nil }|nil
+---@field milestone_editable boolean
+---@field assignees IssueUser[]
+---@field assignee_editable boolean
+---@field author_name string
 
 ---@param issue Issue
 ---@param details IssueDetails|nil
 ---@param loading boolean
----@return IssuesProviderHeaderFields
+---@return IssuesGitLabHeaderData
 function M.header_fields(issue, details, loading)
-	local user_icon = icons.general("user")
+	local assignees = {}
+	if details and details.assignees and #details.assignees > 0 then
+		assignees = details.assignees
+	elseif issue.assignee then
+		assignees = { issue.assignee }
+	end
 
-	local assignee = details and details.assignees[1] or issue.assignee
-	local assignee_name = assignee and tostring(assignee.display_name or "") or ""
+	local milestone = details and details.milestone or nil
 	local reporter_name = issue.reporter and tostring(issue.reporter.display_name or "") or ""
-	if assignee_name == "" then
-		assignee_name = "Unassigned"
-	end
-	if reporter_name == "" then
-		reporter_name = "Unknown"
-	end
-
-	local milestone_text = details and details.milestone and details.milestone.title or ""
-	local has_milestone = details ~= nil and details.milestone ~= nil and details.milestone.id ~= nil
-	local assignee_text = string.format("%s %s", user_icon, assignee_name)
-	local assignee_hl = helper.person_hl(assignee and assignee.display_name or nil)
-	local assignee_editable = supports("assign") and helper.is_open(issue)
-	local milestone_editable = supports("milestone") and helper.is_open(issue)
 
 	return {
-		author = {
-			label = "Author",
-			value = string.format("%s %s", user_icon, reporter_name),
-			hl = helper.person_hl(reporter_name),
-		},
-		assignee = {
-			id = "assignee",
-			label = utils.field_hint_label("issues.change_assignee", "Assignee", assignee_editable),
-			value = assignee_text,
-			hl = assignee_hl,
-			editable = assignee_editable,
-		},
-		labels = labels_field(details, loading),
-		milestone = {
-			id = "milestone",
-			label = utils.field_hint_label(
-				has_milestone and { "issues.go_to_milestone", "issues.change_milestone" } or "issues.change_milestone",
-				"Milestone",
-				milestone_editable
-			),
-			value = milestone_text ~= "" and milestone_text or "None",
-			hl = "AtlasTextMuted",
-			editable = milestone_editable,
-		},
+		labels = (not loading) and (details and details.labels or {}) or {},
+		labels_editable = supports("labels"),
+		milestone = milestone and { title = milestone.title, id = milestone.id } or nil,
+		milestone_editable = supports("milestone") and helper.is_open(issue),
+		assignees = assignees,
+		assignee_editable = supports("assign") and helper.is_open(issue),
+		author_name = reporter_name ~= "" and reporter_name or "Unknown",
 	}
+end
+
+---@param hex string|nil
+---@return string
+function M.label_chip_hl(hex)
+	return label_chip_hl(hex)
 end
 
 ---@return IssuesDetailTabDefinition[]
 function M.tabs()
 	local overview_icon, overview_hl = icons.general("overview")
 	local conversation_icon, conversation_hl = icons.general("conversation")
+	local pr_icon, pr_hl = icons.pulls("pr")
 	return {
 		{
 			key = "overview",
@@ -154,6 +93,12 @@ function M.tabs()
 			label = "Activity",
 			icon = { icon = conversation_icon, hl_group = conversation_hl },
 			mod = require("atlas.issues.ui.detail.tabs.conversation"),
+		},
+		{
+			key = "merge_requests",
+			label = "Merge requests",
+			icon = { icon = pr_icon, hl_group = pr_hl },
+			mod = require("atlas.issues.ui.detail.tabs.merge_requests"),
 		},
 	}
 end

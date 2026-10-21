@@ -301,6 +301,8 @@ M.options = {
 			create_pull_for_issue = "gP",
 			go_to_milestone = "gm",
 			add_comment = "i",
+			comment = "c",
+			toggle_task_item = "x",
 		},
 	},
 }

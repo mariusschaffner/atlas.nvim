@@ -6,6 +6,7 @@ local request_scope = require("atlas.core.requests")
 ---@field header_win integer|nil
 ---@field header_buf integer|nil
 ---@field header_regions table<string, AtlasFieldBoxRegion>
+---@field sidebar_regions table<string, AtlasFieldBoxRegion>
 ---@field provider IssuesProvider|nil
 ---@field provider_detail IssuesProviderDetail|nil
 ---@field current_issue Issue|nil
@@ -27,6 +28,7 @@ local M = {
 	header_win = nil,
 	header_buf = nil,
 	header_regions = {},
+	sidebar_regions = {},
 	provider = nil,
 	provider_detail = nil,
 	current_issue = nil,
@@ -50,6 +52,7 @@ function M.reset()
 	M.header_win = nil
 	M.header_buf = nil
 	M.header_regions = {}
+	M.sidebar_regions = {}
 	M.provider = nil
 	M.provider_detail = nil
 	M.current_issue = nil

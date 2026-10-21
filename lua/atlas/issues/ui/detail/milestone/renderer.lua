@@ -4,6 +4,7 @@ local utils = require("atlas.ui.shared.utils")
 local icons = require("atlas.ui.shared.icons")
 local spinner = require("atlas.ui.components.spinner")
 local field_box = require("atlas.ui.components.field_box")
+local progress_bar = require("atlas.ui.components.progress_bar")
 local tabs = require("atlas.ui.components.tabs")
 local table_tree = require("atlas.ui.components.table_tree")
 local dashboard_providers = require("atlas.issues.ui.dashboard.providers")
@@ -50,53 +51,6 @@ local function work_item_stats(work_items)
 	return completed, total, percent
 end
 
----@param completed integer
----@param total integer
----@param percent integer
----@return string value
----@return table[] spans
-local function progress_gauge(completed, total, percent)
-	local filled = math.max(0, math.min(PROGRESS_BAR_WIDTH, math.floor((percent / 100) * PROGRESS_BAR_WIDTH + 0.5)))
-	local filled_str = string.rep("█", filled)
-	local empty_str = string.rep("█", PROGRESS_BAR_WIDTH - filled)
-
-	local spans = {}
-	local cursor = 0
-	local value = "["
-	cursor = cursor + 1
-
-	local filled_start = cursor
-	value = value .. filled_str
-	cursor = cursor + #filled_str
-	if #filled_str > 0 then
-		table.insert(spans, { start_col = filled_start, end_col = cursor, hl_group = "AtlasTextPositive" })
-	end
-
-	local empty_start = cursor
-	value = value .. empty_str
-	cursor = cursor + #empty_str
-	if #empty_str > 0 then
-		table.insert(spans, { start_col = empty_start, end_col = cursor, hl_group = "AtlasTextMuted" })
-	end
-
-	value = value .. "] "
-	cursor = cursor + 2
-
-	local pct_text = string.format("%d%%", percent)
-	local pct_start = cursor
-	value = value .. pct_text
-	cursor = cursor + #pct_text
-	table.insert(spans, {
-		start_col = pct_start,
-		end_col = cursor,
-		hl_group = percent >= 100 and "AtlasTextPositive" or "AtlasTextMuted",
-	})
-
-	value = value .. string.format(" (%d/%d)", completed, total)
-
-	return value, spans
-end
-
 --- Work item count + a compact bracketed gauge (e.g. "[██████░░░░] 67%
 --- (2/3)"), merged into one "Progress" field box rather than two separate
 --- ones.
@@ -114,7 +68,7 @@ local function progress_field()
 		return { label = "Progress", value = "No work items", hl = "AtlasTextMuted" }
 	end
 
-	local value, spans = progress_gauge(completed, total, percent)
+	local value, spans = progress_bar.render_gauge(completed, total, percent, { width = PROGRESS_BAR_WIDTH })
 	return { label = "Progress", value = value, hl = spans }
 end
 

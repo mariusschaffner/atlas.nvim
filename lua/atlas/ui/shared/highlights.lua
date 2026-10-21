@@ -68,6 +68,22 @@ local groups = {
 	AtlasFieldBoxBorderRequired = { fg = "#ff3b30", bold = true },
 
 	AtlasDetailTabActive = { fg = "#c8c093", bold = true },
+
+	-- Generic detail-view theme tokens (DESIGN-detail-view.md §8): named so
+	-- view code never hard-codes hex. Reuse AtlasTextMuted/AtlasTextPositive/
+	-- AtlasTextWarning/AtlasBorder above for dim/green/yellow-ish/border where
+	-- those already match; the tokens below cover what has no existing
+	-- equivalent. Not GitLab-specific, so they live here rather than in a
+	-- provider's highlights file.
+	AtlasAccent = { fg = "#7aa2f7", bold = true },
+	AtlasTextBright = { fg = "#e6eaff", bold = true },
+	AtlasTextDone = { fg = "#a9b1d6" },
+	AtlasOrange = { fg = "#ff9e64" },
+	AtlasPurple = { fg = "#bb9af7", bold = true },
+	AtlasCyan = { fg = "#7dcfff", bold = true },
+	AtlasKeyHint = { fg = "#e0af68" },
+	AtlasProgressFill = { fg = "#9ece6a" },
+	AtlasProgressEmpty = { fg = "#3b4261" },
 }
 
 function M.setup()

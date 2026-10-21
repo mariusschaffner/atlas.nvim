@@ -343,7 +343,7 @@ local function prepare_open(opts)
 		return nil, false
 	end
 
-	state.win, state.buf, state.header_win, state.header_buf = detail_ui.open("issues", cleanup, render)
+	state.win, state.buf, state.header_win, state.header_buf = detail_ui.open("issues", cleanup, render, { sidebar = true })
 	set_provider(provider)
 	state.on_update = opts.on_update
 
@@ -467,9 +467,9 @@ function M.edit_date(field, label)
 		return
 	end
 
-	local header_win = state.header_win
-	local region = state.header_regions and state.header_regions[field]
-	if header_win == nil or not vim.api.nvim_win_is_valid(header_win) or region == nil then
+	local sidebar_win = detail_ui.sidebar_win()
+	local region = state.sidebar_regions and state.sidebar_regions[field]
+	if sidebar_win == nil or region == nil then
 		notify.warn(label .. " field is not visible")
 		return
 	end
@@ -483,7 +483,7 @@ function M.edit_date(field, label)
 
 	keymaps.remove(buf)
 	inline_field_edit.start({
-		anchor_win = header_win,
+		anchor_win = sidebar_win,
 		row = region.row,
 		col = region.col,
 		width = region.width,
@@ -564,6 +564,36 @@ local function change_tab(step)
 	if state.win and vim.api.nvim_win_is_valid(state.win) then
 		vim.api.nvim_win_set_cursor(state.win, { 1, 0 })
 	end
+end
+
+--- Switches directly to a specific tab (e.g. from the global `c` comment
+--- keymap, reachable from any tab) -- no-op if that tab isn't registered or
+--- is already active.
+---@param key string
+---@return boolean switched
+function M.select_tab(key)
+	local found = false
+	for _, tab in ipairs(state.tabs) do
+		if tab.key == key then
+			found = true
+			break
+		end
+	end
+	if not found or state.current_tab == key then
+		return false
+	end
+
+	set_tab(key)
+	local issue = state.current_issue
+	if issue then
+		load_active_tab(issue)
+		update_spinner()
+	end
+	render()
+	if state.win and vim.api.nvim_win_is_valid(state.win) then
+		vim.api.nvim_win_set_cursor(state.win, { 1, 0 })
+	end
+	return true
 end
 
 function M.next_tab()

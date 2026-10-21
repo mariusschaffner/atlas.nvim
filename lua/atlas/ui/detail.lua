@@ -6,6 +6,8 @@ local utils = require("atlas.ui.shared.utils")
 local MIN_HEADER_HEIGHT = 3
 local MAX_HEADER_RATIO = 0.55
 local CONTENT_BORDER = "rounded"
+local SIDEBAR_WIDTH = 34
+local SIDEBAR_COLLAPSE_COLUMNS = 100
 
 local state = {
 	kind = nil,
@@ -15,6 +17,11 @@ local state = {
 	header_win = nil, -- sticky header window (split layout only)
 	header_buf = nil, -- sticky header buffer (split layout only)
 	spacer_win = nil, -- hidden split the content float overlays (split layout only)
+	sidebar_enabled = false, -- whether the current kind opted into a sidebar region
+	sidebar_win = nil, -- sidebar floating window (split layout only, when not collapsed)
+	sidebar_buf = nil, -- sidebar buffer; kept alive (bufhidden=hide) across collapse/expand
+	sidebar_spacer_win = nil, -- hidden split the sidebar float overlays
+	sidebar_collapsed = false, -- true when narrow-terminal collapse hid the sidebar
 	previous_win = nil,
 	cleanup = nil,
 	render = nil,
@@ -99,6 +106,7 @@ end
 local function reset_content()
 	reset_buffer(state.buf, "atlas.detail")
 	reset_buffer(state.header_buf, "atlas.detail.header")
+	reset_buffer(state.sidebar_buf, "atlas.detail.sidebar")
 	if utils.window.valid(state.win) then
 		vim.api.nvim_set_option_value("winbar", "", { win = state.win, scope = "local" })
 	end
@@ -183,6 +191,98 @@ local function sync_content_float()
 	})
 end
 
+--- Re-syncs the sidebar float's position/size to whatever
+--- `state.sidebar_spacer_win` currently measures.
+local function sync_sidebar_float()
+	if
+		state.layout ~= "split"
+		or not state.sidebar_enabled
+		or not utils.window.valid(state.sidebar_spacer_win)
+		or not utils.window.valid(state.sidebar_win)
+	then
+		return
+	end
+	local width, height = content_geometry(state.sidebar_spacer_win)
+	pcall(vim.api.nvim_win_set_config, state.sidebar_win, {
+		relative = "win",
+		win = state.sidebar_spacer_win,
+		row = 1,
+		col = 1,
+		width = width,
+		height = height,
+	})
+end
+
+--- Tears down the sidebar's spacer split and floating window (if present).
+--- Closing the spacer split lets Neovim's layout engine hand its width back
+--- to `state.spacer_win` automatically -- this is what narrow-terminal
+--- collapse relies on. The sidebar buffer itself is left alone (bufhidden is
+--- "hide", not "wipe") so its last rendered content survives a later expand.
+local function destroy_sidebar_windows()
+	if utils.window.valid(state.sidebar_win) then
+		pcall(vim.api.nvim_win_close, state.sidebar_win, true)
+	end
+	if utils.window.valid(state.sidebar_spacer_win) then
+		pcall(vim.api.nvim_win_close, state.sidebar_spacer_win, true)
+	end
+	state.sidebar_win = nil
+	state.sidebar_spacer_win = nil
+end
+
+---@param tab integer
+local function create_sidebar_windows(tab)
+	if not utils.window.valid(state.spacer_win) then
+		return
+	end
+	if not utils.buffer.valid(state.sidebar_buf) then
+		local sidebar_buf = utils.buffer.create(string.format("atlas://detail/sidebar/%d", tab), "atlas.detail.sidebar")
+		vim.api.nvim_set_option_value("bufhidden", "hide", { buf = sidebar_buf })
+		state.sidebar_buf = sidebar_buf
+	end
+
+	local sidebar_spacer_buf = vim.api.nvim_create_buf(false, true)
+	vim.api.nvim_set_option_value("bufhidden", "wipe", { buf = sidebar_spacer_buf })
+	local sidebar_spacer_win = utils.window.create(state.spacer_win, "belowright vsplit", sidebar_spacer_buf, configure_header)
+	pcall(vim.api.nvim_win_set_width, sidebar_spacer_win, SIDEBAR_WIDTH)
+
+	local width, height = content_geometry(sidebar_spacer_win)
+	local sidebar_win = vim.api.nvim_open_win(state.sidebar_buf, false, {
+		relative = "win",
+		win = sidebar_spacer_win,
+		row = 1,
+		col = 1,
+		width = width,
+		height = height,
+		border = CONTENT_BORDER,
+		style = "minimal",
+		zindex = 50,
+	})
+	configure_header(sidebar_win)
+	vim.api.nvim_set_option_value("winhighlight", content_winhighlight("AtlasBorder"), { win = sidebar_win, scope = "local" })
+
+	state.sidebar_spacer_win = sidebar_spacer_win
+	state.sidebar_win = sidebar_win
+end
+
+--- Shows/hides the sidebar based on the current terminal width (spec: hide
+--- below ~100 columns, collapsing its info into the caller's meta-strip
+--- fallback instead). No-op when the current kind didn't opt into a sidebar.
+local function update_sidebar_collapse()
+	if state.layout ~= "split" or not state.sidebar_enabled then
+		return
+	end
+	local should_collapse = vim.o.columns < SIDEBAR_COLLAPSE_COLUMNS
+	if should_collapse == state.sidebar_collapsed then
+		return
+	end
+	state.sidebar_collapsed = should_collapse
+	if should_collapse then
+		destroy_sidebar_windows()
+	else
+		create_sidebar_windows(vim.api.nvim_win_get_tabpage(state.spacer_win))
+	end
+end
+
 -- Full-screen dedicated tab: a small fixed-height header window on top
 -- (fields, chips, reviewers/checks) that never scrolls, and a bordered
 -- floating content window below it -- a real sticky header, plus a box
@@ -190,7 +290,8 @@ end
 -- The float overlays an invisible "spacer" split so its geometry can be
 -- tracked via Neovim's own split layout engine instead of manual math
 -- against tabline/cmdheight/laststatus.
-local function create_split()
+---@param sidebar_enabled boolean
+local function create_split(sidebar_enabled)
 	vim.cmd("tabnew")
 	local tab = vim.api.nvim_get_current_tabpage()
 	local placeholder_buf = vim.api.nvim_get_current_buf()
@@ -209,6 +310,15 @@ local function create_split()
 	local spacer_win = utils.window.create(header_win, "belowright split", spacer_buf, configure)
 	pcall(vim.api.nvim_win_set_height, header_win, MIN_HEADER_HEIGHT)
 
+	state.spacer_win = spacer_win
+	state.sidebar_enabled = sidebar_enabled
+	state.sidebar_collapsed = sidebar_enabled and vim.o.columns < SIDEBAR_COLLAPSE_COLUMNS
+	if sidebar_enabled and not state.sidebar_collapsed then
+		create_sidebar_windows(tab)
+	end
+
+	-- Computed after the sidebar vsplit (if any) has already taken its share
+	-- of spacer_win's width, so the content float gets the remaining space.
 	local width, height = content_geometry(spacer_win)
 	local content_win = vim.api.nvim_open_win(content_buf, false, {
 		relative = "win",
@@ -244,7 +354,11 @@ local function create_split()
 		group = focus_guard,
 		callback = function()
 			local current = vim.api.nvim_get_current_win()
-			if (current == header_win or current == spacer_win) and utils.window.valid(content_win) then
+			local is_sidechrome = current == header_win
+				or current == spacer_win
+				or current == state.sidebar_win
+				or current == state.sidebar_spacer_win
+			if is_sidechrome and utils.window.valid(content_win) then
 				vim.api.nvim_set_current_win(content_win)
 			end
 		end,
@@ -255,6 +369,12 @@ local function create_split()
 			if state.win ~= content_win and state.header_win ~= header_win and state.spacer_win ~= spacer_win then
 				return
 			end
+			local sidebar_buf = state.sidebar_buf
+			destroy_sidebar_windows()
+			utils.buffer.delete(sidebar_buf)
+			state.sidebar_enabled = false
+			state.sidebar_buf = nil
+			state.sidebar_collapsed = false
 			deactivate()
 			pcall(vim.api.nvim_del_augroup_by_id, focus_guard)
 			if vim.api.nvim_tabpage_is_valid(tab) then
@@ -284,24 +404,29 @@ local function layout_for(kind)
 	return "single"
 end
 
+---@class AtlasDetailOpenOpts
+---@field sidebar boolean|nil -- opt into the fixed-width sidebar region (split layout only)
+
 ---@param kind "issues"|"pulls"|"repo"|"milestone"|"pipelines"|"create"
 ---@param cleanup fun()
 ---@param render fun()
+---@param opts AtlasDetailOpenOpts|nil
 ---@return integer win, integer buf, integer|nil header_win, integer|nil header_buf
-function M.open(kind, cleanup, render)
+function M.open(kind, cleanup, render, opts)
 	require("atlas.ui.shared.highlights").setup()
 	local wanted_layout = layout_for(kind)
+	local wanted_sidebar = wanted_layout == "split" and opts ~= nil and opts.sidebar == true
 	if M.is_open() and vim.api.nvim_win_get_tabpage(state.win) ~= vim.api.nvim_get_current_tabpage() then
 		M.close()
 	end
-	if M.is_open() and state.layout ~= wanted_layout then
+	if M.is_open() and (state.layout ~= wanted_layout or state.sidebar_enabled ~= wanted_sidebar) then
 		M.close()
 	end
 	if not M.is_open() then
 		deactivate()
 		state.win, state.buf, state.header_win, state.header_buf, state.spacer_win = nil, nil, nil, nil, nil
 		if wanted_layout == "split" then
-			create_split()
+			create_split(wanted_sidebar)
 		else
 			create_single()
 		end
@@ -314,6 +439,40 @@ function M.open(kind, cleanup, render)
 	state.cleanup = cleanup
 	state.render = render
 	return state.win, state.buf, state.header_win, state.header_buf
+end
+
+--- The sidebar buffer to render metadata fields into, or `nil` when the
+--- current kind didn't opt into a sidebar, or it is currently collapsed by
+--- narrow-terminal width (see `M.is_sidebar_collapsed`). Callers should check
+--- this on every render (not just once at `M.open` time) since collapse state
+--- can change out from under them on `VimResized`.
+---@return integer|nil
+function M.sidebar_buf()
+	if not state.sidebar_enabled or state.sidebar_collapsed or not utils.buffer.valid(state.sidebar_buf) then
+		return nil
+	end
+	return state.sidebar_buf
+end
+
+--- Whether the sidebar is unavailable right now -- either because the current
+--- kind never opted in, or the terminal is currently too narrow for it. A
+--- caller should fall back to rendering sidebar information inline (e.g. the
+--- spec's narrow-terminal meta strip) when this is true but `sidebar` was
+--- requested at `M.open` time.
+---@return boolean
+function M.is_sidebar_collapsed()
+	return (not state.sidebar_enabled) or state.sidebar_collapsed
+end
+
+--- The sidebar's floating window, for anchoring an `inline_field_edit`
+--- overlay over one of its fields -- `nil` under the same conditions as
+--- `M.sidebar_buf`.
+---@return integer|nil
+function M.sidebar_win()
+	if not state.sidebar_enabled or state.sidebar_collapsed or not utils.window.valid(state.sidebar_win) then
+		return nil
+	end
+	return state.sidebar_win
 end
 
 ---@param tab integer|nil
@@ -351,6 +510,7 @@ function M.resize_header(line_count)
 	end
 	pcall(vim.api.nvim_win_set_height, state.header_win, height)
 	sync_content_float()
+	sync_sidebar_float()
 end
 
 --- Sets the content float's native title to the given `{text, hl_group}[]`
@@ -434,10 +594,13 @@ function M.close(tab)
 	local header_win = state.header_win
 	local buf = state.buf
 	local header_buf = state.header_buf
+	local sidebar_buf = state.sidebar_buf
 	local layout = state.layout
 	deactivate()
 	state.win, state.buf, state.header_win, state.header_buf, state.spacer_win, state.layout =
 		nil, nil, nil, nil, nil, nil
+	state.sidebar_win, state.sidebar_spacer_win, state.sidebar_buf = nil, nil, nil
+	state.sidebar_enabled, state.sidebar_collapsed = false, false
 	if layout == "split" and utils.window.valid(win) then
 		local tabpage = vim.api.nvim_win_get_tabpage(win)
 		pcall(vim.cmd, "tabclose " .. vim.api.nvim_tabpage_get_number(tabpage))
@@ -450,6 +613,7 @@ function M.close(tab)
 	end
 	utils.buffer.delete(buf)
 	utils.buffer.delete(header_buf)
+	utils.buffer.delete(sidebar_buf)
 	require("atlas.ui.dashboard").render()
 end
 
@@ -462,7 +626,9 @@ vim.api.nvim_create_autocmd("VimResized", {
 		if state.layout ~= "split" then
 			pcall(vim.api.nvim_win_set_width, state.win, math.max(math.floor(vim.o.columns * 0.45), 40))
 		else
+			update_sidebar_collapse()
 			sync_content_float()
+			sync_sidebar_float()
 		end
 		if state.render then
 			state.render()
