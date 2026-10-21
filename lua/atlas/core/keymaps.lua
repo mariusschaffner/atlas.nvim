@@ -133,6 +133,7 @@ local M = {}
 ---@field toggle_description_mode? AtlasKeymapValue
 ---@field create_branch? AtlasKeymapValue
 ---@field go_to_pull? AtlasKeymapValue
+---@field create_pull_for_issue? AtlasKeymapValue Opens the unified create view pre-filled with `Type=merge_request` and a "Closes <issue key>" description, from the issue detail view's Linked MR field.
 ---@field go_to_milestone? AtlasKeymapValue
 ---@field add_comment? AtlasKeymapValue Adds a new comment on the issue detail view's Activity tab (inline). Separate action id from the pulls detail view's equivalent (`ui.comments.add`), but they share the same default key.
 
@@ -248,6 +249,7 @@ local M = {}
 ---| "issues.toggle_description_mode"
 ---| "issues.create_branch"
 ---| "issues.go_to_pull"
+---| "issues.create_pull_for_issue"
 ---| "issues.go_to_milestone"
 ---| "issues.add_comment"
 
@@ -440,10 +442,11 @@ function M.validate()
 		-- detail buffer) are different buffers, never active at once, so
 		-- sharing "gp" is safe.
 		{ "ui.next_page", "issues.go_to_pull" },
-		-- previous_page (dashboard buffer) and review.diff.toggle_detail_panel
-		-- (the standalone diff viewer, a separate buffer) never apply to the
-		-- same buffer, so sharing "gP" is safe.
-		{ "ui.previous_page", "pulls.review.diff.toggle_detail_panel" },
+		-- previous_page (dashboard buffer), review.diff.toggle_detail_panel
+		-- (the standalone diff viewer) and create_pull_for_issue (issue detail
+		-- buffer) are three separate buffers, never active at once, so
+		-- sharing "gP" is safe.
+		{ "ui.previous_page", "pulls.review.diff.toggle_detail_panel", "issues.create_pull_for_issue" },
 	}
 
 	local function conflict_allowed(actions)

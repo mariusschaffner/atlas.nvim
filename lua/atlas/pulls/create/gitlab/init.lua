@@ -383,11 +383,15 @@ function M.submit()
 	end)
 end
 
---- Entry point for the pulls dashboard's "c" key: resolves the local git
---- context (repo root, current branch, default remote branch) exactly like
---- the old `pulls/create/pr.lua`'s `M.start()` did, then opens the unified
---- create view pre-filled with `Type=merge_request`.
-function M.start()
+--- Entry point for the pulls dashboard's "c" key (and the issue detail
+--- view's "gP", which passes `opts.description` to pre-fill a closing
+--- reference): resolves the local git context (repo root, current branch,
+--- default remote branch) exactly like the old `pulls/create/pr.lua`'s
+--- `M.start()` did, then opens the unified create view pre-filled with
+--- `Type=merge_request`.
+---@param opts { description: string|nil }|nil
+function M.start(opts)
+	opts = opts or {}
 	local root, root_err = git_branch.repo_root(nil)
 	if not root then
 		notify.error(root_err or "Not in a git repository", { vim_notify = true })
@@ -419,7 +423,7 @@ function M.start()
 		project_path = info.repo_full_name,
 		repo_root = root,
 		initial_type = "merge_request",
-		initial_fields = { source_branch = head, target_branch = base },
+		initial_fields = { source_branch = head, target_branch = base, description = opts.description or "" },
 	})
 end
 

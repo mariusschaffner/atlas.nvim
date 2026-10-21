@@ -298,6 +298,7 @@ M.options = {
 			toggle_description_mode = "m",
 			create_branch = "gb",
 			go_to_pull = "gp",
+			create_pull_for_issue = "gP",
 			go_to_milestone = "gm",
 			add_comment = "i",
 		},

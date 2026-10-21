@@ -36,9 +36,13 @@ local function linked_mr_field()
 	end
 	local core = state.provider and state.provider.capabilities.core
 	local has_hint = core and core.fetch_linked_merge_requests ~= nil
-	-- Navigable (via "gp"), not editable: no highlighted border, just the
-	-- hint prefix in the title.
-	local label = utils.field_hint_label("issues.go_to_pull", "Linked MR", has_hint)
+	-- Navigable (via "gp") and, like the Milestone field's "gM", always
+	-- offers a create action ("gP": create a merge request for this issue).
+	-- Neither is editable: no highlighted border, just the hint prefix in
+	-- the title.
+	local has_items = type(value) == "table" and #value > 0
+	local hint_ids = has_items and { "issues.go_to_pull", "issues.create_pull_for_issue" } or "issues.create_pull_for_issue"
+	local label = utils.field_hint_label(hint_ids, "Linked MR", has_hint)
 
 	if value == "loading" then
 		return { label = label, value = spinner.with_text("Loading..."), hl = "AtlasTextMuted" }

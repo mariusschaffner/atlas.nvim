@@ -48,6 +48,17 @@ local function has_linked_milestone()
 	return milestone ~= nil and milestone.id ~= nil
 end
 
+---@param issue Issue
+local function create_pull_for_issue(issue)
+	local providers = require("atlas.providers")
+	local pulls_provider = providers.load("gitlab", "pulls")
+	if pulls_provider == nil then
+		notify.error("Pull request provider unavailable")
+		return
+	end
+	require("atlas.pulls.create.gitlab").start({ description = "Closes " .. tostring(issue.key) })
+end
+
 ---@param mr IssueLinkedMergeRequest
 local function open_linked_mr(mr)
 	local providers = require("atlas.providers")
@@ -385,6 +396,21 @@ function M.register(buf, opts)
 
 	utils.insert_if(
 		items,
+		resolver.item("issues.create_pull_for_issue", {
+			desc = "Create merge request for this issue",
+			hint = false,
+			callback = function()
+				local issue = state.current_issue
+				if issue == nil then
+					return
+				end
+				create_pull_for_issue(issue)
+			end,
+		})
+	)
+
+	utils.insert_if(
+		items,
 		resolver.item("issues.go_to_milestone", {
 			desc = "Go to linked milestone",
 			hint = false,
@@ -483,6 +509,7 @@ function M.remove(buf)
 	utils.insert_if(general, resolver.remove_item("issues.change_due_date"))
 	utils.insert_if(general, resolver.remove_item("issues.create_branch"))
 	utils.insert_if(general, resolver.remove_item("issues.go_to_pull"))
+	utils.insert_if(general, resolver.remove_item("issues.create_pull_for_issue"))
 	utils.insert_if(general, resolver.remove_item("issues.go_to_milestone"))
 	utils.insert_if(general, resolver.remove_item("ui.next_panel_tab"))
 	utils.insert_if(general, resolver.remove_item("ui.previous_panel_tab"))
