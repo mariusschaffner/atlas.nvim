@@ -30,8 +30,8 @@ local FILE_STATUSES = {
 ---@field modified AtlasCodeDiffRange
 
 ---@class AtlasCodeDiffSession
----@field original { relative: string|nil }|nil
----@field modified { relative: string|nil }|nil
+---@field original_path string|nil
+---@field modified_path string|nil
 ---@field original_bufnr integer|nil
 ---@field modified_bufnr integer|nil
 ---@field original_win integer|nil
@@ -369,8 +369,8 @@ local function sync(session)
 	end
 	local data = explorer.data or {}
 
-	local old_path = relative_path(session.source.root, codediff.original and codediff.original.relative)
-	local new_path = relative_path(session.source.root, codediff.modified and codediff.modified.relative)
+	local old_path = relative_path(session.source.root, codediff.original_path)
+	local new_path = relative_path(session.source.root, codediff.modified_path)
 	local path = new_path ~= "" and new_path or old_path
 	local selection = data.current_selection
 	local selected_path = relative_path(session.source.root, selection and selection.path or data.current_file_path)

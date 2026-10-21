@@ -3,7 +3,7 @@
 -- `word_segment` mode, which feeds this only the token currently under the
 -- cursor: with no `:` yet, candidates are the known filter keys (see
 -- `atlas.ui.filter_query`'s `KEY_ALIASES`); once a `key:` prefix is present,
--- candidates switch to that key's values. `view`/`scope`/`state`/`mr` stay
+-- candidates switch to that key's values. `scope`/`state`/`mr` stay
 -- well-known static enums, but `assignee:`/`author:` are real, project-scoped
 -- lookups for `issues`/`pulls` (`pipelines` has no such filter and keeps the
 -- static "me"-only offer): `apply_filter_text` in both domains' controllers
@@ -23,10 +23,9 @@ local USERS_API_MODULES = {
 	pulls = "atlas.pulls.providers.gitlab.api.users",
 }
 
-local FILTER_KEYS = { "view", "scope", "state", "label", "assignee", "author", "milestone", "mr" }
+local FILTER_KEYS = { "scope", "state", "label", "assignee", "author", "milestone", "mr" }
 
 local STATIC_VALUES = {
-	view = { "issues", "pulls", "pipelines" },
 	scope = { "all", "assigned_to_me", "created_by_me" },
 }
 

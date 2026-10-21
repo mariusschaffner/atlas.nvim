@@ -52,7 +52,6 @@ local KEY_ALIASES = {
 	group = "group",
 	scope = "scope",
 	state = "state",
-	view = "view",
 	mr = "merge_request",
 	merge_request = "merge_request",
 }
@@ -60,7 +59,6 @@ local KEY_ALIASES = {
 local PULLS_STATUS_VALUES = { OPEN = true, MERGED = true, DECLINED = true }
 
 ---@class AtlasFilterQueryParseResult
----@field view "issues"|"pulls"|"pipelines"|nil
 ---@field query table
 ---@field status_filters table<string, boolean>|nil
 
@@ -72,7 +70,6 @@ function M.parse(text, opts)
 	local view = {}
 	local free_words = {}
 	local labels = {}
-	local view_token = nil
 	local status_filters = nil
 
 	for _, raw_token in ipairs(tokenize(text or "")) do
@@ -117,11 +114,6 @@ function M.parse(text, opts)
 						status_filters[status] = true
 					end
 				end
-			elseif canonical == "view" then
-				local candidate = value:lower()
-				if candidate == "issues" or candidate == "pulls" or candidate == "pipelines" then
-					view_token = candidate
-				end
 			elseif canonical == "merge_request" and opts.domain == "pipelines" then
 				view.merge_request_iid = tonumber(value)
 			elseif canonical == "scope" then
@@ -145,7 +137,7 @@ function M.parse(text, opts)
 		view.search = table.concat(free_words, " ")
 	end
 
-	return { view = view_token, query = view, status_filters = status_filters }
+	return { query = view, status_filters = status_filters }
 end
 
 ---@param key string
@@ -168,10 +160,6 @@ function M.serialize(view, opts)
 	opts = opts or {}
 	view = view or {}
 	local parts = {}
-
-	if opts.domain == "issues" or opts.domain == "pulls" or opts.domain == "pipelines" then
-		table.insert(parts, token("view", opts.domain))
-	end
 
 	if opts.domain == "pipelines" and view.merge_request_iid ~= nil then
 		table.insert(parts, token("mr", view.merge_request_iid))

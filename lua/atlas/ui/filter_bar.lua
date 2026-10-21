@@ -2,10 +2,9 @@
 -- (dashboard_tabs.lua) and the per-domain filter row that used to be
 -- duplicated in issues/pulls renderer.lua. One bordered box, always
 -- visible, spanning the full width, showing the active domain's
--- filter_text (which always includes a live-editable `view:<domain>`
--- token). The notification bell and the "g? help" hint live in this box's
--- own title border (right-aligned), not the statusline -- see
--- `title_right` below.
+-- live-editable filter_text. The notification bell and the "g? help" hint
+-- live in this box's own title border (right-aligned), not the statusline
+-- -- see `title_right` below.
 local M = {}
 
 local bordered_box = require("atlas.ui.components.bordered_box")

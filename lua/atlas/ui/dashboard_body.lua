@@ -10,6 +10,13 @@ local ns = vim.api.nvim_create_namespace("atlas.ui")
 -- Top + bottom border rows the table box adds around the domain body.
 local BOX_BORDER_LINES = 2
 
+--- Table box title prefix per domain, shown as "<Prefix> - Table".
+local TABLE_TITLE = {
+	issues = "Issue",
+	pulls = "Pulls",
+	pipelines = "Pipelines",
+}
+
 ---@type AtlasFieldBoxRegion|nil
 local filter_region = nil
 
@@ -94,8 +101,8 @@ local function page_indicator(page_info)
 end
 
 --- Renders the filter bar plus a domain-specific body into the dashboard
---- buffer, the body wrapped in its own bordered box (title "Table", grey
---- non-editable chrome, keybinding hints in the bottom-left corner and a
+--- buffer, the body wrapped in its own bordered box (title "<Domain> -
+--- Table", grey non-editable chrome, keybinding hints in the bottom-left corner and a
 --- "(page/total) - [gp] - [gP]" indicator in the bottom-right corner when
 --- the body is paginated).
 ---@param render_body fun(width: integer, height: integer, bar_lines: integer): string[], table[], table<integer, table>, { page: integer, total_pages: integer }|nil
@@ -132,10 +139,13 @@ function M.render(render_body)
 		table.insert(content_lines, "")
 	end
 
+	local domain = dashboard_host.domain()
+	local title = (domain and TABLE_TITLE[domain] and TABLE_TITLE[domain] .. " - Table") or "Table"
+
 	local box_lines, box_spans = bordered_box.render({
 		width = width,
 		box_width = width,
-		title = "Table",
+		title = title,
 		content_lines = content_lines,
 		content_highlights = content_highlights,
 		border_hl = "AtlasBorder",
