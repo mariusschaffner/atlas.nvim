@@ -5,6 +5,7 @@ local state = require("atlas.pulls.ui.detail.state")
 local detail_header = require("atlas.ui.components.detail_header")
 local strip = require("atlas.ui.components.strip")
 local detail_data = require("atlas.pulls.ui.detail.data")
+local readiness = require("atlas.pulls.ui.detail.readiness")
 local detail_sidebar = require("atlas.pulls.ui.detail.sidebar")
 local detail_tabs = require("atlas.pulls.ui.components.tabs")
 local resolver = require("atlas.core.keymaps")
@@ -95,6 +96,27 @@ local function render_strip(width)
 	if gates == nil then
 		local text = type(state.merge_checks) == "string" and state.merge_checks or "Merge status unavailable"
 		return { text }, { { line = 0, start_col = 0, end_col = #text, hl_group = "AtlasTextMuted" } }
+	end
+
+	-- Narrow terminals (sidebar hidden, DESIGN-merge-request-view.md §1):
+	-- one line, "✓ pipeline · ✓ no conflicts · ◷ review · gM blocked".
+	if detail_ui.is_sidebar_collapsed() then
+		local line, spans = "", {}
+		for i, segment in ipairs(readiness.compact(gates, key_hint("pulls.merge"))) do
+			if i > 1 then
+				table.insert(spans, { line = 0, start_col = #line, end_col = #line + #" · ", hl_group = "AtlasBorder" })
+				line = line .. " · "
+			end
+			if segment.glyph then
+				table.insert(spans, { line = 0, start_col = #line, end_col = #line + #segment.glyph, hl_group = GATE_HL[segment.state] })
+				line = line .. segment.glyph .. " "
+			end
+			local hl = GATE_HL[segment.state] and "AtlasTextBright"
+				or ((MERGE_NODE[segment.state] or MERGE_NODE.blocked).label_hl)
+			table.insert(spans, { line = 0, start_col = #line, end_col = #line + #segment.text, hl_group = hl })
+			line = line .. segment.text
+		end
+		return { line }, spans
 	end
 
 	local nodes = {}
