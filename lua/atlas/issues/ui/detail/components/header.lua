@@ -16,6 +16,10 @@ local ui_utils = require("atlas.ui.utils")
 -- breadcrumb/title/chips all start in the same screen column.
 local LEFT_PAD = 4
 local LEFT_PAD_STR = string.rep(" ", LEFT_PAD)
+-- Exported so other callers appending their own lines below this header's
+-- (e.g. the milestone detail view's timeline strip) can left-align to the
+-- same column.
+M.LEFT_PAD = LEFT_PAD
 
 ---@class IssuesDetailHeaderData
 ---@field breadcrumb string e.g. "atlas / semesterarbeit > issues > #17".

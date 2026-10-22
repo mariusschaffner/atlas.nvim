@@ -131,7 +131,8 @@ function M.open(milestone, opts)
 
 	state.requests.cancel()
 	state.requests = request_scope.new()
-	state.win, state.buf, state.header_win, state.header_buf = detail_ui.open("milestone", cleanup, render)
+	state.win, state.buf, state.header_win, state.header_buf =
+		detail_ui.open("milestone", cleanup, render, { sidebar = true })
 	state.provider = opts.provider
 	state.project_path = opts.project_path
 	state.current_milestone = milestone
@@ -457,6 +458,18 @@ end
 
 function M.prev_tab()
 	change_tab(-1)
+end
+
+--- Opens the current milestone in the browser (DESIGN-milestone-view.md §7's
+--- `gx`), mirroring the issue detail view's own `ui.open_in_browser` keymap.
+function M.open_in_browser()
+	local milestone = state.current_milestone
+	local url = milestone and tostring(milestone.web_url or "") or ""
+	if url == "" then
+		notify.warn("No URL available")
+		return
+	end
+	vim.ui.open(url)
 end
 
 function M.close()

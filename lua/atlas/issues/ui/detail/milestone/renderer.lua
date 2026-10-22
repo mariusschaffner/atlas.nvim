@@ -1,28 +1,40 @@
+-- The milestone detail view (DESIGN-milestone-view.md): a borderless header
+-- (meta line + state pill/title, reusing `issues.ui.detail.components.header`),
+-- a 3-line timeline strip appended below it in the same sticky header buffer,
+-- a tab bar + per-tab main pane content, and a sidebar (reusing
+-- `atlas.ui.components.sidebar`/`sidebar_field`) with PROGRESS/WORK ITEMS/
+-- MERGE REQUESTS/IN PROGRESS fields. Mirrors the issue detail view's renderer
+-- (`issues/ui/detail/renderer.lua`) in shape; see DESIGN-milestone-view.md §1-§8.
 local M = {}
 
 local utils = require("atlas.ui.shared.utils")
-local icons = require("atlas.ui.shared.icons")
+local ui_utils = require("atlas.ui.utils")
 local spinner = require("atlas.ui.components.spinner")
-local field_box = require("atlas.ui.components.field_box")
-local progress_bar = require("atlas.ui.components.progress_bar")
+local header = require("atlas.issues.ui.detail.components.header")
+local sidebar = require("atlas.ui.components.sidebar")
 local tabs = require("atlas.ui.components.tabs")
+local progress_bar = require("atlas.ui.components.progress_bar")
+local markdown_sections = require("atlas.issues.ui.detail.milestone.markdown_sections")
+local timeline = require("atlas.issues.ui.detail.milestone.timeline")
+local wf_state = require("atlas.issues.providers.gitlab.wf_state")
 local table_tree = require("atlas.ui.components.table_tree")
 local dashboard_providers = require("atlas.issues.ui.dashboard.providers")
 local pulls_dashboard_renderer = require("atlas.pulls.ui.dashboard.renderer")
 local pulls_dashboard_providers = require("atlas.pulls.ui.dashboard.providers")
 local detail_ui = require("atlas.ui.detail")
 local inline_edit = require("atlas.ui.inline_edit")
+local resolver = require("atlas.core.keymaps")
 local state = require("atlas.issues.ui.detail.milestone.state")
 
 local ns = vim.api.nvim_create_namespace("atlas.issues.milestone_detail")
 local header_ns = vim.api.nvim_create_namespace("atlas.issues.milestone_detail.header")
+local sidebar_ns = vim.api.nvim_create_namespace("atlas.issues.milestone_detail.sidebar")
 local PADDING_X = 1
-local PROGRESS_BAR_WIDTH = 16
 
 local TABS = {
-	{ key = "description", label = "Description", icon = { icon = icons.general("overview") } },
-	{ key = "work_items", label = "Work Items", icon = { icon = icons.general("conversation") } },
-	{ key = "merge_requests", label = "Merge Requests", icon = { icon = icons.pulls("pr") } },
+	{ key = "description", label = "Description" },
+	{ key = "work_items", label = "Work items" },
+	{ key = "merge_requests", label = "Merge requests" },
 }
 M.tabs = TABS
 
@@ -37,148 +49,515 @@ local function set_lines(buf, lines)
 	vim.api.nvim_set_option_value("modifiable", false, { buf = buf })
 end
 
----@param work_items Issue[]
----@return integer completed, integer total, integer percent
-local function work_item_stats(work_items)
-	local total = #work_items
-	local completed = 0
-	for _, issue in ipairs(work_items) do
-		if issue.status_id == "closed" then
-			completed = completed + 1
-		end
-	end
-	local percent = total > 0 and math.floor((completed / total) * 100 + 0.5) or 0
-	return completed, total, percent
+---@param action_id string
+---@return string|nil
+local function key_hint(action_id)
+	local keys = resolver.resolve(action_id)
+	return keys and keys[1] or nil
 end
 
---- Work item count + a compact bracketed gauge (e.g. "[██████░░░░] 67%
---- (2/3)"), merged into one "Progress" field box rather than two separate
---- ones.
----@return IssuesDetailHeaderField|nil
-local function progress_field()
-	if state.work_items_loading then
-		return { label = "Progress", value = spinner.with_text("Loading..."), hl = "AtlasTextMuted" }
+--- "gs gd" (space-joined, unlike `key_hints`' " | " style elsewhere -- these
+--- are two different fields' keys shown together, not alternatives for one).
+---@return string|nil
+local function dates_hint()
+	local parts = {}
+	local gs = key_hint("issues.change_milestone_start_date")
+	local gd = key_hint("issues.change_milestone_due_date")
+	if gs then
+		table.insert(parts, gs)
 	end
-	if state.work_items == nil then
+	if gd then
+		table.insert(parts, gd)
+	end
+	if #parts == 0 then
 		return nil
 	end
+	return table.concat(parts, " ")
+end
 
-	local completed, total, percent = work_item_stats(state.work_items)
-	if total == 0 then
-		return { label = "Progress", value = "No work items", hl = "AtlasTextMuted" }
+---@param milestone IssueMilestone
+---@return string
+local function breadcrumb(milestone)
+	local path = tostring(state.project_path or "")
+	local parts = vim.split(path, "/", { plain = true, trimempty = true })
+	local project = parts[#parts] or path
+	table.remove(parts)
+	local namespace = table.concat(parts, "/")
+	local left = namespace ~= "" and (namespace .. " / " .. project) or project
+	return string.format("%s › milestones › %%%s", left, tostring(milestone.id or ""))
+end
+
+---@param milestone IssueMilestone
+---@return string
+local function meta_right(milestone)
+	local scope = milestone.group_id and "group" or "project"
+	local rel = utils.relative_time(milestone.updated_at)
+	local updated = rel ~= "-" and (rel .. " ago") or "-"
+	return string.format("%s milestone · updated %s", scope, updated)
+end
+
+---@param milestone IssueMilestone
+---@param work_items Issue[]|nil
+---@param merge_requests PullRequest[]|nil
+---@return string
+local function narrow_meta_strip(milestone, work_items, merge_requests)
+	local counts = { todo = 0, doing = 0, done = 0 }
+	local unassigned = 0
+	for _, issue in ipairs(work_items or {}) do
+		local bucket = wf_state.state_for(issue)
+		counts[bucket] = counts[bucket] + 1
+		if issue.assignee == nil then
+			unassigned = unassigned + 1
+		end
 	end
-
-	local value, spans = progress_bar.render_gauge(completed, total, percent, { width = PROGRESS_BAR_WIDTH })
-	return { label = "Progress", value = value, hl = spans }
+	local total = counts.todo + counts.doing + counts.done
+	return string.format(
+		"%d/%d closed · %d doing · %d unassigned · %d MRs",
+		counts.done,
+		total,
+		counts.doing,
+		unassigned,
+		#(merge_requests or {})
+	)
 end
 
 ---@param milestone IssueMilestone
 ---@param width integer
----@return string[], table[], table<string, AtlasFieldBoxRegion>
-local function render_header(milestone, width)
-	local core = state.provider and state.provider.capabilities.core
-	local can_edit_title = core and core.update_milestone_title ~= nil
-	local can_edit_start = core and core.update_milestone_start_date ~= nil
-	local can_edit_due = core and core.update_milestone_due_date ~= nil
-
-	local title_field = {
-		id = "title",
-		label = utils.field_hint_label(
-			"issues.change_milestone_title",
-			string.format("Title - #%s", tostring(milestone.id)),
-			can_edit_title
-		),
-		value = tostring(milestone.title or ""),
-		border_hl = milestone.state == "closed" and "AtlasGLIssueClosed" or "AtlasGLIssueOpen",
-		editable = can_edit_title,
+---@param today_iso string
+---@return string[] lines
+---@return AtlasUIHighlight[] highlights
+local function render_header(milestone, width, today_iso)
+	local pill = timeline.state_pill(milestone, today_iso)
+	local data = {
+		breadcrumb = breadcrumb(milestone),
+		meta_right = meta_right(milestone),
+		state_label = pill.label,
+		state_hl = pill.hl,
+		title = milestone.title or "",
+		iid_text = "%" .. tostring(milestone.id or ""),
 	}
-	local lines, spans, title_regions = field_box.render_columns({}, { width = width, top_field = title_field })
-	local regions = {}
-	for id, region in pairs(title_regions or {}) do
-		regions[id] = region
+	local lines, spans = header.render(data, width)
+
+	if detail_ui.is_sidebar_collapsed() then
+		local strip = "    " .. narrow_meta_strip(milestone, state.work_items, state.merge_requests)
+		table.insert(lines, strip)
+		table.insert(spans, { line = #lines - 1, start_col = 4, end_col = #strip, hl_group = "AtlasTextMuted" })
 	end
 
-	-- One row, three columns: Start date, Due date, Progress side by side.
-	local start_date_col = {
-		{
-			id = "start_date",
-			label = utils.field_hint_label("issues.change_milestone_start_date", "Start date", can_edit_start),
-			value = (milestone.start_date and milestone.start_date ~= "") and milestone.start_date or "None",
-			hl = "AtlasTextMuted",
-			editable = can_edit_start,
-		},
-	}
-	local due_date_col = {
-		{
-			id = "due_date",
-			label = utils.field_hint_label("issues.change_milestone_due_date", "Due date", can_edit_due),
-			value = (milestone.due_date and milestone.due_date ~= "") and milestone.due_date or "None",
-			hl = "AtlasTextMuted",
-			editable = can_edit_due,
-		},
-	}
-	local progress_col = {}
-	utils.insert_if(progress_col, progress_field())
+	return lines, spans
+end
 
-	local field_lines, field_spans, field_regions =
-		field_box.render_columns({ start_date_col, due_date_col, progress_col }, { width = width })
-	local base = #lines
-	utils.append_block(lines, spans, { lines = field_lines, highlights = field_spans })
+---@param width integer
+---@return string[] cells
+local function build_cells(width)
+	local cells = {}
+	for i = 1, width do
+		cells[i] = " "
+	end
+	return cells
+end
 
-	for id, region in pairs(field_regions or {}) do
-		regions[id] = { row = base + region.row, col = region.col, width = region.width, height = region.height }
+---@param cells string[]
+---@param start_col integer 0-indexed
+---@param text string
+local function set_text(cells, start_col, text)
+	for i = 1, #text do
+		local idx = start_col + i
+		if cells[idx] then
+			cells[idx] = text:sub(i, i)
+		end
+	end
+end
+
+---@param cells string[]
+---@param col integer 0-indexed
+---@param glyph string
+local function set_glyph(cells, col, glyph)
+	if cells[col + 1] then
+		cells[col + 1] = glyph
+	end
+end
+
+--- Concatenates `cells` into the rendered line, plus a `byte_range(from_col,
+--- to_col)` helper mapping 0-indexed column ranges to byte offsets -- needed
+--- because the timeline strip's glyphs (│ ━ ─ ┃) are multi-byte UTF-8, so a
+--- column index and a byte offset aren't the same number.
+---@param cells string[]
+---@return string line
+---@return fun(from_col: integer, to_col: integer): integer, integer byte_range
+local function finalize_cells(cells)
+	local parts, offsets = {}, {}
+	local byte_pos = 0
+	for i, cell in ipairs(cells) do
+		offsets[i] = byte_pos
+		table.insert(parts, cell)
+		byte_pos = byte_pos + #cell
+	end
+	offsets[#cells + 1] = byte_pos
+	local line = table.concat(parts)
+	local function byte_range(from_col, to_col)
+		from_col = math.max(0, math.min(#cells, from_col))
+		to_col = math.max(0, math.min(#cells, to_col))
+		return offsets[from_col + 1], offsets[to_col + 1]
+	end
+	return line, byte_range
+end
+
+--- The timeline strip (DESIGN-milestone-view.md §4): date ticks, a fill/
+--- today-marker bar, and a label line, built on `timeline.lua`'s pure day
+--- math. Returns 1 line (the "+ set dates" hint) when there isn't enough
+--- date information to draw a proportional bar, 3 lines otherwise.
+---@param milestone IssueMilestone
+---@param width integer
+---@param today_iso string
+---@return string[] lines
+---@return AtlasUIHighlight[] highlights
+local function render_timeline(milestone, width, today_iso)
+	width = math.max(1, width)
+	local lines, spans = {}, {}
+	local closed = milestone.state == "closed"
+	local start_iso = timeline.resolve_start(milestone)
+	local due_iso = (milestone.due_date and milestone.due_date ~= "") and milestone.due_date or nil
+	local bar = timeline.bar_state(today_iso, start_iso, due_iso, closed)
+
+	-- Without both ends of the range there's no cols_per_day to compute --
+	-- same degenerate "+ set dates" treatment as the no-dates case.
+	if bar.state == "no_dates" or start_iso == nil or due_iso == nil then
+		local hint = dates_hint()
+		local text = "+ set dates"
+		local full = hint and (text .. "  " .. hint) or text
+		table.insert(lines, full)
+		table.insert(spans, { line = 0, start_col = 0, end_col = #text, hl_group = "AtlasTextMutedItalic" })
+		if hint then
+			table.insert(spans, { line = 0, start_col = #full - #hint, end_col = #full, hl_group = "AtlasKeyHint" })
+		end
+		return lines, spans
 	end
 
-	return lines, spans, regions
+	local marker_col = timeline.column_for(today_iso, start_iso, due_iso, width)
+
+	-- Line 1: date ticks.
+	do
+		local ticks = timeline.date_ticks(start_iso, due_iso, width)
+		local cells = build_cells(width)
+		for _, tick in ipairs(ticks) do
+			set_glyph(cells, tick.col, "│")
+			if tick.text then
+				local start_col = tick.right_aligned and (tick.col - #tick.text + 1) or tick.col
+				set_text(cells, start_col, tick.text)
+			end
+		end
+		local line, byte_range = finalize_cells(cells)
+		table.insert(lines, line)
+		local s0, s1 = byte_range(0, width)
+		table.insert(spans, { line = 0, start_col = s0, end_col = s1, hl_group = "AtlasTextMuted" })
+	end
+
+	-- Line 2: bar.
+	do
+		local cells = build_cells(width)
+		local fill_upto, bar_hl, show_marker
+
+		if bar.state == "closed" then
+			fill_upto, bar_hl, show_marker = width, "AtlasProgressEmpty", false
+		elseif bar.state == "overdue" then
+			-- Foreground-only red, not the bg-filled pill group (that one's
+			-- meant for the title's tinted pill, not a full-width bar).
+			fill_upto, bar_hl, show_marker = width, "AtlasLogError", false
+		elseif bar.state == "before_start" then
+			fill_upto, bar_hl, show_marker = 0, "AtlasBorder", false
+		else -- in_progress
+			fill_upto, bar_hl, show_marker = (marker_col or 0) + 1, "AtlasCyan", true
+		end
+
+		for i = 0, width - 1 do
+			cells[i + 1] = (i < fill_upto) and "━" or "─"
+		end
+		if show_marker and marker_col then
+			set_glyph(cells, marker_col, "┃")
+		end
+
+		local line, byte_range = finalize_cells(cells)
+		table.insert(lines, line)
+		local line_no = #lines - 1
+
+		if show_marker and marker_col then
+			if marker_col > 0 then
+				local f0, f1 = byte_range(0, marker_col)
+				table.insert(spans, { line = line_no, start_col = f0, end_col = f1, hl_group = bar_hl })
+			end
+			local m0, m1 = byte_range(marker_col, marker_col + 1)
+			table.insert(spans, { line = line_no, start_col = m0, end_col = m1, hl_group = "AtlasTextBright" })
+			if marker_col + 1 < width then
+				local e0, e1 = byte_range(marker_col + 1, width)
+				table.insert(spans, { line = line_no, start_col = e0, end_col = e1, hl_group = "AtlasBorder" })
+			end
+		else
+			if fill_upto > 0 then
+				local f0, f1 = byte_range(0, fill_upto)
+				table.insert(spans, { line = line_no, start_col = f0, end_col = f1, hl_group = bar_hl })
+			end
+			if fill_upto < width then
+				local e0, e1 = byte_range(fill_upto, width)
+				table.insert(spans, { line = line_no, start_col = e0, end_col = e1, hl_group = "AtlasBorder" })
+			end
+		end
+	end
+
+	-- Line 3: labels.
+	do
+		local label_text
+		if bar.state == "before_start" then
+			label_text = string.format("starts in %d day%s", bar.days, bar.days == 1 and "" or "s")
+		elseif bar.state == "overdue" then
+			label_text = string.format("%d day%s overdue", bar.days, bar.days == 1 and "" or "s")
+		elseif bar.state == "closed" then
+			label_text = "closed " .. (timeline.format_date(due_iso) or "")
+		else
+			label_text = "today"
+		end
+
+		local hint = dates_hint()
+		local hint_text = (hint and (hint .. " dates")) or "dates"
+
+		local label_col = 0
+		if bar.state == "in_progress" and marker_col then
+			local half = math.floor(ui_utils.text_width(label_text) / 2)
+			label_col = math.max(0, math.min(width - ui_utils.text_width(label_text), marker_col - half))
+		end
+
+		local cells = build_cells(width)
+		set_text(cells, label_col, label_text)
+
+		local hint_col = width - #hint_text
+		local hint_fits = hint_col > label_col + #label_text
+		if hint_fits then
+			set_text(cells, hint_col, hint_text)
+		end
+
+		local line, byte_range = finalize_cells(cells)
+		table.insert(lines, line)
+		local line_no = #lines - 1
+
+		local l0, l1 = byte_range(label_col, label_col + #label_text)
+		table.insert(spans, { line = line_no, start_col = l0, end_col = l1, hl_group = "AtlasTextBright" })
+
+		if hint_fits then
+			local key_part = hint or ""
+			if #key_part > 0 then
+				local h0, h1 = byte_range(hint_col, hint_col + #key_part)
+				table.insert(spans, { line = line_no, start_col = h0, end_col = h1, hl_group = "AtlasKeyHint" })
+			end
+			local d0, d1 = byte_range(hint_col + #key_part, width)
+			table.insert(spans, { line = line_no, start_col = d0, end_col = d1, hl_group = "AtlasTextMuted" })
+		end
+	end
+
+	return lines, spans
 end
 
---- Whether the description field (the "description" tab's content) can be
---- edited right now -- drives the content box's editable border color, same
---- signal `M.edit_description`'s guard uses to decide whether "i" does
---- anything.
----@return boolean
-local function description_editable()
-	local core = state.provider and state.provider.capabilities.core
-	return state.current_tab == "description" and core ~= nil and core.update_milestone_description ~= nil
+---@param work_items Issue[]
+---@return { todo: integer, doing: integer, done: integer } counts
+---@return integer unassigned
+local function work_item_buckets(work_items)
+	local counts = { todo = 0, doing = 0, done = 0 }
+	local unassigned = 0
+	for _, issue in ipairs(work_items) do
+		local bucket = wf_state.state_for(issue)
+		counts[bucket] = counts[bucket] + 1
+		if issue.assignee == nil then
+			unassigned = unassigned + 1
+		end
+	end
+	return counts, unassigned
 end
 
---- The content box's current border color -- reused for both the actual
---- border (`detail_ui.set_content_border`) and the title's non-label
---- characters, so the "-" separators/leading dash match the border instead
---- of sitting at the default `FloatTitle` color.
----@return string
-local function content_border_hl()
-	return description_editable() and "AtlasFieldBoxBorderEditable" or "AtlasBorder"
+---@param label string
+---@param hl string
+---@param count integer
+---@param width integer
+---@return string line
+---@return AtlasUIHighlight[] spans -- 0-indexed, relative to this one line
+local function count_row(label, hl, count, width)
+	local count_text = tostring(count)
+	-- Display width, not byte length -- some labels carry a multi-byte glyph
+	-- (e.g. "○ To do"'s leading circle) that's 1 display cell but 3 bytes.
+	local gap = math.max(1, width - ui_utils.text_width(label) - ui_utils.text_width(count_text))
+	local line = label .. string.rep(" ", gap) .. count_text
+	return line,
+		{
+			{ line = 0, start_col = 0, end_col = #label, hl_group = hl },
+			{ line = 0, start_col = #line - #count_text, end_col = #line, hl_group = "AtlasTextMuted" },
+		}
+end
+
+---@param milestone IssueMilestone
+---@param work_items Issue[]|nil
+---@param merge_requests PullRequest[]|nil
+---@param width integer
+---@return string[] lines
+---@return AtlasUIHighlight[] highlights
+---@return table<string, AtlasFieldBoxRegion> regions
+local function render_sidebar(milestone, work_items, merge_requests, width)
+	work_items = work_items or {}
+	merge_requests = merge_requests or {}
+	local counts, unassigned = work_item_buckets(work_items)
+	local total = counts.todo + counts.doing + counts.done
+
+	local entries = {}
+
+	-- PROGRESS
+	do
+		local segments = math.min(20, math.max(1, total))
+		local bar_text, bar_spans = progress_bar.render_tri_segments(counts.done, counts.doing, counts.todo, {
+			segments = segments,
+		})
+		local ratio = string.format("%d/%d closed", counts.done, total)
+		local value_spans = { { line = 1, start_col = 0, end_col = #ratio, hl_group = "AtlasTextMuted" } }
+		for _, s in ipairs(bar_spans) do
+			table.insert(value_spans, { line = 0, start_col = s.start_col, end_col = s.end_col, hl_group = s.hl_group })
+		end
+		table.insert(entries, {
+			label = "Progress",
+			value_lines = { bar_text, ratio },
+			value_highlights = value_spans,
+		})
+	end
+
+	-- WORK ITEMS
+	do
+		local lines, spans = {}, {}
+		local function add(label, hl, count)
+			local line, row_spans = count_row(label, hl, count, width)
+			for _, s in ipairs(row_spans) do
+				table.insert(spans, { line = #lines, start_col = s.start_col, end_col = s.end_col, hl_group = s.hl_group })
+			end
+			table.insert(lines, line)
+		end
+		add("○ To do", "AtlasAccent", counts.todo)
+		add("◐ Doing", "AtlasPurple", counts.doing)
+		add("✓ Done", "AtlasProgressFill", counts.done)
+		if unassigned > 0 then
+			add("unassigned", "AtlasTextMuted", unassigned)
+			-- Recolor the just-added row's count orange (count_row defaults it
+			-- to muted, right for To do/Doing/Done but not for unassigned).
+			spans[#spans].hl_group = "AtlasOrange"
+		end
+		table.insert(entries, { label = "Work items", value_lines = lines, value_highlights = spans })
+	end
+
+	-- MERGE REQUESTS
+	do
+		if #merge_requests == 0 then
+			table.insert(entries, { label = "Merge requests", empty = true, empty_text = "none linked yet" })
+		else
+			local lines, spans = {}, {}
+			local shown = math.min(3, #merge_requests)
+			for i = 1, shown do
+				local mr = merge_requests[i]
+				local text = string.format("!%s %s", tostring(mr.id), tostring(mr.title or ""))
+				if ui_utils.text_width(text) > width then
+					text = utils.truncate(text, width)
+				end
+				table.insert(spans, { line = #lines, start_col = 0, end_col = #text, hl_group = "AtlasTextMuted" })
+				table.insert(lines, text)
+			end
+			if #merge_requests > shown then
+				local more = string.format("+%d more", #merge_requests - shown)
+				table.insert(spans, { line = #lines, start_col = 0, end_col = #more, hl_group = "AtlasTextMuted" })
+				table.insert(lines, more)
+			end
+			table.insert(entries, { label = "Merge requests", value_lines = lines, value_highlights = spans })
+		end
+	end
+
+	-- IN PROGRESS (hidden entirely when empty, per DESIGN-milestone-view.md §5)
+	do
+		local doing_items = {}
+		for _, issue in ipairs(work_items) do
+			if wf_state.state_for(issue) == "doing" then
+				table.insert(doing_items, issue)
+			end
+		end
+		if #doing_items > 0 then
+			table.insert(entries, { divider = true })
+			local lines, spans = {}, {}
+			for _, issue in ipairs(doing_items) do
+				local iid_text = "#" .. tostring(issue.iid or "?")
+				local prefix = iid_text .. " "
+				local title = tostring(issue.title or "")
+				local avail = math.max(1, width - #prefix)
+				if ui_utils.text_width(title) > avail then
+					title = utils.truncate(title, avail)
+				end
+				local line = prefix .. title
+				table.insert(spans, { line = #lines, start_col = 0, end_col = #iid_text, hl_group = "AtlasTextMuted" })
+				table.insert(lines, line)
+			end
+			table.insert(entries, { label = "In progress", value_lines = lines, value_highlights = spans })
+		end
+	end
+
+	return sidebar.render(entries, width)
 end
 
 ---@param active_tab string
----@return { [1]: string, [2]: string }[]
-function M.title_chunks(active_tab)
-	return tabs.title_chunks(TABS, active_tab, {
+---@param width integer
+---@return string[] lines
+---@return AtlasUIHighlight[] highlights
+local function render_tab_bar(active_tab, width)
+	local items = {}
+	for _, tab in ipairs(TABS) do
+		local label = tab.label
+		if tab.key == "work_items" and type(state.work_items) == "table" then
+			label = label .. " " .. #state.work_items
+		elseif tab.key == "merge_requests" and type(state.merge_requests) == "table" then
+			label = label .. " " .. #state.merge_requests
+		end
+		table.insert(items, { key = tab.key, label = label })
+	end
+	return tabs.render(items, active_tab, width, {
 		active_hl = "AtlasDetailTabActive",
 		inactive_hl = "AtlasTextMuted",
-		gap = " - ",
-		border_hl = content_border_hl(),
+		divider_hl = "AtlasBorder",
+		gap = "   ",
+		hint = "⇥ switch tab",
+		hint_hl = "AtlasTextMuted",
 	})
 end
 
----@return string[], table[]
-local function render_description()
-	local lines, spans = {}, {}
+---@param width integer
+---@return string[] lines
+---@return AtlasUIHighlight[] highlights
+local function render_description(width)
 	if state.description_loading then
+		local lines, spans = {}, {}
 		utils.push(lines, spans, spinner.with_text("Loading description..."), "AtlasTextMuted", PADDING_X)
 		return lines, spans
 	end
-	local description = tostring(state.description or "")
-	if description == "" then
+	local lines, spans = markdown_sections.render(tostring(state.description or ""), { width = width - 2 * PADDING_X })
+	if #lines == 0 then
 		utils.push(lines, spans, "No description", "AtlasTextMuted", PADDING_X)
-	else
-		local pad = string.rep(" ", PADDING_X)
-		for _, line in ipairs(utils.sanitize_lines(description)) do
-			table.insert(lines, pad .. line)
+		return lines, spans
+	end
+	local padded_lines, padded_spans = {}, {}
+	local pad = string.rep(" ", PADDING_X)
+	for i, line in ipairs(lines) do
+		padded_lines[i] = line ~= "" and (pad .. line) or line
+	end
+	for _, span in ipairs(spans) do
+		if span.line_hl_group == nil then
+			table.insert(padded_spans, {
+				line = span.line,
+				start_col = span.start_col + PADDING_X,
+				end_col = span.end_col + PADDING_X,
+				hl_group = span.hl_group,
+			})
+		else
+			table.insert(padded_spans, span)
 		end
 	end
-	return lines, spans
+	return padded_lines, padded_spans
 end
 
 ---@param issues Issue[]
@@ -215,33 +594,6 @@ local function work_item_cell_hl(row, col, ctx)
 	return display.highlights and display.highlights(row, col, ctx) or nil
 end
 
---- Inserts a blank line between the window's own title (the tab bar) and
---- the table header, matching the gap every other tab's content has below
---- the border. Shifts the already-1-indexed lines/spans/line_map down by
---- one to make room.
----@param lines string[]
----@param spans table[]
----@param line_map table<integer, table>
----@return string[] lines
----@return table[] spans
----@return table<integer, table> line_map
-local function prepend_header_gap(lines, spans, line_map)
-	table.insert(lines, 1, "")
-	for _, span in ipairs(spans) do
-		span.line = span.line + 1
-	end
-	local shifted_map = {}
-	for lnum, row in pairs(line_map) do
-		shifted_map[lnum + 1] = row
-	end
-	return lines, spans, shifted_map
-end
-
---- Same styled, columned table as the main issue dashboard (icon/name/
---- assignee/labels/status), just a flat list -- Work Items are always
---- issues linked to this milestone, never sub-milestones, so there's no
---- tree grouping to do, and no "Child Items" column (that's only ever
---- populated for a milestone-group row, which never appears here).
 ---@param issues Issue[]
 ---@param width integer
 ---@return string[] lines
@@ -255,6 +607,9 @@ local function render_work_items_table(issues, width)
 	for _, issue in ipairs(issues) do
 		table.insert(rows, work_item_row(issue, label_width))
 	end
+	-- `table_tree.render` returns (lines, line_map, spans) -- reordered here
+	-- to (lines, spans, line_map) to match `render_merge_requests_table`'s
+	-- order (and this file's own convention) at the call site below.
 	local lines, line_map, spans = table_tree.render({
 		width = width,
 		margin = PADDING_X,
@@ -263,7 +618,7 @@ local function render_work_items_table(issues, width)
 		cell_hl = work_item_cell_hl,
 		header_separator = true,
 	})
-	return prepend_header_gap(lines, spans, line_map)
+	return lines, spans, line_map
 end
 
 ---@param width integer
@@ -289,12 +644,6 @@ local function render_work_items(width)
 	return render_work_items_table(state.work_items, width)
 end
 
---- Same styled, columned table as the main pulls dashboard (title/comments/
---- reviewer/dates), just a flat "plain" list -- Merge Requests are always
---- linked to this milestone's own project, so there's no repo grouping to
---- do. Unlike the main pulls dashboard's own "plain" view, rows are kept
---- back-to-back with no blank line between them (`row_spacer = false`), to
---- keep this secondary list compact.
 ---@param pulls PullRequest[]
 ---@param width integer
 ---@return string[] lines
@@ -302,14 +651,13 @@ end
 ---@return table<integer, table> line_map
 local function render_merge_requests_table(pulls, width)
 	local display = pulls_dashboard_providers.get(state.provider and state.provider.id)
-	local lines, spans, line_map = pulls_dashboard_renderer.render_table(
+	return pulls_dashboard_renderer.render_table(
 		pulls,
 		"plain",
 		width,
 		display,
 		{ header_separator = true, row_spacer = false }
 	)
-	return prepend_header_gap(lines, spans, line_map)
 end
 
 ---@param width integer
@@ -335,6 +683,25 @@ local function render_merge_requests(width)
 	return render_merge_requests_table(state.merge_requests, width)
 end
 
+--- Whether the description field (the "description" tab's content) can be
+--- edited right now -- drives the content box's editable border color, same
+--- signal `M.edit_description`'s guard uses to decide whether "i" does
+--- anything.
+---@return boolean
+local function description_editable()
+	local core = state.provider and state.provider.capabilities.core
+	return state.current_tab == "description" and core ~= nil and core.update_milestone_description ~= nil
+end
+
+--- The content box's current border color -- reused for both the actual
+--- border (`detail_ui.set_content_border`) and (previously) the native
+--- title's non-label characters; the tab bar is now buffer content, not a
+--- native title, but the border itself still reflects editability.
+---@return string
+local function content_border_hl()
+	return description_editable() and "AtlasFieldBoxBorderEditable" or "AtlasBorder"
+end
+
 function M.render()
 	local buf = state.buf
 	local win = state.win
@@ -345,26 +712,46 @@ function M.render()
 		return
 	end
 
+	-- Computed once per render pass so the header's pill, the timeline
+	-- strip, and (if it ever needs "today") the sidebar all agree.
+	local today_iso = os.date("!%Y-%m-%d")
+
 	local milestone = state.current_milestone
 	local header_win = state.header_win
 	local header_buf = state.header_buf
 	local has_header = utils.window.valid(header_win) and utils.buffer.valid(header_buf)
 
 	if has_header then
-		local header_lines, header_spans, header_regions = {}, {}, {}
+		local header_lines, header_spans = {}, {}
 		if milestone ~= nil then
-			header_lines, header_spans, header_regions = render_header(milestone, vim.api.nvim_win_get_width(header_win))
+			local width = vim.api.nvim_win_get_width(header_win)
+			local h_lines, h_spans = render_header(milestone, width, today_iso)
+			local t_lines, t_spans = render_timeline(milestone, width, today_iso)
+			header_lines, header_spans = h_lines, h_spans
+			utils.append_block(header_lines, header_spans, { lines = t_lines, highlights = t_spans })
 		end
 		set_lines(header_buf, header_lines)
 		utils.apply_spans(header_buf, header_ns, header_spans)
 		detail_ui.resize_header(#header_lines)
-		state.header_regions = header_regions or {}
 	end
 
-	detail_ui.set_content_title(M.title_chunks(state.current_tab))
+	local sidebar_buf = state.buf and detail_ui.sidebar_buf() or nil
+	local sidebar_win = sidebar_buf and detail_ui.sidebar_win() or nil
+	if sidebar_buf and sidebar_win then
+		local sidebar_lines, sidebar_spans = {}, {}
+		if milestone ~= nil then
+			local width = math.max(1, vim.api.nvim_win_get_width(sidebar_win) - 2 * sidebar.PAD_X)
+			sidebar_lines, sidebar_spans = render_sidebar(milestone, state.work_items, state.merge_requests, width)
+		end
+		set_lines(sidebar_buf, sidebar_lines)
+		utils.apply_spans(sidebar_buf, sidebar_ns, sidebar_spans)
+	end
 
-	-- Leading "─ " mirrors the top title's own border-dash prefix
-	-- (tabs.title_chunks), so the hint aligns with the title above it.
+	-- No native window title any more (DESIGN-milestone-view.md §1's tab bar
+	-- is buffer content, not window chrome) -- clear whatever a previous
+	-- render (or the issue view, if this window is reused) left behind.
+	detail_ui.set_content_title(nil)
+
 	local footer_chunks
 	if inline_edit.is_active(buf) then
 		local hl = "AtlasFieldBoxBorderEditing"
@@ -393,25 +780,37 @@ function M.render()
 	detail_ui.set_content_footer(footer_chunks)
 
 	if inline_edit.is_active(buf) then
-		-- Editing owns the border color (AtlasFieldBoxBorderEditing) until it
-		-- finishes, and re-rendering the content here would clobber the
-		-- in-progress raw edit buffer.
 		return
 	end
 	detail_ui.set_content_border(content_border_hl())
 
-	local lines, spans, line_map = nil, nil, {}
-	if milestone == nil then
-		lines, spans = { "", "  Nothing selected..." }, {}
-	elseif state.current_tab == "work_items" then
-		lines, spans, line_map = render_work_items(vim.api.nvim_win_get_width(win))
-	elseif state.current_tab == "merge_requests" then
-		lines, spans, line_map = render_merge_requests(vim.api.nvim_win_get_width(win))
-	else
-		lines, spans = render_description()
-	end
-	state.line_map = line_map
+	local width = vim.api.nvim_win_get_width(win)
+	local lines, spans, line_map = {}, {}, {}
 
+	if milestone == nil then
+		lines = { "", "  Nothing selected..." }
+	else
+		local tab_lines, tab_spans = render_tab_bar(state.current_tab, width)
+		lines, spans = tab_lines, tab_spans
+		table.insert(lines, "")
+
+		local content_lines, content_spans, content_line_map
+		if state.current_tab == "work_items" then
+			content_lines, content_spans, content_line_map = render_work_items(width)
+		elseif state.current_tab == "merge_requests" then
+			content_lines, content_spans, content_line_map = render_merge_requests(width)
+		else
+			content_lines, content_spans = render_description(width)
+		end
+
+		local base = #lines
+		utils.append_block(lines, spans, { lines = content_lines, highlights = content_spans })
+		for lnum, row in pairs(content_line_map or {}) do
+			line_map[lnum + base] = row
+		end
+	end
+
+	state.line_map = line_map
 	set_lines(buf, lines)
 	utils.apply_spans(buf, ns, spans)
 end

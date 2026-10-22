@@ -69,6 +69,9 @@
 ---@field start_date string|nil
 ---@field description string|nil
 ---@field state string|nil "active"|"closed"
+---@field group_id integer|nil Set when the milestone belongs to a group rather than a single project (DESIGN-milestone-view.md §3's "group milestone" meta text).
+---@field updated_at string|nil
+---@field created_at string|nil Used as the timeline strip's start-date fallback when `start_date` is unset but `due_date` is (DESIGN-milestone-view.md §4's "only due date" row).
 
 --------------------------------------------------------------------------------
 -- Group

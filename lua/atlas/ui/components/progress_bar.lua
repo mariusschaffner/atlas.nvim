@@ -92,4 +92,63 @@ function M.render_gauge(completed, total, percent, opts)
 	return value, spans
 end
 
+--- Tri-color segmented bar (DESIGN-milestone-view.md §5's PROGRESS field):
+--- one segment per work item, capped at `opts.segments` (default 20) and
+--- scaled proportionally above that, colored by bucket (done/doing/todo)
+--- rather than a single fill/empty split.
+---@param done integer
+---@param doing integer
+---@param todo integer
+---@param opts { segments: integer|nil, done_hl: string|nil, doing_hl: string|nil, todo_hl: string|nil }|nil
+---@return string value
+---@return table[] highlights
+function M.render_tri_segments(done, doing, todo, opts)
+	opts = opts or {}
+	local total = done + doing + todo
+	local cap = math.max(1, opts.segments or 20)
+	local done_hl = opts.done_hl or "AtlasProgressFill"
+	local doing_hl = opts.doing_hl or "AtlasPurple"
+	local todo_hl = opts.todo_hl or "AtlasProgressEmpty"
+
+	local done_n, doing_n, todo_n
+	if total <= cap then
+		done_n, doing_n, todo_n = done, doing, todo
+	else
+		-- Scale each bucket proportionally, then hand any rounding remainder to
+		-- the largest bucket so the three counts still sum to exactly `cap`
+		-- segments (rather than drifting a segment short/long from rounding).
+		local scale = cap / total
+		done_n = math.floor(done * scale + 0.5)
+		doing_n = math.floor(doing * scale + 0.5)
+		todo_n = cap - done_n - doing_n
+		if todo_n < 0 then
+			-- Only possible when todo was 0 and rounding pushed done+doing over
+			-- cap; shrink whichever of done/doing is larger to absorb it.
+			if done_n >= doing_n then
+				done_n = done_n + todo_n
+			else
+				doing_n = doing_n + todo_n
+			end
+			todo_n = 0
+		end
+	end
+
+	local parts, spans = {}, {}
+	local col = 0
+	---@param count integer
+	---@param hl_group string
+	local function add_segments(count, hl_group)
+		for _ = 1, count do
+			table.insert(parts, "▰")
+			table.insert(spans, { start_col = col, end_col = col + 1, hl_group = hl_group })
+			col = col + 2
+		end
+	end
+	add_segments(done_n, done_hl)
+	add_segments(doing_n, doing_hl)
+	add_segments(todo_n, todo_hl)
+
+	return table.concat(parts, " "), spans
+end
+
 return M

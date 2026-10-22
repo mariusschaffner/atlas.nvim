@@ -289,6 +289,18 @@ local function utc_epoch(y, m, d, hh, mm, ss)
 	return days * 86400 + hh * 3600 + mm * 60 + ss
 end
 
+--- Exported so other pure-math modules (e.g. the milestone timeline strip's
+--- day math) can build on the same UTC epoch conversion instead of
+--- re-deriving it.
+---@param y integer
+---@param m integer
+---@param d integer
+---@param hh integer
+---@param mm integer
+---@param ss integer
+---@return integer
+M.utc_epoch = utc_epoch
+
 function M.relative_time(iso)
 	if type(iso) ~= "string" or iso == "" then
 		return "-"

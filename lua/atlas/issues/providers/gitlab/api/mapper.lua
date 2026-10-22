@@ -75,6 +75,11 @@ local function milestone(raw)
 		local web_path = json.safe_str(raw.webPath)
 		web_url = web_path and (service.base_url() .. web_path) or nil
 	end
+	-- Deliberately doesn't carry `group_id`/`updated_at` the way
+	-- `issues/providers/gitlab/api/milestones.lua`'s `to_milestone` does:
+	-- this milestone only ever renders as an issue's label/chip (`Issue.milestone`),
+	-- never used to open the milestone detail view, so neither field is read
+	-- anywhere downstream of this mapper.
 	return {
 		id = id,
 		title = title,

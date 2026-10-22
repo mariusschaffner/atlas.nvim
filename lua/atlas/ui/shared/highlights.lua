@@ -84,6 +84,11 @@ local groups = {
 	AtlasKeyHint = { fg = "#e0af68" },
 	AtlasProgressFill = { fg = "#9ece6a" },
 	AtlasProgressEmpty = { fg = "#3b4261" },
+
+	-- Milestone detail-view description tab's goal block background
+	-- (DESIGN-milestone-view.md §8/§6's "Goal block": subtle background,
+	-- yellow icon, bright text).
+	AtlasBgHighlight = { bg = "#1f2335" },
 }
 
 function M.setup()

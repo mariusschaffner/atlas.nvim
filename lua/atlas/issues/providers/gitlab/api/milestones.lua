@@ -25,6 +25,9 @@ local function to_milestone(raw)
 		web_url = json.safe_str(raw.web_url),
 		description = json.safe_str(raw.description),
 		state = json.safe_str(raw.state),
+		group_id = tonumber(raw.group_id),
+		updated_at = json.safe_str(raw.updated_at),
+		created_at = json.safe_str(raw.created_at),
 	}
 end
 

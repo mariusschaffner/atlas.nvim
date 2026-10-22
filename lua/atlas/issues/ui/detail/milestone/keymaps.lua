@@ -127,6 +127,18 @@ function M.register(buf)
 
 	utils.insert_if(
 		items,
+		resolver.item("ui.open_in_browser", {
+			desc = "Open in browser",
+			hint = false,
+			opts = { nowait = true, silent = true },
+			callback = function()
+				require("atlas.issues.ui.detail.milestone").open_in_browser()
+			end,
+		})
+	)
+
+	utils.insert_if(
+		items,
 		resolver.item("ui.help", {
 			desc = "Toggle help",
 			hint = false,
@@ -166,6 +178,7 @@ function M.remove(buf)
 	utils.insert_if(items, resolver.remove_item("ui.inspect"))
 	utils.insert_if(items, resolver.remove_item("issues.change_milestone_start_date"))
 	utils.insert_if(items, resolver.remove_item("issues.change_milestone_due_date"))
+	utils.insert_if(items, resolver.remove_item("ui.open_in_browser"))
 	utils.insert_if(items, resolver.remove_item("ui.help"))
 	utils.insert_if(items, resolver.remove_item("ui.close"))
 	help.remove("General", items, { buffer = buf })

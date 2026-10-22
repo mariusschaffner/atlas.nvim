@@ -5,7 +5,7 @@ local M = {}
 ---@param items { key: string, label: string, icon: AtlasIconStyle|nil }[]
 ---@param active_tab string
 ---@param width integer
----@param opts? { inactive_hl?: string, active_hl?: string, gap?: string, divider?: boolean, divider_hl?: string, padding_x?: integer }
+---@param opts? { inactive_hl?: string, active_hl?: string, gap?: string, divider?: boolean, divider_hl?: string, padding_x?: integer, hint?: string, hint_hl?: string }
 ---@return string[] lines
 ---@return table[] spans
 function M.render(items, active_tab, width, opts)
@@ -54,6 +54,26 @@ function M.render(items, active_tab, width, opts)
 		if i < #items then
 			line = line .. gap
 			col = col + #gap
+		end
+	end
+
+	-- Right-aligned dim hint (e.g. "⇥ switch tab") appended after the last
+	-- tab, used by views whose tab bar is actual buffer content rather than a
+	-- floating window's native title (see `M.title_chunks` below for that
+	-- other case, which never shows a hint).
+	if opts.hint and opts.hint ~= "" then
+		local hint = opts.hint
+		local current_width = vim.api.nvim_strwidth(line)
+		local hint_width = vim.api.nvim_strwidth(hint)
+		if current_width + hint_width < available then
+			local gap_str = string.rep(" ", available - current_width - hint_width)
+			table.insert(spans, {
+				line = 0,
+				start_col = #line + #gap_str,
+				end_col = #line + #gap_str + #hint,
+				hl_group = opts.hint_hl or "AtlasTextMuted",
+			})
+			line = line .. gap_str .. hint
 		end
 	end
 

@@ -1,8 +1,9 @@
--- Stacks the issue detail view's sidebar fields (DESIGN-detail-view.md §4):
--- Assignee, Labels, Milestone, Start->Due, a divider, Development, and the
--- "Opened by ..." footer. Each field is `sidebar_field`'s one reusable
--- component; this module just lays them out and tracks a field's region (for
--- `inline_field_edit` anchoring) when it has an `id`.
+-- Stacks a detail view's sidebar fields (DESIGN-detail-view.md §4; reused as-is
+-- by the milestone detail view per DESIGN-milestone-view.md §5). Each field is
+-- `sidebar_field`'s one reusable component; this module just lays them out
+-- (plus dividers/plain-text lines) and tracks a field's region (for
+-- `inline_field_edit` anchoring) when it has an `id`. Domain-agnostic -- lives
+-- under `atlas.ui.components`, not a specific vertical's directory tree.
 local M = {}
 
 local sidebar_field = require("atlas.ui.components.sidebar_field")
