@@ -23,6 +23,7 @@ local state = {
 	sidebar_buf = nil, -- sidebar buffer; kept alive (bufhidden=hide) across collapse/expand
 	sidebar_collapsed = false, -- true when narrow-terminal collapse hid the sidebar
 	boxed_header = false, -- header draws its own box: floats start on the spacer's first row (no gap row)
+	dock = nil, -- { win, buf, height }: float pinned to the content window's bottom rows (see M.set_content_dock)
 	previous_win = nil,
 	cleanup = nil,
 	render = nil,
@@ -113,7 +114,63 @@ local function reset_content()
 	end
 end
 
+--- Geometry of the content dock float: pinned to the content window's bottom
+--- rows, full content width, inside the content pane's own border.
+---@param height integer Interior rows (the dock's own rounded border adds 2).
+---@return integer row, integer width
+local function dock_geometry(height)
+	local win_height = vim.api.nvim_win_get_height(state.win)
+	local win_width = vim.api.nvim_win_get_width(state.win)
+	return math.max(0, win_height - height - 2), math.max(1, win_width - 2)
+end
+
+local function close_dock()
+	local dock = state.dock
+	state.dock = nil
+	if dock and utils.window.valid(dock.win) then
+		pcall(vim.api.nvim_win_close, dock.win, true)
+	end
+end
+
+--- Re-syncs the dock float to the content window's current size.
+local function sync_dock()
+	local dock = state.dock
+	if dock == nil then
+		return
+	end
+	if not utils.window.valid(state.win) or not utils.buffer.valid(dock.buf) then
+		close_dock()
+		return
+	end
+	local row, width = dock_geometry(dock.height)
+	local config = {
+		relative = "win",
+		win = state.win,
+		row = row,
+		col = 0,
+		width = width,
+		height = dock.height,
+	}
+	if utils.window.valid(dock.win) then
+		pcall(vim.api.nvim_win_set_config, dock.win, config)
+		return
+	end
+	dock.win = vim.api.nvim_open_win(
+		dock.buf,
+		false,
+		vim.tbl_extend("force", config, {
+			border = "rounded",
+			style = "minimal",
+			zindex = 60,
+			focusable = false,
+		})
+	)
+	vim.api.nvim_set_option_value("wrap", false, { win = dock.win, scope = "local" })
+	vim.api.nvim_set_option_value("winhighlight", dock.winhighlight or "", { win = dock.win, scope = "local" })
+end
+
 local function deactivate()
+	close_dock()
 	local cleanup = state.cleanup
 	state.kind = nil
 	state.cleanup = nil
@@ -208,6 +265,7 @@ local function sync_content_float()
 		width = content_width,
 		height = height,
 	})
+	sync_dock()
 end
 
 --- Re-syncs the sidebar float's position/size to whatever `state.spacer_win`
@@ -611,6 +669,54 @@ function M.set_content_border(hl_group)
 	if changed then
 		pcall(vim.api.nvim_win_set_config, state.win, { title = new_title, title_pos = "left" })
 	end
+end
+
+---@class AtlasDetailDockSpec
+---@field buf integer Buffer the dock shows (rendered by the caller).
+---@field height integer Interior rows.
+---@field winhighlight string|nil e.g. "FloatBorder:AtlasComposerBorderActive".
+
+--- Pins a small bordered float to the bottom of the content window (e.g. the
+--- Activity tab's "write a new comment…" bar), kept in place across resizes.
+--- Calling it again with the same buffer just updates height/colors. Pass
+--- `nil` to remove it. The dock is not focusable: callers that need input
+--- open their own float anchored to `M.content_dock_win()`. The content
+--- buffer should reserve `height + 2` trailing rows so its last lines can
+--- scroll clear of the dock.
+---@param spec AtlasDetailDockSpec|nil
+function M.set_content_dock(spec)
+	if spec == nil then
+		close_dock()
+		return
+	end
+	if state.layout ~= "split" or not utils.window.valid(state.win) then
+		return
+	end
+	if state.dock and state.dock.buf ~= spec.buf then
+		close_dock()
+	end
+	state.dock = state.dock or { buf = spec.buf }
+	state.dock.height = math.max(1, spec.height)
+	state.dock.winhighlight = spec.winhighlight
+	sync_dock()
+	if utils.window.valid(state.dock and state.dock.win) then
+		pcall(
+			vim.api.nvim_set_option_value,
+			"winhighlight",
+			spec.winhighlight or "",
+			{ win = state.dock.win, scope = "local" }
+		)
+	end
+end
+
+--- The dock's window (see `M.set_content_dock`), or nil when none is shown.
+---@return integer|nil
+function M.content_dock_win()
+	local dock = state.dock
+	if dock and utils.window.valid(dock.win) then
+		return dock.win
+	end
+	return nil
 end
 
 ---@param tab integer|nil
