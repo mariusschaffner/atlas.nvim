@@ -77,6 +77,7 @@ local groups = {
 	-- provider's highlights file.
 	AtlasAccent = { fg = "#7aa2f7", bold = true },
 	AtlasTextBright = { fg = "#e6eaff", bold = true },
+	AtlasTextBold = { bold = true },
 	AtlasTextDone = { fg = "#a9b1d6" },
 	AtlasOrange = { fg = "#ff9e64" },
 	AtlasPurple = { fg = "#bb9af7", bold = true },

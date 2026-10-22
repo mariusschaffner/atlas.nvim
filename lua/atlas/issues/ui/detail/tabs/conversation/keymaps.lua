@@ -34,7 +34,6 @@ local ACTIONS = {
 	"ui.comments.reply",
 	"ui.comments.edit",
 	"ui.delete",
-	"ui.comments.react",
 	"ui.comments.toggle_resolved",
 	"issues.expand_activity",
 	"ui.toggle_fold",
@@ -92,9 +91,6 @@ local function comment_hints(comment, root)
 		end
 		if own and comments.delete_comment then
 			table.insert(hints, { action_id = "ui.delete", label = "delete" })
-		end
-		if comments.add_reaction and #(comments.reaction_options or {}) > 0 then
-			table.insert(hints, { action_id = "ui.comments.react", label = "react" })
 		end
 		if root.resolvable and comments.set_thread_resolved then
 			table.insert(hints, {
@@ -355,19 +351,6 @@ local function do_delete(refresh)
 end
 
 ---@param refresh fun()
-local function do_react(refresh)
-	local issue = detail.current_issue
-	local comment = cursor_comment()
-	if not issue or not comment or not guard_open(issue) then
-		return
-	end
-	actions.react(issue, comment, function()
-		refresh()
-		M.update_hint()
-	end)
-end
-
----@param refresh fun()
 local function toggle_resolved(refresh)
 	local issue = detail.current_issue
 	local _, root = cursor_comment()
@@ -537,11 +520,6 @@ function M.setup(buf, refresh)
 	if comments and comments.delete_comment then
 		add("ui.delete", "Delete comment", function()
 			do_delete(refresh)
-		end)
-	end
-	if comments and comments.add_reaction and #(comments.reaction_options or {}) > 0 then
-		add("ui.comments.react", "Add reaction", function()
-			do_react(refresh)
 		end)
 	end
 	if comments and comments.set_thread_resolved then

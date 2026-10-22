@@ -347,45 +347,4 @@ function M.set_thread_resolved(issue, root, resolved, on_done)
 	})
 end
 
----@param issue Issue
----@param item IssueConversationItem
----@param name string
----@param on_done fun(ok: boolean, err: string|nil)
----@return { cancel: fun() }|nil
-function M.add_reaction(issue, item, name, on_done)
-	if item.kind ~= "comment" then
-		on_done(false, "Reactions are only supported on comments")
-		return nil
-	end
-	local comment = item.entity
-	---@cast comment IssueComment
-	local note_id = comment.id
-	local path, iid = normalizer.parse_key(tostring(issue.key or ""))
-	if path == "" or iid == nil then
-		on_done(false, "Invalid issue key")
-		return nil
-	end
-	local endpoint = string.format(
-		"/projects/%s/issues/%d/notes/%s/award_emoji?name=%s",
-		service.url_encode(path),
-		iid,
-		tostring(note_id),
-		service.url_encode(name)
-	)
-	return service.request("POST", endpoint, nil, function(_, err)
-		if err then
-			on_done(false, err)
-			return
-		end
-		service.delete_memory_cache(discussions_cache_key(path, iid))
-		on_done(true, nil)
-	end, {
-		action = "Add reaction",
-		path = path,
-		iid = iid,
-		note_id = tostring(note_id),
-		name = name,
-	})
-end
-
 return M

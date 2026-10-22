@@ -12,6 +12,7 @@ local M = {}
 
 local line_builder = require("atlas.ui.components.line")
 local avatar = require("atlas.ui.components.avatar")
+local highlights = require("atlas.ui.shared.highlights")
 local utils = require("atlas.ui.shared.utils")
 
 local GUIDE_MID = "├"
@@ -211,6 +212,18 @@ function M.render(node, width, opts)
 		local chip_col, text_col, guide_col = columns(pad, depth)
 		local editing = opts.editing_id ~= nil and opts.editing_id == current.id and opts.render_editor ~= nil
 
+		-- A blank tinted row above and below each comment, so the block
+		-- breathes inside its background (only with a block style).
+		local function push_padding()
+			if not opts.block then
+				return
+			end
+			line_builder.new():pad_to(text_col):push(lines, spans)
+			map_row("padding", current, root, depth)
+		end
+
+		push_padding()
+
 		-- Header.
 		local header = line_builder.new()
 		if guide then
@@ -221,7 +234,15 @@ function M.render(node, width, opts)
 		local chip, chip_hl = avatar.chip(current.author)
 		header:add(chip, chip_hl)
 		header:add(" ")
-		header:add(current.author, "AtlasTextBright")
+		-- Same hash key as the avatar chip, so name and chip share a color;
+		-- the bold layer combines underneath the color.
+		local name_start = header.bytes
+		header:add(current.author, "AtlasTextBold")
+		table.insert(header.spans, {
+			start_col = name_start,
+			end_col = header.bytes,
+			hl_group = highlights.dynamic_for(current.author) or "AtlasTextBright",
+		})
 		if current.is_you then
 			header:add("  ")
 			header:add(" you ", "AtlasBadgeYou")
@@ -305,8 +326,10 @@ function M.render(node, width, opts)
 				opts.collapsed_hints
 			)
 			map_row("collapsed", current, root, depth)
+			push_padding()
 			return
 		end
+		push_padding()
 
 		local has_reply = depth == 0 and opts.render_reply ~= nil and opts.reply_parent_id == current.id
 		for index, child in ipairs(children) do

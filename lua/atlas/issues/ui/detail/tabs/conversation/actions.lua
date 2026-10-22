@@ -1,6 +1,5 @@
 local M = {}
 
-local picker = require("atlas.ui.picker")
 local notify = require("atlas.core.notify")
 local state = require("atlas.issues.ui.detail.tabs.conversation.state")
 local detail = require("atlas.issues.ui.detail.state")
@@ -235,57 +234,6 @@ function M.set_resolved(issue, root, resolved, done)
 		notify.success(resolved and "Thread resolved" or "Thread reopened", { timeout = 1200 })
 		done(true)
 	end)
-end
-
----@param issue Issue
----@param comment IssueComment
----@param refresh fun()
-function M.react(issue, comment, refresh)
-	local comments = get_comments()
-	if not comments or not comments.add_reaction then
-		notify.warn("Provider does not support reactions")
-		return
-	end
-	local options = comments.reaction_options or {}
-	if #options == 0 then
-		notify.warn("No reactions available for this provider")
-		return
-	end
-	local choices = {}
-	for _, opt in ipairs(options) do
-		table.insert(choices, {
-			key = opt.key,
-			label = string.format("%s  %s", opt.emoji or opt.key, opt.label or opt.key),
-		})
-	end
-	picker.select({
-		title = "Add reaction",
-		items = choices,
-		format_item = function(choice)
-			return choice.label
-		end,
-		on_select = function(selected)
-			if selected == nil then
-				return
-			end
-			notify.loading("Adding reaction...")
-			comments.add_reaction(issue, { kind = "comment", entity = comment }, selected.key, function(ok, err)
-				if not state.is_current(issue) then
-					return
-				end
-				if err then
-					notify.error("Reaction failed: " .. tostring(err))
-					return
-				end
-				if ok then
-					comment.reactions = comment.reactions or {}
-					comment.reactions[selected.key] = (tonumber(comment.reactions[selected.key]) or 0) + 1
-				end
-				notify.success("Reaction added", { timeout = 1200 })
-				refresh()
-			end)
-		end,
-	})
 end
 
 return M
