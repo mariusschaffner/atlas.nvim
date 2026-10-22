@@ -84,6 +84,13 @@ local groups = {
 	AtlasKeyHint = { fg = "#e0af68" },
 	AtlasProgressFill = { fg = "#9ece6a" },
 	AtlasProgressEmpty = { fg = "#3b4261" },
+	AtlasTextBrightRegular = { fg = "#e6eaff" },
+
+	-- Issues detail view's own in-buffer tab bar (borderless layout) -- a
+	-- separate group from `AtlasDetailTabActive` above (shared by every other
+	-- split-kind's native-title tab bar) so its accent-colored underline
+	-- doesn't bleed into pulls/milestone/pipelines/create's tabs.
+	AtlasDetailTabActiveUnderline = { fg = "#e6eaff", sp = "#7aa2f7", bold = true, underline = true },
 }
 
 function M.setup()

@@ -18,6 +18,7 @@ local state = {
 	header_win = nil, -- sticky header window (split layout only)
 	header_buf = nil, -- sticky header buffer (split layout only)
 	spacer_win = nil, -- hidden split both the content and sidebar floats overlay (split layout only)
+	borderless = false, -- opt-in: content float has no border, sidebar float has a left-edge-only border
 	sidebar_enabled = false, -- whether the current kind opted into a sidebar region
 	sidebar_win = nil, -- sidebar floating window (split layout only, when not collapsed)
 	sidebar_buf = nil, -- sidebar buffer; kept alive (bufhidden=hide) across collapse/expand
@@ -173,18 +174,26 @@ end
 ---@return integer content_width, integer content_col, integer|nil sidebar_width, integer|nil sidebar_col, integer height
 local function split_geometry(spacer_win)
 	local total = math.max(1, vim.api.nvim_win_get_width(spacer_win))
-	local height = math.max(1, vim.api.nvim_win_get_height(spacer_win) - 2)
+	-- Borderless content reserves no rows/cols for a frame; a bordered content
+	-- float reserves 2 (top+bottom / left+right). The sidebar's own reserve is
+	-- handled separately below since, when borderless, it still draws a
+	-- left-edge-only native border (1 col), unlike the content float.
+	local content_border_cols = state.borderless and 0 or 2
+	local height = math.max(1, vim.api.nvim_win_get_height(spacer_win) - content_border_cols)
+	local content_col = state.borderless and 0 or 1
+
 	if state.sidebar_enabled and not state.sidebar_collapsed then
 		-- Reserve SIDEBAR_WIDTH + a gap column for the sidebar, but never let
 		-- the content pane shrink below a usable minimum.
 		local sidebar_box = math.min(SIDEBAR_WIDTH, math.max(1, total - 24))
 		local content_box = math.max(1, total - sidebar_box - SIDEBAR_GAP)
-		local content_width = math.max(1, content_box - 2)
-		local sidebar_width = math.max(1, sidebar_box - 2)
-		local sidebar_col = 1 + content_width + 2 + SIDEBAR_GAP
-		return content_width, 1, sidebar_width, sidebar_col, height
+		local content_width = math.max(1, content_box - content_border_cols)
+		local sidebar_border_cols = state.borderless and 1 or 2
+		local sidebar_width = math.max(1, sidebar_box - sidebar_border_cols)
+		local sidebar_col = content_col + content_width + content_border_cols + SIDEBAR_GAP
+		return content_width, content_col, sidebar_width, sidebar_col, height
 	end
-	return math.max(1, total - 2), 1, nil, nil, height
+	return math.max(1, total - content_border_cols), content_col, nil, nil, height
 end
 
 --- Re-syncs the content float's position/size to whatever `state.spacer_win`
@@ -256,6 +265,11 @@ local function create_sidebar_window(tab)
 	if sidebar_width == nil then
 		return
 	end
+	-- Borderless mode draws only the sidebar's left edge (matching the
+	-- design's single vertical divider between content and sidebar), via
+	-- Neovim's per-side border array: [top, top-right, right, bottom-right,
+	-- bottom, bottom-left, left, top-left].
+	local border = state.borderless and { "", "", "", "", "", "", { "│", "AtlasBorder" }, "" } or CONTENT_BORDER
 	local sidebar_win = vim.api.nvim_open_win(state.sidebar_buf, false, {
 		relative = "win",
 		win = state.spacer_win,
@@ -263,7 +277,7 @@ local function create_sidebar_window(tab)
 		col = sidebar_col,
 		width = sidebar_width,
 		height = height,
-		border = CONTENT_BORDER,
+		border = border,
 		style = "minimal",
 		zindex = 50,
 	})
@@ -300,7 +314,8 @@ end
 -- tracked via Neovim's own split layout engine instead of manual math
 -- against tabline/cmdheight/laststatus.
 ---@param sidebar_enabled boolean
-local function create_split(sidebar_enabled)
+---@param borderless boolean
+local function create_split(sidebar_enabled, borderless)
 	vim.cmd("tabnew")
 	local tab = vim.api.nvim_get_current_tabpage()
 	local placeholder_buf = vim.api.nvim_get_current_buf()
@@ -328,6 +343,7 @@ local function create_split(sidebar_enabled)
 	pcall(vim.api.nvim_win_set_height, header_win, MIN_HEADER_HEIGHT)
 
 	state.spacer_win = spacer_win
+	state.borderless = borderless
 	state.sidebar_enabled = sidebar_enabled
 	state.sidebar_collapsed = sidebar_enabled and vim.o.columns < SIDEBAR_COLLAPSE_COLUMNS
 	if sidebar_enabled and not state.sidebar_collapsed then
@@ -342,7 +358,7 @@ local function create_split(sidebar_enabled)
 		col = content_col,
 		width = content_width,
 		height = height,
-		border = CONTENT_BORDER,
+		border = borderless and "none" or CONTENT_BORDER,
 		style = "minimal",
 		zindex = 50,
 	})
@@ -387,6 +403,7 @@ local function create_split(sidebar_enabled)
 			state.sidebar_enabled = false
 			state.sidebar_buf = nil
 			state.sidebar_collapsed = false
+			state.borderless = false
 			deactivate()
 			pcall(vim.api.nvim_del_augroup_by_id, focus_guard)
 			if vim.api.nvim_tabpage_is_valid(tab) then
@@ -418,6 +435,7 @@ end
 
 ---@class AtlasDetailOpenOpts
 ---@field sidebar boolean|nil -- opt into the fixed-width sidebar region (split layout only)
+---@field borderless boolean|nil -- content float has no border, sidebar float only a left-edge one (split layout only)
 
 ---@param kind "issues"|"pulls"|"repo"|"milestone"|"pipelines"|"create"
 ---@param cleanup fun()
@@ -428,17 +446,21 @@ function M.open(kind, cleanup, render, opts)
 	require("atlas.ui.shared.highlights").setup()
 	local wanted_layout = layout_for(kind)
 	local wanted_sidebar = wanted_layout == "split" and opts ~= nil and opts.sidebar == true
+	local wanted_borderless = wanted_layout == "split" and opts ~= nil and opts.borderless == true
 	if M.is_open() and vim.api.nvim_win_get_tabpage(state.win) ~= vim.api.nvim_get_current_tabpage() then
 		M.close()
 	end
-	if M.is_open() and (state.layout ~= wanted_layout or state.sidebar_enabled ~= wanted_sidebar) then
+	if
+		M.is_open()
+		and (state.layout ~= wanted_layout or state.sidebar_enabled ~= wanted_sidebar or state.borderless ~= wanted_borderless)
+	then
 		M.close()
 	end
 	if not M.is_open() then
 		deactivate()
 		state.win, state.buf, state.header_win, state.header_buf, state.spacer_win = nil, nil, nil, nil, nil
 		if wanted_layout == "split" then
-			create_split(wanted_sidebar)
+			create_split(wanted_sidebar, wanted_borderless)
 		else
 			create_single()
 		end
@@ -613,6 +635,7 @@ function M.close(tab)
 		nil, nil, nil, nil, nil, nil
 	state.sidebar_win, state.sidebar_buf = nil, nil
 	state.sidebar_enabled, state.sidebar_collapsed = false, false
+	state.borderless = false
 	if layout == "split" and utils.window.valid(win) then
 		local tabpage = vim.api.nvim_win_get_tabpage(win)
 		pcall(vim.cmd, "tabclose " .. vim.api.nvim_tabpage_get_number(tabpage))

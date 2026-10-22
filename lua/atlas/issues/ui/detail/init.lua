@@ -343,7 +343,8 @@ local function prepare_open(opts)
 		return nil, false
 	end
 
-	state.win, state.buf, state.header_win, state.header_buf = detail_ui.open("issues", cleanup, render, { sidebar = true })
+	state.win, state.buf, state.header_win, state.header_buf =
+		detail_ui.open("issues", cleanup, render, { sidebar = true, borderless = true })
 	set_provider(provider)
 	state.on_update = opts.on_update
 
