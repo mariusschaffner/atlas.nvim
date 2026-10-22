@@ -52,7 +52,7 @@ local function key_hints(action_ids)
 			table.insert(parts, k)
 		end
 	end
-	return #parts > 0 and table.concat(parts, " ") or nil
+	return #parts > 0 and table.concat(parts, " | ") or nil
 end
 
 ---@param issue Issue

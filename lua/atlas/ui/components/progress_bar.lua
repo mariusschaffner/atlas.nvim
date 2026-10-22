@@ -1,6 +1,6 @@
 -- Pure-render progress indicators shared across detail views: a compact
 -- tick-segment bar (DESIGN-detail-view.md §3's checklist progress, e.g.
--- "▰▰▰▰▱▱ 4/6 criteria") and a bracketed block gauge with a percentage
+-- "●●●●○○ 4/6 criteria") and a bracketed block gauge with a percentage
 -- (the milestone detail view's "[██████░░░░] 67% (2/3)").
 local M = {}
 
@@ -12,8 +12,8 @@ local M = {}
 function M.render_segments(completed, total, opts)
 	opts = opts or {}
 	local segments = math.max(1, opts.segments or math.max(1, total))
-	local fill_char = opts.fill_char or "▰"
-	local empty_char = opts.empty_char or "▱"
+	local fill_char = opts.fill_char or "●"
+	local empty_char = opts.empty_char or "○"
 	local fill_hl = opts.fill_hl or "AtlasProgressFill"
 	local empty_hl = opts.empty_hl or "AtlasProgressEmpty"
 
