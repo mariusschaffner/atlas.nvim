@@ -81,7 +81,7 @@ local function update_cursor_hint(win, buf)
 	-- `right_align` floats the hint to the content window's right edge
 	-- (DESIGN-detail-view.md §5), regardless of the task line's own length.
 	vim.api.nvim_buf_set_extmark(buf, hint_ns, cursor_line, 0, {
-		virt_text = { { "x toggle", "AtlasTextMutedItalic" } },
+		virt_text = { { "x toggle", "AtlasKeyHint" } },
 		virt_text_pos = "right_align",
 	})
 end
