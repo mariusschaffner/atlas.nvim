@@ -42,6 +42,7 @@ function M.render(data, width)
 		spans,
 		{ line = 0, start_col = #meta_line - #meta_right, end_col = #meta_line, hl_group = "AtlasTextMuted" }
 	)
+	table.insert(lines, "")
 
 	-- Title line: state pill + title + dim #iid.
 	local pill = string.format(" %s %s ", "●", data.state_label or "")
@@ -67,12 +68,13 @@ function M.render(data, width)
 	local regions = {
 		title = { row = title_line_no, col = #title_prefix, width = math.max(1, width - #title_prefix), height = 1 },
 	}
+	table.insert(lines, "")
 
 	-- Chip row: label chips, then milestone + progress appended to the last
 	-- chip line (or a fresh one if there are no labels).
 	local chip_lines, chip_spans = {}, {}
 	if data.chips and #data.chips > 0 then
-		chip_lines, chip_spans = utils.render_chips(data.chips, { width = width, padding_x = 0 })
+		chip_lines, chip_spans = utils.render_chips(data.chips, { width = width, padding_x = 0, rounded = true })
 	end
 	if #chip_lines == 0 then
 		chip_lines = { "" }

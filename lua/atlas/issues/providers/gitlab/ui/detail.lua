@@ -35,6 +35,14 @@ local function label_chip_hl(hex)
 	return highlights.label_hl(hex, "AtlasGLIssueLabelChip_", "AtlasChipActive")
 end
 
+--- Fg-only variant of `label_chip_hl`, for a rounded chip's end-cap glyphs
+--- (colored like the chip, on the surrounding background rather than filled).
+---@param hex string|nil
+---@return string
+local function label_cap_hl(hex)
+	return highlights.label_fg_hl(hex, "AtlasGLIssueLabelCap_", "AtlasChipActive")
+end
+
 ---@class IssuesGitLabHeaderData
 ---@field labels { name: string, color: string|nil }[]
 ---@field labels_editable boolean
@@ -42,7 +50,6 @@ end
 ---@field milestone_editable boolean
 ---@field assignees IssueUser[]
 ---@field assignee_editable boolean
----@field author_name string
 
 ---@param issue Issue
 ---@param details IssueDetails|nil
@@ -57,7 +64,6 @@ function M.header_fields(issue, details, loading)
 	end
 
 	local milestone = details and details.milestone or nil
-	local reporter_name = issue.reporter and tostring(issue.reporter.display_name or "") or ""
 
 	return {
 		labels = (not loading) and (details and details.labels or {}) or {},
@@ -66,7 +72,6 @@ function M.header_fields(issue, details, loading)
 		milestone_editable = supports("milestone") and helper.is_open(issue),
 		assignees = assignees,
 		assignee_editable = supports("assign") and helper.is_open(issue),
-		author_name = reporter_name ~= "" and reporter_name or "Unknown",
 	}
 end
 
@@ -74,6 +79,12 @@ end
 ---@return string
 function M.label_chip_hl(hex)
 	return label_chip_hl(hex)
+end
+
+---@param hex string|nil
+---@return string
+function M.label_cap_hl(hex)
+	return label_cap_hl(hex)
 end
 
 ---@return IssuesDetailTabDefinition[]

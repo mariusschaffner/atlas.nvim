@@ -114,7 +114,9 @@ local function render_header(issue, gl, width)
 		if name ~= "" then
 			local hl = provider_detail and provider_detail.label_chip_hl and provider_detail.label_chip_hl(label.color)
 				or "AtlasChipActive"
-			table.insert(chips, { label = name, hl = hl })
+			local cap_hl = provider_detail and provider_detail.label_cap_hl and provider_detail.label_cap_hl(label.color)
+				or hl
+			table.insert(chips, { label = name, hl = hl, cap_hl = cap_hl })
 		end
 	end
 
@@ -214,7 +216,11 @@ local function labels_entry(gl, width)
 					and state.provider_detail.label_chip_hl
 					and state.provider_detail.label_chip_hl(label.color)
 				or "AtlasChipActive"
-			table.insert(chips, { label = name, hl = hl })
+			local cap_hl = state.provider_detail
+					and state.provider_detail.label_cap_hl
+					and state.provider_detail.label_cap_hl(label.color)
+				or hl
+			table.insert(chips, { label = name, hl = hl, cap_hl = cap_hl })
 		end
 	end
 	if #chips == 0 then
@@ -226,7 +232,7 @@ local function labels_entry(gl, width)
 			empty_text = "+ add label",
 		}
 	end
-	local lines, spans = utils.render_chips(chips, { width = width, padding_x = 0 })
+	local lines, spans = utils.render_chips(chips, { width = width, padding_x = 0, rounded = true })
 	return {
 		id = "labels",
 		label = "Labels",
@@ -369,13 +375,12 @@ local function development_entry()
 	}
 end
 
----@param issue Issue
 ---@param gl IssuesGitLabHeaderData
 ---@param width integer
 ---@return string[] lines
 ---@return AtlasUIHighlight[] highlights
 ---@return table<string, AtlasFieldBoxRegion> regions
-local function render_sidebar(issue, gl, width)
+local function render_sidebar(gl, width)
 	local entries = {
 		assignee_entry(gl),
 		labels_entry(gl, width),
@@ -385,12 +390,6 @@ local function render_sidebar(issue, gl, width)
 		development_entry(),
 	}
 	local lines, spans, regions = sidebar.render(entries, width)
-
-	table.insert(lines, "")
-	table.insert(lines, "")
-	local footer_text = "Opened by " .. (gl.author_name or "Unknown")
-	table.insert(lines, footer_text)
-	table.insert(spans, { line = #lines - 1, start_col = 0, end_col = #footer_text, hl_group = "AtlasTextMuted" })
 
 	return lines, spans, regions
 end
@@ -528,7 +527,7 @@ function M.render(tab_items, get_tab_module)
 	if sidebar_buf and sidebar_win then
 		local sidebar_lines, sidebar_spans, sidebar_regions = {}, {}, {}
 		if issue ~= nil then
-			sidebar_lines, sidebar_spans, sidebar_regions = render_sidebar(issue, gl, vim.api.nvim_win_get_width(sidebar_win))
+			sidebar_lines, sidebar_spans, sidebar_regions = render_sidebar(gl, vim.api.nvim_win_get_width(sidebar_win))
 		end
 		set_lines(sidebar_buf, sidebar_lines)
 		utils.apply_spans(sidebar_buf, sidebar_ns, sidebar_spans)

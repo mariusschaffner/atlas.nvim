@@ -166,15 +166,28 @@ function M.apply_spans_clamped(buf, namespace, spans)
 	end
 end
 
---- Wraps a list of {label, hl} chips into padded, width-wrapped lines +
---- highlight spans (used by pulls/issues detail-header chip rows).
----@param chips ({ label: string, hl: string|nil }|nil)[]
----@param opts { width: integer, padding_x?: integer }
+-- Left/right "rounded pill" cap glyphs (powerline half-circles) for
+-- `render_chips`' `rounded` option -- colored with the chip's own hue on the
+-- surrounding background, so the flat bg-tinted body reads as a rounded
+-- badge instead of a rectangle.
+-- Built via nr2char (rather than embedding the glyphs literally) so the
+-- Private-Use-Area codepoints survive any editor/encoding round-trip intact.
+local CHIP_CAP_LEFT = vim.fn.nr2char(0xE0B6, 1) -- Powerline "left half circle thick"
+local CHIP_CAP_RIGHT = vim.fn.nr2char(0xE0B4, 1) -- Powerline "right half circle thick"
+
+--- Wraps a list of {label, hl, cap_hl} chips into padded, width-wrapped
+--- lines + highlight spans (used by pulls/issues detail-header chip rows).
+--- With `opts.rounded`, each chip gets powerline half-circle end caps
+--- (colored `chip.cap_hl`, falling back to `chip.hl`) instead of a flat
+--- rectangle; omit it (the default) for the original plain padded look.
+---@param chips ({ label: string, hl: string|nil, cap_hl: string|nil }|nil)[]
+---@param opts { width: integer, padding_x?: integer, rounded?: boolean }
 ---@return string[], table[]
 function M.render_chips(chips, opts)
 	local pad = math.max(0, opts.padding_x or 1)
 	local padding = string.rep(" ", pad)
 	local width = math.max(1, opts.width)
+	local rounded = opts.rounded == true
 	local lines = {}
 	local line = padding
 	local spans = {}
@@ -183,7 +196,8 @@ function M.render_chips(chips, opts)
 
 	for _, chip in ipairs(chips) do
 		if chip ~= nil then
-			local label = string.format(" %s ", chip.label)
+			local body = rounded and (" " .. chip.label .. " ") or string.format(" %s ", chip.label)
+			local label = rounded and (CHIP_CAP_LEFT .. body .. CHIP_CAP_RIGHT) or body
 			local gap = has_chip and " " or ""
 			if has_chip and line_width + vim.api.nvim_strwidth(gap .. label) > width then
 				table.insert(lines, line)
@@ -197,12 +211,34 @@ function M.render_chips(chips, opts)
 			local start_col = #line
 			line = line .. label
 			if chip.hl ~= nil then
-				table.insert(spans, {
-					line = #lines,
-					start_col = start_col,
-					end_col = start_col + #label,
-					hl_group = chip.hl,
-				})
+				if rounded then
+					local cap_hl = chip.cap_hl or chip.hl
+					table.insert(spans, {
+						line = #lines,
+						start_col = start_col,
+						end_col = start_col + #CHIP_CAP_LEFT,
+						hl_group = cap_hl,
+					})
+					table.insert(spans, {
+						line = #lines,
+						start_col = start_col + #CHIP_CAP_LEFT,
+						end_col = start_col + #CHIP_CAP_LEFT + #body,
+						hl_group = chip.hl,
+					})
+					table.insert(spans, {
+						line = #lines,
+						start_col = start_col + #CHIP_CAP_LEFT + #body,
+						end_col = start_col + #label,
+						hl_group = cap_hl,
+					})
+				else
+					table.insert(spans, {
+						line = #lines,
+						start_col = start_col,
+						end_col = start_col + #label,
+						hl_group = chip.hl,
+					})
+				end
 			end
 			line_width = vim.api.nvim_strwidth(line)
 			has_chip = true
