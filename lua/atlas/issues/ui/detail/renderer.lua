@@ -164,9 +164,10 @@ local function render_header(issue, gl, width)
 		table.insert(parts, due and ("due " .. due) or "due -")
 		local branches = state.linked_branches
 		table.insert(parts, (type(branches) == "table" and #branches > 0) and branches[1].name or "no branch")
-		local strip = table.concat(parts, " · ")
+		local pad = "    "
+		local strip = pad .. table.concat(parts, " · ")
 		table.insert(lines, strip)
-		table.insert(spans, { line = #lines - 1, start_col = 0, end_col = #strip, hl_group = "AtlasTextMuted" })
+		table.insert(spans, { line = #lines - 1, start_col = #pad, end_col = #strip, hl_group = "AtlasTextMuted" })
 	end
 
 	return lines, spans, regions

@@ -9,6 +9,14 @@ local M = {}
 local utils = require("atlas.ui.shared.utils")
 local ui_utils = require("atlas.ui.utils")
 
+-- Left-indents every header line to line up with where the content box's own
+-- title text starts: 1 column for the float's own offset from the spacer's
+-- edge, 1 for its rounded-border corner glyph, and 2 for the title's leading
+-- "- " (see `tabs.title_chunks`) -- so e.g. "Description" and the header's
+-- breadcrumb/title/chips all start in the same screen column.
+local LEFT_PAD = 4
+local LEFT_PAD_STR = string.rep(" ", LEFT_PAD)
+
 ---@class IssuesDetailHeaderData
 ---@field breadcrumb string e.g. "atlas / semesterarbeit > issues > #17".
 ---@field meta_right string e.g. "opened by M. Schaffner - 2h ago".
@@ -27,8 +35,8 @@ local ui_utils = require("atlas.ui.utils")
 ---@return string[] lines
 ---@return AtlasUIHighlight[] highlights
 ---@return table<string, AtlasFieldBoxRegion> regions Only `title`, for anchoring its inline-edit overlay.
-function M.render(data, width)
-	width = math.max(1, width)
+function M.render(data, outer_width)
+	local width = math.max(1, outer_width - LEFT_PAD)
 	local lines, spans = {}, {}
 
 	-- Meta line.
@@ -121,6 +129,17 @@ function M.render(data, width)
 	end
 
 	utils.append_block(lines, spans, { lines = chip_lines, highlights = chip_spans })
+
+	for i, line in ipairs(lines) do
+		lines[i] = line ~= "" and (LEFT_PAD_STR .. line) or line
+	end
+	for _, span in ipairs(spans) do
+		if span.line_hl_group == nil then
+			span.start_col = span.start_col + LEFT_PAD
+			span.end_col = span.end_col + LEFT_PAD
+		end
+	end
+	regions.title.col = regions.title.col + LEFT_PAD
 
 	return lines, spans, regions
 end
