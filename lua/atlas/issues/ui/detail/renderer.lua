@@ -15,6 +15,7 @@ local inline_edit = require("atlas.ui.inline_edit")
 local inline_field_edit = require("atlas.ui.inline_field_edit")
 local highlights = require("atlas.ui.shared.highlights")
 local conversation_state = require("atlas.issues.ui.detail.tabs.conversation.state")
+local composer_dock = require("atlas.ui.components.composer.dock")
 local presentation = require("atlas.issues.ui.presentation")
 local resolver = require("atlas.core.keymaps")
 
@@ -457,12 +458,8 @@ end
 
 --- The Activity tab's own border color -- blue by default whenever the tab
 --- supports adding a top-level comment (mirrors the description tab always
---- being blue while editable), escalating to orange only once actively
---- typing a new top-level comment. A reply keeps its own comment box's
---- border as the "is this actively being edited" signal, so the global
---- border just stays blue for those. Grey on a closed issue -- only this
---- outer pane border, not individual comment boxes (still blue when
---- selected/active; see `border_hl` in the conversation renderer).
+--- being blue while editable), escalating to orange while any composer
+--- (docked new comment, inline reply/edit) is open. Grey on a closed issue.
 ---@return string|nil
 local function conversation_border_hl()
 	if state.current_tab ~= "conversation" then
@@ -475,8 +472,8 @@ local function conversation_border_hl()
 	if comments == nil or comments.add_comment == nil then
 		return nil
 	end
-	local composing = conversation_state.composing
-	if composing ~= nil and composing.kind == "add" and inline_field_edit.is_active() then
+	local session = conversation_state.session
+	if (session ~= nil and session.is_open()) or composer_dock.is_expanded() then
 		return "AtlasFieldBoxBorderEditing"
 	end
 	return "AtlasFieldBoxBorderEditable"
@@ -493,8 +490,8 @@ end
 
 --- Whether the Activity tab's "[i] - Add" footer hint should show: only on
 --- that tab, only when the provider supports adding a top-level comment, and
---- not while a comment is already being inline-edited/composed (that box
---- already shows its own Save/Cancel hint on its own border).
+--- not while the docked composer is there (it carries its own "c focus"
+--- hint) or a comment is already being inline-edited.
 ---@return boolean
 local function conversation_addable()
 	local comments = state.provider and state.provider.capabilities.comments
@@ -502,6 +499,7 @@ local function conversation_addable()
 		and comments ~= nil
 		and comments.add_comment ~= nil
 		and not inline_field_edit.is_active()
+		and not composer_dock.is_attached()
 		and presentation.is_open(state.current_issue)
 end
 

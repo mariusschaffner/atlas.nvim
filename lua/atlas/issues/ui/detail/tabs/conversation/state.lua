@@ -4,13 +4,14 @@ local utils = require("atlas.ui.shared.utils")
 local MAX_COMMENT_LINES = 8
 
 ---@class IssuesConversationComposing
----@field kind "add"|"reply"
----@field parent IssueComment|nil
+---@field kind "reply"
+---@field parent IssueComment Thread root the reply goes to.
 ---@field seed_text string
 
----@class IssuesConversationNavigableEntry
----@field id string
----@field comment IssueComment
+---@class IssuesConversationComposer
+---@field height integer Text rows the inline composer frame reserves.
+---@field mode string Vim mode of the editing float ("i"/"n").
+---@field dirty boolean Text differs from what the composer opened with.
 
 ---@class IssuesConversationState
 ---@field items IssueConversationItem[]|"loading"|nil
@@ -20,11 +21,12 @@ local MAX_COMMENT_LINES = 8
 ---@field expanded_runs table<string, boolean>
 ---@field requests AtlasRequestScope
 ---@field current_issue Issue|nil
----@field active_id string|nil Currently active/selected comment id (not cursor-bound).
 ---@field editing_id string|nil Comment id currently being inline-edited, if any.
----@field composing IssuesConversationComposing|nil In-progress inline add/reply, if any.
----@field regions table<string, AtlasFieldBoxRegion> Comment box interior regions from the last render, keyed "comment:"..id (or "composing" for the in-progress add/reply box).
----@field navigable IssuesConversationNavigableEntry[] Flattened, in-order list of every visible comment from the last render.
+---@field composing IssuesConversationComposing|nil In-progress inline reply, if any.
+---@field composer IssuesConversationComposer Live state of the open inline composer (edit or reply).
+---@field session AtlasComposerSession|nil The open inline composer's editing float.
+---@field follow_id string|nil Comment the cursor jumps to after the next render (e.g. one just posted).
+---@field regions table<string, AtlasFieldBoxRegion> From the last render: "comment:"..id (header row, body height) and "composer" (inline composer text area).
 local M = {
 	items = nil,
 	error = nil,
@@ -33,11 +35,12 @@ local M = {
 	expanded_runs = {},
 	requests = request_scope.new(),
 	current_issue = nil,
-	active_id = nil,
 	editing_id = nil,
 	composing = nil,
+	composer = { height = 1, mode = "i", dirty = false },
+	session = nil,
+	follow_id = nil,
 	regions = {},
-	navigable = {},
 }
 
 function M.reset()
@@ -49,11 +52,15 @@ function M.reset()
 	M.collapsed = {}
 	M.expanded_comments = {}
 	M.expanded_runs = {}
-	M.active_id = nil
+	if M.session and M.session.is_open() then
+		M.session.close()
+	end
+	M.session = nil
 	M.editing_id = nil
 	M.composing = nil
+	M.composer = { height = 1, mode = "i", dirty = false }
+	M.follow_id = nil
 	M.regions = {}
-	M.navigable = {}
 end
 
 ---@param issue Issue
@@ -66,50 +73,6 @@ function M.deactivate()
 	M.current_issue = nil
 	M.requests.cancel()
 	M.requests = request_scope.new()
-end
-
----@return IssueComment|nil
-function M.active_comment()
-	for _, entry in ipairs(M.navigable) do
-		if entry.id == M.active_id then
-			return entry.comment
-		end
-	end
-	return nil
-end
-
---- Rebuilds the navigable list from the last render, and defaults `active_id`
---- to the first entry whenever it's unset or no longer present (first render
---- after data loads, or after the active comment was deleted).
----@param navigable IssuesConversationNavigableEntry[]
-function M.set_navigable(navigable)
-	M.navigable = navigable
-	if M.active_id ~= nil then
-		for _, entry in ipairs(navigable) do
-			if entry.id == M.active_id then
-				return
-			end
-		end
-	end
-	M.active_id = navigable[1] and navigable[1].id or nil
-end
-
---- Moves the active comment by `step` (1 = next, -1 = previous), clamped at
---- the ends of the navigable list (no wraparound, matching plain j/k).
----@param step 1|-1
-function M.move_active(step)
-	if #M.navigable == 0 then
-		return
-	end
-	local index = 1
-	for i, entry in ipairs(M.navigable) do
-		if entry.id == M.active_id then
-			index = i
-			break
-		end
-	end
-	index = math.max(1, math.min(#M.navigable, index + step))
-	M.active_id = M.navigable[index].id
 end
 
 ---@param issue Issue

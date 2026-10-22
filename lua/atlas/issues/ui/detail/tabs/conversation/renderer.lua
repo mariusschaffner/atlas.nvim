@@ -1,30 +1,26 @@
 local M = {}
 
-local keymaps = require("atlas.core.keymaps")
 local utils = require("atlas.ui.shared.utils")
 local spinner = require("atlas.ui.components.spinner")
-local bordered_box = require("atlas.ui.components.bordered_box")
 local emojis = require("atlas.ui.shared.emojis")
+local line_builder = require("atlas.ui.components.line")
+local day_divider = require("atlas.ui.components.timeline.day_divider")
+local event_row = require("atlas.ui.components.timeline.event_row")
+local timeline_comment = require("atlas.ui.components.timeline.comment")
+local frame = require("atlas.ui.components.composer.frame")
+local dock = require("atlas.ui.components.composer.dock")
 local comment_threads = require("atlas.issues.ui.components.comment_threads")
-local activity_component = require("atlas.issues.ui.detail.components.activity")
+local events = require("atlas.issues.ui.detail.tabs.conversation.events")
 local presentation = require("atlas.issues.ui.presentation")
 local detail = require("atlas.issues.ui.detail.state")
 local state = require("atlas.issues.ui.detail.tabs.conversation.state")
 local actions = require("atlas.issues.ui.detail.tabs.conversation.actions")
 
 local PADDING_X = 1
-local PADDING = string.rep(" ", PADDING_X)
-local CONTENT_PAD = " "
-local CONNECTOR = "│"
-local INDENT_STEP = 2
-local BOX_WIDTH_RATIO = 0.8
-local MIN_BOX_WIDTH = 20
-
----@param available_width integer
----@return integer box_width
-local function comment_box_width(available_width)
-	return math.max(MIN_BOX_WIDTH, math.floor(available_width * BOX_WIDTH_RATIO))
-end
+--- Activity runs longer than this collapse to their first/last
+--- `COLLAPSE_KEEP` entries around a "⋯ N more changes" row.
+local COLLAPSE_THRESHOLD = 4
+local COLLAPSE_KEEP = 2
 
 --- Finds "@handle" mentions in a single (already-wrapped) line and colors
 --- them the same way an author's own name is colored (`person_hl`), keyed
@@ -45,398 +41,119 @@ local function mention_spans(line)
 	return spans
 end
 
----@param lines string[]
----@param spans table[]
-local function append_connector(lines, spans)
-	local connector_line = PADDING .. CONNECTOR
-	table.insert(lines, connector_line)
-	table.insert(spans, {
-		line = #lines - 1,
-		start_col = PADDING_X,
-		end_col = PADDING_X + #CONNECTOR,
-		hl_group = "AtlasTextMuted",
-	})
+---@param comment IssueComment
+---@return string[]
+local function body_lines(comment)
+	if comment.deleted then
+		return { "(deleted comment)" }
+	end
+	local lines = utils.sanitize_lines(utils.strip_markup(comment.body or ""))
+	while #lines > 0 and vim.trim(lines[#lines]) == "" do
+		table.remove(lines)
+	end
+	if #lines == 0 then
+		return { "(empty comment)" }
+	end
+	return lines
 end
 
----@param dst_lines string[]
----@param dst_spans table[]
----@param src_lines string[]
----@param src_spans table[]
-local function splice(dst_lines, dst_spans, src_lines, src_spans)
-	local offset = #dst_lines
-	for _, line in ipairs(src_lines) do
-		table.insert(dst_lines, line)
+---@param comment IssueComment
+---@return AtlasTimelineEventSegment[]
+local function thread_badges(comment)
+	if not comment.resolvable then
+		return {}
 	end
-	for _, span in ipairs(src_spans) do
-		span.line = span.line + offset
-		table.insert(dst_spans, span)
+	if comment.resolved then
+		return { { "✓ resolved thread", "AtlasBadgeResolved" } }
 	end
-end
-
----@param node IssuesCommentThreadNode
----@return integer
-local function descendant_count(node)
-	local count = #node.children
-	for _, child in ipairs(node.children) do
-		count = count + descendant_count(child)
-	end
-	return count
+	return { { "◷ unresolved thread", "AtlasBadgeUnresolved" } }
 end
 
 ---@param node IssuesCommentThreadNode
 ---@param depth integer
----@param out IssuesConversationNavigableEntry[]
-local function collect_navigable(node, depth, out)
-	table.insert(out, { id = tostring(node.comment.id), comment = node.comment })
-	local collapsed_here = depth == 0 and #node.children > 0 and state.is_collapsed(node.comment.id)
-	if not collapsed_here then
-		for _, child in ipairs(node.children) do
-			collect_navigable(child, depth + 1, out)
-		end
+---@return AtlasTimelineCommentNode
+local function to_comment_node(node, depth)
+	local comment = node.comment
+	local reaction_options = detail.provider
+		and detail.provider.capabilities.comments
+		and detail.provider.capabilities.comments.reaction_options
+	local reactions_text, reactions_spans = emojis.format(comment.reactions, reaction_options)
+	local children = {}
+	for _, child in ipairs(node.children) do
+		table.insert(children, to_comment_node(child, depth + 1))
 	end
+	return {
+		id = tostring(comment.id),
+		author = comment_threads.author_name(comment.author),
+		is_you = actions.is_own_comment(comment),
+		time = utils.local_time(comment.created),
+		badges = depth == 0 and thread_badges(comment) or nil,
+		body_lines = body_lines(comment),
+		max_lines = state.comment_max_lines(comment),
+		reactions_text = reactions_text,
+		reactions_spans = reactions_spans and #reactions_spans > 0 and reactions_spans or nil,
+		children = children,
+		collapsed = depth == 0 and state.is_collapsed(comment.id),
+		data = comment,
+	}
 end
 
----@param comment IssueComment
----@param reaction_options IssueReactionOption[]|nil
----@param wrap_width integer Display width each body line is word-wrapped to.
----@return string[] lines
----@return table[] highlights
----@return integer body_start 0-indexed row (within `lines`) where the raw editable body starts.
----@return integer body_line_count How many rows of `lines` are the raw editable body (excludes the date line and any trailing truncation-indicator/reactions rows).
-local function comment_content(comment, reaction_options, wrap_width)
-	local lines, highlights = {}, {}
-	local date_text = utils.format_datetime(comment.created)
-	if date_text ~= "" then
-		table.insert(lines, date_text)
-		table.insert(highlights, { line = 0, start_col = 0, end_col = #date_text, hl_group = "AtlasTextMuted" })
-	end
-	local body_start = #lines
-
-	if comment.deleted then
-		local text = "(deleted comment)"
-		table.insert(lines, text)
-		table.insert(highlights, { line = #lines - 1, start_col = 0, end_col = #text, hl_group = "AtlasTextMutedItalic" })
-		return lines, highlights, body_start, 0
-	end
-
-	local body_lines = utils.sanitize_lines(utils.strip_markup(comment.body or ""))
-	while #body_lines > 0 and vim.trim(body_lines[#body_lines]) == "" do
-		table.remove(body_lines)
-	end
-	if #body_lines == 0 then
-		body_lines = { "(empty comment)" }
-	end
-
-	local max_lines = state.comment_max_lines(comment)
-	local truncated = max_lines ~= nil and #body_lines > max_lines
-	local visible_count = truncated and max_lines or #body_lines
-	for i = 1, visible_count do
-		for _, wrapped_line in ipairs(utils.wrap_line(body_lines[i], wrap_width)) do
-			table.insert(lines, wrapped_line)
-			local line_idx = #lines - 1
-			for _, span in ipairs(mention_spans(wrapped_line)) do
-				table.insert(
-					highlights,
-					{ line = line_idx, start_col = span.start_col, end_col = span.end_col, hl_group = span.hl_group }
-				)
-			end
-		end
-	end
-	local body_line_count = #lines - body_start
-	if truncated then
-		local fold_keys = keymaps.resolve("ui.toggle_fold")
-		local key = fold_keys and fold_keys[1]
-		local text = key and string.format("... (%s to expand)", key) or "..."
-		table.insert(lines, text)
-		table.insert(highlights, { line = #lines - 1, start_col = 0, end_col = #text, hl_group = "AtlasTextMuted" })
-	end
-
-	local reactions_text, reaction_highlights = emojis.format(comment.reactions, reaction_options)
-	if reactions_text ~= "" then
-		table.insert(lines, reactions_text)
-		local line_idx = #lines - 1
-		for _, span in ipairs(reaction_highlights) do
-			table.insert(
-				highlights,
-				{ line = line_idx, start_col = span.start_col, end_col = span.end_col, hl_group = span.hl_group }
-			)
-		end
-	end
-
-	return lines, highlights, body_start, body_line_count
-end
-
----@param segments { action_id: string, label: string, hl: string }[]
----@return string|nil text
----@return table[]|nil highlights
-local function build_hint(segments)
-	local parts, highlights, cursor = {}, {}, 0
-	for _, seg in ipairs(segments) do
-		if #parts > 0 then
-			local sep = " ── "
-			table.insert(parts, sep)
-			cursor = cursor + #sep
-		end
-		local segment = utils.field_hint_label(seg.action_id, seg.label, true)
-		table.insert(highlights, { start_col = cursor, end_col = cursor + #segment, hl_group = seg.hl })
-		table.insert(parts, segment)
-		cursor = cursor + #segment
-	end
-	if #parts == 0 then
-		return nil, nil
-	end
-	return table.concat(parts), highlights
-end
-
----@param comment IssueComment
----@return string|nil text
----@return table[]|nil highlights
-local function bottom_hint_for(comment)
-	local comments = detail.provider and detail.provider.capabilities.comments
-	if not comments or not presentation.is_open(detail.current_issue) then
-		return nil, nil
-	end
-
-	local segments = {}
-	if comments.add_comment or comments.reply_comment then
-		table.insert(segments, { action_id = "ui.comments.reply", label = "Reply", hl = "AtlasFooterInfo" })
-	end
-	local own = actions.is_own_comment(comment)
-	if own and comments.edit_comment then
-		table.insert(segments, { action_id = "ui.comments.edit", label = "Edit", hl = "AtlasFooterWarning" })
-	end
-	if own and comments.delete_comment then
-		table.insert(segments, { action_id = "ui.delete", label = "Delete", hl = "AtlasFooterError" })
-	end
-	return build_hint(segments)
-end
-
---- Shown on a comment's own bottom border while it is being inline-edited,
---- and on the composing box while adding/replying -- mirrors the
---- description tab's editing footer (same action ids, same border-matching
---- color) instead of the Reply/Edit/Delete affordances.
----@return string text
----@return table[] highlights
-local function editing_hint()
-	local hl = "AtlasFieldBoxBorderEditing"
-	return build_hint({
-		{ action_id = "ui.submit", label = "Save", hl = hl },
-		{ action_id = "ui.field_edit.close", label = "Cancel", hl = hl },
-	})
-end
-
----@param comment IssueComment
----@return string title
----@return table[] title_highlights Spans relative to `title`, coloring the whole (name-only) title.
-local function title_for(comment)
-	local name = comment_threads.author_name(comment.author)
-	return name, { { start_col = 0, end_col = #name, hl_group = presentation.person_hl(name) } }
-end
-
---- Adds a space of horizontal padding on every content line, so the border
---- isn't flush against the text.
----@param lines string[]
----@param highlights table[]
----@return string[] lines
----@return table[] highlights
-local function frame_content(lines, highlights)
-	local framed_lines = {}
-	for _, line in ipairs(lines) do
-		table.insert(framed_lines, CONTENT_PAD .. line)
-	end
-
-	local framed_highlights = {}
-	for _, span in ipairs(highlights) do
-		table.insert(framed_highlights, {
-			line = span.line,
-			start_col = span.start_col + #CONTENT_PAD,
-			end_col = span.end_col + #CONTENT_PAD,
-			hl_group = span.hl_group,
+---@param title AtlasTimelineEventSegment[]|nil
+---@param hints AtlasKeyHintSegment[]
+---@return AtlasTimelineComposerRender
+local function composer_render(title, hints)
+	return function(ctx)
+		return frame.render({
+			indent = ctx.indent,
+			width = ctx.width,
+			prefix = ctx.prefix,
+			title = title,
+			height = state.composer.height,
+			mode = state.composer.mode,
+			hints = hints,
+			dirty = state.composer.dirty,
 		})
 	end
-	return framed_lines, framed_highlights
 end
 
----@param box_lines string[]
----@param box_highlights table[]
----@param indent integer
-local function apply_indent(box_lines, box_highlights, indent)
-	if indent <= 0 then
-		return
+--- Footer hints of the reply composer; "post & resolve" only while the
+--- thread is resolvable and still open.
+---@param root IssueComment
+---@return AtlasKeyHintSegment[]
+function M.reply_hints(root)
+	local comments = detail.provider and detail.provider.capabilities.comments
+	local hints = { { action_id = "ui.submit", label = "post" } }
+	if root.resolvable and not root.resolved and comments and comments.set_thread_resolved then
+		table.insert(hints, { action_id = "ui.comments.submit_resolve", label = "post & resolve" })
 	end
-	local pad = string.rep(" ", indent)
-	for i, line in ipairs(box_lines) do
-		box_lines[i] = pad .. line
-	end
-	for _, span in ipairs(box_highlights) do
-		span.start_col = span.start_col + indent
-		span.end_col = span.end_col + indent
-	end
+	table.insert(hints, { action_id = "ui.field_edit.close", label = "cancel" })
+	table.insert(hints, { action_id = "ui.comments.full_buffer", label = "full buffer" })
+	return hints
 end
 
----@param comment IssueComment
----@param depth integer
----@param width integer
----@param lines string[]
----@param spans table[]
----@param line_map table<integer, table>
----@param extra_content_lines string[]|nil
----@param extra_content_highlights table[]|nil
-local function render_comment_box(comment, depth, width, lines, spans, line_map, extra_content_lines, extra_content_highlights)
-	local id = tostring(comment.id)
-	local indent = PADDING_X + depth * INDENT_STEP
-	local available = math.max(MIN_BOX_WIDTH, width - indent)
-	local box_width = comment_box_width(available)
-	local wrap_width = math.max(1, box_width - 2 - #CONTENT_PAD)
+---@type AtlasKeyHintSegment[]
+M.EDIT_HINTS = {
+	{ action_id = "ui.submit", label = "save" },
+	{ action_id = "ui.field_edit.close", label = "discard" },
+	{ action_id = "ui.comments.full_buffer", label = "full buffer" },
+}
 
-	local reaction_options = detail.provider and detail.provider.capabilities.comments and detail.provider.capabilities.comments.reaction_options
-	local content_lines, content_highlights, body_start, body_line_count = comment_content(comment, reaction_options, wrap_width)
-	for _, line in ipairs(extra_content_lines or {}) do
-		table.insert(content_lines, line)
-	end
-	for _, span in ipairs(extra_content_highlights or {}) do
-		table.insert(content_highlights, span)
-	end
-
-	local is_editing = state.editing_id == id
-	local is_active = state.composing == nil and state.active_id == id
-	local border_hl = is_editing and "AtlasFieldBoxBorderEditing"
-		or (is_active and "AtlasFieldBoxBorderEditable")
-		or "AtlasFieldBoxBorder"
-
-	local bottom_hint, bottom_hint_highlights
-	if is_editing then
-		bottom_hint, bottom_hint_highlights = editing_hint()
-	elseif is_active then
-		bottom_hint, bottom_hint_highlights = bottom_hint_for(comment)
-	end
-
-	local title, title_highlights = title_for(comment)
-	local framed_lines, framed_highlights = frame_content(content_lines, content_highlights)
-
-	local box_lines, box_highlights = bordered_box.render({
-		width = box_width,
-		box_width = box_width,
-		title = title,
-		title_highlights = title_highlights,
-		content_lines = framed_lines,
-		content_highlights = framed_highlights,
-		border_hl = border_hl,
-		bottom_hint = bottom_hint,
-		bottom_hint_highlights = bottom_hint_highlights,
-	})
-	apply_indent(box_lines, box_highlights, indent)
-
-	local base = #lines
-	-- Points at just the raw editable body (skipping the date line above it
-	-- and any truncation-indicator/reactions/"N replies" rows below it), so
-	-- the inline edit overlay lands exactly on the body text, not adjacent
-	-- content.
-	state.regions["comment:" .. id] = {
-		row = base + 1 + body_start,
-		col = indent + 1,
-		width = box_width - 2,
-		height = math.max(1, body_line_count),
-	}
-
-	for _, line in ipairs(box_lines) do
-		table.insert(lines, line)
-	end
-	for _, span in ipairs(box_highlights) do
-		table.insert(spans, { line = base + span.line, start_col = span.start_col, end_col = span.end_col, hl_group = span.hl_group })
-	end
-	for i = 1, #box_lines do
-		line_map[base + i] = { comment = comment, entity_kind = "comment" }
-	end
-end
-
----@param width integer
----@param depth integer
----@param lines string[]
----@param spans table[]
-local function render_composing_box(width, depth, lines, spans)
-	local composing = state.composing
-	if not composing then
-		return
-	end
-
-	local title = "New Comment"
-	local title_highlights = nil
-	local current_user = require("atlas.issues.state").current_user
-	if current_user and current_user.display_name and current_user.display_name ~= "" then
-		title = current_user.display_name
-		title_highlights = { { start_col = 0, end_col = #title, hl_group = presentation.person_hl(title) } }
-	end
-
-	local indent = PADDING_X + depth * INDENT_STEP
-	local available = math.max(MIN_BOX_WIDTH, width - indent)
-	local box_width = comment_box_width(available)
-	local content_lines = { "", "", "" }
-	local bottom_hint, bottom_hint_highlights = editing_hint()
-
-	local box_lines, box_highlights = bordered_box.render({
-		width = box_width,
-		box_width = box_width,
-		title = title,
-		title_highlights = title_highlights,
-		content_lines = content_lines,
-		border_hl = "AtlasFieldBoxBorderEditing",
-		bottom_hint = bottom_hint,
-		bottom_hint_highlights = bottom_hint_highlights,
-	})
-	apply_indent(box_lines, box_highlights, indent)
-
-	local base = #lines
-	state.regions.composing = { row = base + 1, col = indent + 1, width = box_width - 2, height = #content_lines }
-
-	for _, line in ipairs(box_lines) do
-		table.insert(lines, line)
-	end
-	for _, span in ipairs(box_highlights) do
-		table.insert(spans, { line = base + span.line, start_col = span.start_col, end_col = span.end_col, hl_group = span.hl_group })
-	end
-end
-
----@param node IssuesCommentThreadNode
----@param depth integer
----@param width integer
----@param lines string[]
----@param spans table[]
----@param line_map table<integer, table>
-local function render_thread_node(node, depth, width, lines, spans, line_map)
-	local collapsed_here = depth == 0 and #node.children > 0 and state.is_collapsed(node.comment.id)
-
-	local extra_lines, extra_highlights
-	if collapsed_here then
-		local count = descendant_count(node)
-		local text = string.format("%d %s", count, count == 1 and "Reply" or "Replies")
-		extra_lines = { text }
-		extra_highlights = { { line = 0, start_col = 0, end_col = #text, hl_group = "AtlasTextMuted" } }
-	end
-
-	if #lines > 0 then
-		append_connector(lines, spans)
-	end
-	render_comment_box(node.comment, depth, width, lines, spans, line_map, extra_lines, extra_highlights)
-
-	if not collapsed_here then
-		for _, child in ipairs(node.children) do
-			render_thread_node(child, depth + 1, width, lines, spans, line_map)
-		end
-		local composing = state.composing
-		if composing and composing.kind == "reply" and composing.parent and tostring(composing.parent.id) == tostring(node.comment.id) then
-			append_connector(lines, spans)
-			render_composing_box(width, depth + 1, lines, spans)
-		end
-	end
+---@return string|nil
+local function current_user_name()
+	local user = require("atlas.issues.state").current_user
+	return user and (user.display_name ~= "" and user.display_name or user.account_id) or nil
 end
 
 ---@class IssuesConversationTimelineEntry
----@field type "comment"|"activity_run"
+---@field type "comment"|"activity_run"|"day"
 ---@field timestamp string
+---@field label string|nil Day label ("day" entries).
 ---@field thread IssuesCommentThreadNode|nil
 ---@field items IssueConversationItem[]|nil
 
+--- Merges comment threads and activity oldest-first, cuts activity into runs
+--- (broken by comments, `always_render` entries and day boundaries) and
+--- inserts a "day" entry wherever the local calendar day changes.
 ---@param items IssueConversationItem[]
 ---@return IssuesConversationTimelineEntry[]
 local function build_timeline(items)
@@ -463,6 +180,7 @@ local function build_timeline(items)
 
 	local entries = {}
 	local run = {}
+	local current_day = nil
 	local function flush_run()
 		if #run > 0 then
 			table.insert(entries, { type = "activity_run", timestamp = run[1].created_at, items = run })
@@ -470,6 +188,12 @@ local function build_timeline(items)
 		end
 	end
 	for _, item in ipairs(mixed) do
+		local day = utils.local_day_key(item.timestamp)
+		if day ~= current_day then
+			flush_run()
+			current_day = day
+			table.insert(entries, { type = "day", timestamp = item.timestamp, label = utils.day_label(item.timestamp) })
+		end
 		if item.kind == "activity" then
 			---@type IssueActivityEntry
 			local activity = item.item.entity
@@ -488,37 +212,119 @@ local function build_timeline(items)
 	return entries
 end
 
+---@class IssuesConversationRenderContext
+---@field lines string[]
+---@field spans AtlasUIHighlight[]
+---@field line_map table<integer, table>
+---@field width integer
+
+---@param ctx IssuesConversationRenderContext
+local function blank(ctx)
+	table.insert(ctx.lines, "")
+	ctx.line_map[#ctx.lines] = { kind = "spacer" }
+end
+
+---@param ctx IssuesConversationRenderContext
+---@param block_lines string[]
+---@param block_spans AtlasUIHighlight[]
+---@param entry table|nil line_map entry for every row of the block
+---@return integer base
+local function append(ctx, block_lines, block_spans, entry)
+	local base = line_builder.splice(ctx.lines, ctx.spans, block_lines, block_spans)
+	for i = 1, #block_lines do
+		ctx.line_map[base + i] = entry or { kind = "spacer" }
+	end
+	return base
+end
+
+---@param ctx IssuesConversationRenderContext
 ---@param entry IssuesConversationTimelineEntry
----@param width integer
----@param has_next boolean
----@param lines string[]
----@param spans table[]
----@param line_map table<integer, table>
-local function render_entry(entry, width, has_next, lines, spans, line_map)
-	if entry.type == "comment" then
-		render_thread_node(entry.thread, 0, width, lines, spans, line_map)
+local function render_activity_run(ctx, entry)
+	local run_id = tostring(entry.timestamp or "")
+	local items = entry.items or {}
+	local function render_item(item)
+		local block_lines, block_spans = event_row.render(events.to_event(item.entity), ctx.width, {
+			padding_x = PADDING_X,
+		})
+		append(ctx, block_lines, block_spans, {
+			kind = "activity",
+			activity_entry = item.entity,
+			activity_actor = item.entity.actor,
+			run_id = run_id,
+		})
+	end
+
+	if #items > COLLAPSE_THRESHOLD and not state.is_run_expanded(run_id) then
+		for i = 1, COLLAPSE_KEEP do
+			render_item(items[i])
+		end
+		local hidden = #items - COLLAPSE_KEEP * 2
+		local block_lines, block_spans = event_row.render({
+			icon = "⋯",
+			segments = { { string.format("%d more %s", hidden, hidden == 1 and "change" or "changes"), "AtlasTimelineVerb" } },
+			hints = { { action_id = "issues.expand_activity", label = "expand" } },
+		}, ctx.width, { padding_x = PADDING_X })
+		append(ctx, block_lines, block_spans, { kind = "activity_gap", run_id = run_id })
+		for i = #items - COLLAPSE_KEEP + 1, #items do
+			render_item(items[i])
+		end
 		return
 	end
-	if entry.type == "activity_run" then
-		local run_id = tostring(entry.timestamp or "")
-		local activities = {}
-		for _, item in ipairs(entry.items or {}) do
-			table.insert(activities, item.entity)
-		end
-		local activity_lines, activity_spans, activity_line_map = activity_component.render(activities, width, {
-			padding_x = PADDING_X,
-			squash = not state.is_run_expanded(run_id),
-			run_id = run_id,
-			has_next = has_next,
-		})
-		if #lines > 0 then
-			append_connector(lines, spans)
-		end
-		splice(lines, spans, activity_lines, activity_spans)
-		local base = #lines - #activity_lines
-		for lnum, item in pairs(activity_line_map or {}) do
-			line_map[base + lnum] = item
-		end
+	for _, item in ipairs(items) do
+		render_item(item)
+	end
+end
+
+---@param ctx IssuesConversationRenderContext
+---@param thread IssuesCommentThreadNode
+local function render_thread(ctx, thread)
+	local composing = state.composing
+	local root = thread.comment
+	local reply_here = composing ~= nil and tostring(composing.parent.id) == tostring(root.id)
+	local block_lines, block_spans, block_map, regions = timeline_comment.render(to_comment_node(thread, 0), ctx.width, {
+		padding_x = PADDING_X,
+		body_spans = mention_spans,
+		truncated_hints = { { action_id = "ui.toggle_fold", label = "expand" } },
+		collapsed_hints = { { action_id = "ui.toggle_fold", label = "expand" } },
+		editing_id = state.editing_id,
+		render_editor = composer_render(nil, M.EDIT_HINTS),
+		reply_parent_id = reply_here and tostring(root.id) or nil,
+		reply_author = current_user_name(),
+		render_reply = reply_here and composer_render({ { "↩ Reply to thread", "AtlasComposerTitle" } }, M.reply_hints(root))
+			or nil,
+	})
+	local base = append(ctx, block_lines, block_spans)
+	for lnum, entry in pairs(block_map) do
+		ctx.line_map[base + lnum] = entry
+	end
+	for key, region in pairs(regions) do
+		state.regions[key] = vim.tbl_extend("force", {}, region, { row = base + region.row })
+	end
+end
+
+---@param ctx IssuesConversationRenderContext
+---@param text string
+---@param hl string
+local function push_message(ctx, text, hl)
+	utils.push(ctx.lines, ctx.spans, text, hl, PADDING_X)
+	ctx.line_map[#ctx.lines] = { kind = "spacer" }
+end
+
+--- Trailing rows so the last timeline entries can scroll clear of the
+--- docked composer, plus the "· NOW ·" marker right above it while it's open.
+---@param ctx IssuesConversationRenderContext
+local function render_dock_padding(ctx)
+	local height = dock.total_height()
+	if height == 0 then
+		return
+	end
+	blank(ctx)
+	if dock.is_expanded() then
+		local block_lines, block_spans = day_divider.render_centered("NOW", ctx.width)
+		append(ctx, block_lines, block_spans)
+	end
+	for _ = 1, height do
+		blank(ctx)
 	end
 end
 
@@ -526,47 +332,52 @@ end
 ---@param _details IssueDetails|nil
 ---@param width integer
 function M.render(_issue, _details, width)
-	local lines, spans, line_map = {}, {}, {}
+	---@type IssuesConversationRenderContext
+	local ctx = { lines = {}, spans = {}, line_map = {}, width = width }
+	state.regions = {}
 
 	if state.error then
-		utils.push(lines, spans, state.error, "AtlasLogError", PADDING_X)
-		return lines, spans, line_map
+		push_message(ctx, state.error, "AtlasLogError")
+		return ctx.lines, ctx.spans, ctx.line_map
 	end
-
 	if state.items == nil then
-		return lines, spans, line_map
+		return ctx.lines, ctx.spans, ctx.line_map
 	end
 	if state.items == "loading" then
-		utils.push(lines, spans, spinner.with_text("Loading conversation..."), "AtlasTextMuted", PADDING_X)
-		return lines, spans, line_map
+		push_message(ctx, spinner.with_text("Loading conversation..."), "AtlasTextMuted")
+		return ctx.lines, ctx.spans, ctx.line_map
 	end
 
 	---@cast state.items IssueConversationItem[]
-	local navigable = {}
-	for _, thread in ipairs(comment_threads.group_comments(state.comments())) do
-		collect_navigable(thread, 0, navigable)
-	end
-	state.set_navigable(navigable)
-
 	local entries = build_timeline(state.items)
-
-	if #entries == 0 and state.composing == nil then
-		utils.push(lines, spans, "No conversation yet.", "AtlasTextMuted", PADDING_X)
-		return lines, spans, line_map
+	if #entries == 0 then
+		push_message(ctx, "No activity yet.", "AtlasTextMuted")
 	end
 
-	for index, entry in ipairs(entries) do
-		render_entry(entry, width, index < #entries, lines, spans, line_map)
-	end
-
-	if state.composing and state.composing.kind == "add" then
-		if #lines > 0 then
-			append_connector(lines, spans)
+	local previous = nil
+	for _, entry in ipairs(entries) do
+		if entry.type == "day" then
+			if previous ~= nil and previous ~= "comment" then
+				blank(ctx)
+			end
+			local block_lines, block_spans = day_divider.render(entry.label or "", width, { padding_x = PADDING_X })
+			append(ctx, block_lines, block_spans)
+		elseif entry.type == "comment" then
+			-- Every thread is followed by a blank row; only an activity run
+			-- right before it needs one added.
+			if previous == "activity_run" then
+				blank(ctx)
+			end
+			render_thread(ctx, entry.thread)
+			blank(ctx)
+		else
+			render_activity_run(ctx, entry)
 		end
-		render_composing_box(width, 0, lines, spans)
+		previous = entry.type
 	end
 
-	return lines, spans, line_map
+	render_dock_padding(ctx)
+	return ctx.lines, ctx.spans, ctx.line_map
 end
 
 return M

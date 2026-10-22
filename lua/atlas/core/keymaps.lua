@@ -43,6 +43,9 @@ local M = {}
 ---@field reply? AtlasKeymapValue
 ---@field edit? AtlasKeymapValue
 ---@field react? AtlasKeymapValue
+---@field submit_resolve? AtlasKeymapValue Posts a reply and resolves its thread, from an inline reply composer.
+---@field full_buffer? AtlasKeymapValue Moves an inline composer's draft into a whole-tab editor.
+---@field toggle_resolved? AtlasKeymapValue Resolves/unresolves the comment thread under the cursor (issue Activity tab).
 
 ---@class AtlasUIFieldEditKeymaps
 ---@field close? AtlasKeymapValue Discards an in-progress inline field edit (assignee/labels/reviewers/title/filter box/...).
@@ -138,6 +141,7 @@ local M = {}
 ---@field add_comment? AtlasKeymapValue Adds a new comment on the issue detail view's Activity tab (inline). Separate action id from the pulls detail view's equivalent (`ui.comments.add`), but they share the same default key.
 ---@field comment? AtlasKeymapValue Jumps to the Activity tab (from any tab) and opens its comment composer -- distinct from `add_comment`, which is the Activity tab's own composer binding, reachable only while that tab is already active.
 ---@field toggle_task_item? AtlasKeymapValue Toggles the `- [ ]`/`- [x]` task item under the cursor on the issue detail view's Description tab.
+---@field expand_activity? AtlasKeymapValue Expands the collapsed activity run ("⋯ N more changes") or collapsed thread under the cursor on the issue Activity tab.
 
 ---@class AtlasKeymapsConfig
 ---@field ui? AtlasUIKeymaps
@@ -161,6 +165,9 @@ local M = {}
 ---| "ui.comments.reply"
 ---| "ui.comments.edit"
 ---| "ui.comments.react"
+---| "ui.comments.submit_resolve"
+---| "ui.comments.full_buffer"
+---| "ui.comments.toggle_resolved"
 ---| "ui.edit_description"
 ---| "ui.field_edit.close"
 ---| "ui.field_edit.next_completion"
@@ -256,6 +263,7 @@ local M = {}
 ---| "issues.add_comment"
 ---| "issues.comment"
 ---| "issues.toggle_task_item"
+---| "issues.expand_activity"
 
 ---@param value AtlasKeymapValue
 ---@return string[]|nil
@@ -396,7 +404,12 @@ function M.validate()
 		-- pipeline_cancel (pipelines tab) and review.diff.toggle_resolved
 		-- (review/conversation tabs, or the standalone diff viewer) are
 		-- never active for the same tab/buffer at once.
-		{ "pulls.pipeline_cancel", "pulls.review.diff.toggle_resolved" },
+		-- ui.comments.toggle_resolved is the issue Activity tab's own binding,
+		-- never active alongside either of those.
+		{ "pulls.pipeline_cancel", "pulls.review.diff.toggle_resolved", "ui.comments.toggle_resolved" },
+		-- ui.select (dashboard/picker rows) and issues.expand_activity (issue
+		-- Activity tab) never apply to the same buffer, so sharing "<CR>" is safe.
+		{ "ui.select", "issues.expand_activity" },
 		-- pipeline_retry (pipelines tab) and review.diff.toggle_review_panel
 		-- (review/conversation tabs, or the standalone diff viewer) are never
 		-- active for the same tab/buffer at once.

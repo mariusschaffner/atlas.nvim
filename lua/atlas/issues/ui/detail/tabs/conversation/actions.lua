@@ -88,7 +88,7 @@ function M.add(issue, text, done)
 		if created then
 			state.upsert_comment(created)
 			adjust_comment_count(issue, 1)
-			state.active_id = tostring(created.id)
+			state.follow_id = tostring(created.id)
 		end
 		notify.success("Comment added", { timeout = 1200 })
 		done(true)
@@ -123,7 +123,7 @@ function M.reply(issue, parent, text, done)
 		if created then
 			state.upsert_comment(created)
 			adjust_comment_count(issue, 1)
-			state.active_id = tostring(created.id)
+			state.follow_id = tostring(created.id)
 		end
 		notify.success("Reply added", { timeout = 1200 })
 		done(true)
@@ -163,6 +163,10 @@ function M.edit(issue, comment, text, done)
 		if updated then
 			updated.parent_id = updated.parent_id or comment.parent_id
 			updated._raw = vim.tbl_extend("keep", updated._raw or {}, comment._raw or {})
+			-- Thread resolution isn't part of a note's own payload.
+			updated.resolvable = comment.resolvable
+			updated.resolved = comment.resolved
+			updated.resolved_by = comment.resolved_by
 			state.upsert_comment(updated)
 		else
 			comment.body = text
@@ -200,6 +204,36 @@ function M.delete(issue, comment, refresh)
 			notify.success("Comment deleted", { timeout = 1200 })
 			refresh()
 		end)
+	end)
+end
+
+--- Resolves/unresolves a thread; updates the root optimistically once the
+--- provider confirms.
+---@param issue Issue
+---@param root IssueComment
+---@param resolved boolean
+---@param done fun(ok: boolean, err: string|nil)
+function M.set_resolved(issue, root, resolved, done)
+	local comments = get_comments()
+	if not comments or not comments.set_thread_resolved then
+		done(false, "Not supported")
+		return
+	end
+	notify.loading(resolved and "Resolving thread..." or "Reopening thread...")
+	comments.set_thread_resolved(issue, root, resolved, function(ok, err)
+		if not state.is_current(issue) then
+			done(true)
+			return
+		end
+		if err or not ok then
+			notify.error((resolved and "Resolve failed: " or "Reopen failed: ") .. tostring(err))
+			done(false, err)
+			return
+		end
+		root.resolved = resolved
+		root.resolved_by = resolved and require("atlas.issues.state").current_user or nil
+		notify.success(resolved and "Thread resolved" or "Thread reopened", { timeout = 1200 })
+		done(true)
 	end)
 end
 

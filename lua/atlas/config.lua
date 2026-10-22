@@ -190,6 +190,9 @@ M.options = {
 				reply = "gc",
 				edit = "gE",
 				react = "gr",
+				submit_resolve = "<C-r>",
+				full_buffer = "<C-e>",
+				toggle_resolved = "gX",
 			},
 			edit_description = "i",
 			field_edit = {
@@ -303,6 +306,7 @@ M.options = {
 			add_comment = "i",
 			comment = "c",
 			toggle_task_item = "x",
+			expand_activity = "<CR>",
 		},
 	},
 }
