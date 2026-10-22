@@ -281,7 +281,12 @@ local function render_thread(ctx, thread)
 	local reply_here = composing ~= nil and tostring(composing.parent.id) == tostring(root.id)
 	local block_lines, block_spans, block_map, regions = timeline_comment.render(to_comment_node(thread, 0), ctx.width, {
 		padding_x = PADDING_X,
-		block = { bar = "▎", bar_hl = "AtlasCommentBar", bg = { "AtlasCommentBg", "AtlasCommentReplyBg" } },
+		block = {
+			bar = "▎",
+			bar_hl = "AtlasCommentBar",
+			bg = { "AtlasCommentBg", "AtlasCommentReplyBg" },
+			width_ratio = 0.8,
+		},
 		body_spans = mention_spans,
 		truncated_hints = { { action_id = "ui.toggle_fold", label = "expand" } },
 		collapsed_hints = { { action_id = "ui.toggle_fold", label = "expand" } },

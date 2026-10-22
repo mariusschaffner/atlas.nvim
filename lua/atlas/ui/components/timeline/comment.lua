@@ -69,6 +69,7 @@ end
 ---@field bar string|nil Accent glyph drawn right before the text column, e.g. "▎".
 ---@field bar_hl string|nil
 ---@field bg string[] Background per nesting level (last entry reused for deeper levels).
+---@field width_ratio number|nil Fraction of the available width the whole thread (tint, times, composers) spans; body text then wraps inside it.
 
 --- Priority below the default extmark priority, so every other highlight on
 --- the row (avatar chips, badges, mentions) draws on top of the tint.
@@ -147,6 +148,12 @@ function M.render(node, width, opts)
 	opts = opts or {}
 	local pad = opts.padding_x or 1
 	local ratio = opts.width_ratio or DEFAULT_WIDTH_RATIO
+	-- A block style can narrow the whole thread; body text then fills the
+	-- block (one column of right padding) instead of wrapping at `ratio`.
+	local block_width = opts.block and opts.block.width_ratio and math.floor(width * opts.block.width_ratio) or nil
+	if block_width then
+		width = math.max(pad + TEXT_OFFSET + 20, block_width)
+	end
 	local lines, spans, line_map, regions = {}, {}, {}, {}
 	---@type table<integer, integer> 1-based row -> nesting level, for `opts.block`.
 	local row_depth = {}
@@ -264,7 +271,8 @@ function M.render(node, width, opts)
 			local block_lines, block_spans, region = opts.render_editor({ indent = text_col, width = width })
 			append_composer(block_lines, block_spans, region, current, root, depth)
 		else
-			local wrap_width = math.max(10, math.floor((width - text_col) * ratio))
+			local wrap_width = block_width and math.max(10, width - text_col - 1)
+				or math.max(10, math.floor((width - text_col) * ratio))
 			local raw = current.body_lines or {}
 			local visible = raw
 			local truncated = current.max_lines ~= nil and #raw > current.max_lines
