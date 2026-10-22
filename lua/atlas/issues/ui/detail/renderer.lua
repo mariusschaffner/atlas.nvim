@@ -142,8 +142,6 @@ local function render_header(issue, gl, width)
 		progress_text = progress_text,
 	}
 
-	local lines, spans, regions = header.render(data, width)
-
 	-- Narrow-terminal fallback: fold the sidebar's information into one dim
 	-- meta strip under the title/chip row instead of silently dropping it
 	-- (DESIGN-detail-view.md §1's "Narrow terminals" collapse).
@@ -164,13 +162,10 @@ local function render_header(issue, gl, width)
 		table.insert(parts, due and ("due " .. due) or "due -")
 		local branches = state.linked_branches
 		table.insert(parts, (type(branches) == "table" and #branches > 0) and branches[1].name or "no branch")
-		local pad = "    "
-		local strip = pad .. table.concat(parts, " · ")
-		table.insert(lines, strip)
-		table.insert(spans, { line = #lines - 1, start_col = #pad, end_col = #strip, hl_group = "AtlasTextMuted" })
+		data.meta_strip = table.concat(parts, " · ")
 	end
 
-	return lines, spans, regions
+	return header.render(data, width, { boxed = true })
 end
 
 --- The label highlight for a sidebar field: orange while it's the one
