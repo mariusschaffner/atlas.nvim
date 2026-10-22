@@ -80,6 +80,7 @@
 ---@field edit_comment (fun(issue: Issue, comment: IssueComment, content: string, on_done: fun(comment: IssueComment|nil, err: string|nil)): { cancel: fun() }|nil)|nil
 ---@field delete_comment (fun(issue: Issue, comment: IssueComment, on_done: fun(ok: boolean, err: string|nil)): { cancel: fun() }|nil)|nil
 ---@field add_reaction (fun(issue: Issue, item: IssueConversationItem, key: string, on_done: fun(ok: boolean, err: string|nil)): { cancel: fun() }|nil)|nil
+---@field set_thread_resolved (fun(issue: Issue, root: IssueComment, resolved: boolean, on_done: fun(ok: boolean, err: string|nil)): { cancel: fun() }|nil)|nil
 ---@field reaction_options IssueReactionOption[]|nil
 ---@field comment_completion (fun(context: AtlasIssuesCommentCompletionContext): AtlasMarkdownCompletionProvider|nil)|nil
 

@@ -122,6 +122,9 @@
 ---@field children IssueComment[]|nil
 ---@field reactions table<string, number>|nil
 ---@field deleted boolean|nil
+---@field resolvable boolean|nil Thread root only: the thread can be resolved.
+---@field resolved boolean|nil Thread root only.
+---@field resolved_by IssueUser|nil Thread root only.
 ---@field _raw table|nil
 
 --------------------------------------------------------------------------------
@@ -148,6 +151,7 @@
 ---@field body_hl IssueActivityBodyHlFn|nil
 ---@field deleted boolean|nil
 ---@field always_render boolean|nil
+---@field icon_name string|nil Provider's event-type icon hint (GitLab `systemNoteIconName`, e.g. "user", "pencil", "list-task").
 
 ---@alias IssueConversationItemKind "comment"|"activity"
 

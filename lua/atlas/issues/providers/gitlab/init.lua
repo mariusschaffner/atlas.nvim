@@ -171,6 +171,7 @@ local M = {
 			edit_comment = notes_api.edit_comment,
 			delete_comment = notes_api.delete_comment,
 			add_reaction = notes_api.add_reaction,
+			set_thread_resolved = notes_api.set_thread_resolved,
 		},
 		notifications = notifications_api,
 		actions = actions,

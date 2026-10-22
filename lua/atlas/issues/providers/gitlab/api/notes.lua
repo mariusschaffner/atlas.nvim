@@ -11,11 +11,15 @@ local GQL_DISCUSSIONS = [[
 				discussions {
 					nodes {
 						id
+						resolvable
+						resolved
+						resolvedBy { username name }
 						notes {
 							nodes {
 								id
 								body
 								system
+								systemNoteIconName
 								createdAt
 								updatedAt
 								author { username name }
@@ -90,6 +94,7 @@ local function map_discussions(discussions)
 		local discussion = json.safe_table(discussion_value)
 		local discussion_id = id_tail(discussion.id)
 		local first_id = nil
+		local resolvable = discussion.resolvable == true
 		for _, raw in ipairs(json.safe_table(json.safe_table(discussion.notes).nodes)) do
 			if raw.system == true then
 				local entry = normalizer.to_activity_from_note(raw)
@@ -99,6 +104,12 @@ local function map_discussions(discussions)
 			else
 				local comment = normalizer.to_comment_from_note(raw, first_id, discussion_id)
 				if comment then
+					-- Resolution is a thread-level property; it lives on the root.
+					if first_id == nil and resolvable then
+						comment.resolvable = true
+						comment.resolved = discussion.resolved == true
+						comment.resolved_by = normalizer.to_user(discussion.resolvedBy)
+					end
 					first_id = first_id or comment.id
 					table.insert(comments, comment)
 				end
@@ -280,6 +291,59 @@ function M.delete_comment(issue, comment, on_done)
 		path = path,
 		iid = iid,
 		note_id = note_id,
+	})
+end
+
+local GQL_TOGGLE_RESOLVE = [[
+	mutation ($id: DiscussionID!, $resolve: Boolean!) {
+		discussionToggleResolve(input: { id: $id, resolve: $resolve }) {
+			errors
+			discussion { resolved }
+		}
+	}
+]]
+
+--- Resolves/unresolves a thread. Issue threads have no REST resolve
+--- endpoint (only merge request discussions do), so this goes through the
+--- GraphQL `discussionToggleResolve` mutation.
+---@param issue Issue
+---@param root IssueComment Thread root (carries the discussion id).
+---@param resolved boolean
+---@param on_done fun(ok: boolean, err: string|nil)
+---@return { cancel: fun() }|nil
+function M.set_thread_resolved(issue, root, resolved, on_done)
+	local path, iid = normalizer.parse_key(tostring(issue.key or ""))
+	if path == "" or iid == nil then
+		on_done(false, "Invalid issue key")
+		return nil
+	end
+	local discussion_id = root._raw and tostring(root._raw.discussion_id or "") or ""
+	if discussion_id == "" then
+		on_done(false, "Missing discussion id")
+		return nil
+	end
+
+	return service.graphql(GQL_TOGGLE_RESOLVE, {
+		id = "gid://gitlab/Discussion/" .. discussion_id,
+		resolve = resolved,
+	}, function(data, err)
+		if err then
+			on_done(false, err)
+			return
+		end
+		local payload = json.safe_table(json.safe_table(data).discussionToggleResolve)
+		local errors = json.safe_table(payload.errors)
+		if #errors > 0 then
+			on_done(false, tostring(errors[1]))
+			return
+		end
+		service.delete_memory_cache(discussions_cache_key(path, iid))
+		on_done(true, nil)
+	end, {
+		action = resolved and "Resolve discussion (GQL)" or "Reopen discussion (GQL)",
+		path = path,
+		iid = iid,
+		discussion_id = discussion_id,
 	})
 end
 

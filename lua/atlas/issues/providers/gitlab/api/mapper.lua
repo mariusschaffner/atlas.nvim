@@ -277,6 +277,7 @@ function M.to_activity_from_note(raw)
 		actor = M.to_user(raw.author),
 		date = json.safe_str(raw.createdAt) or json.safe_str(raw.created_at),
 		label = body,
+		icon_name = json.safe_str(raw.systemNoteIconName),
 	}
 end
 
