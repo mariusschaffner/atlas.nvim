@@ -8,11 +8,14 @@ local sidebar = require("atlas.issues.ui.detail.components.sidebar")
 local avatar = require("atlas.ui.components.avatar")
 local progress_bar = require("atlas.ui.components.progress_bar")
 local markdown_lines = require("atlas.ui.components.markdown_lines")
+local tabs = require("atlas.ui.components.tabs")
 local state = require("atlas.issues.ui.detail.state")
 local detail_ui = require("atlas.ui.detail")
 local inline_edit = require("atlas.ui.inline_edit")
+local inline_field_edit = require("atlas.ui.inline_field_edit")
 local highlights = require("atlas.ui.shared.highlights")
 local conversation_state = require("atlas.issues.ui.detail.tabs.conversation.state")
+local presentation = require("atlas.issues.ui.presentation")
 local resolver = require("atlas.core.keymaps")
 
 local ns = vim.api.nvim_create_namespace("atlas.issues.provider_detail")
@@ -166,12 +169,6 @@ local function render_header(issue, gl, width)
 		table.insert(lines, strip)
 		table.insert(spans, { line = #lines - 1, start_col = #pad, end_col = #strip, hl_group = "AtlasTextMuted" })
 	end
-
-	-- Full-width divider, the header/body separator (matches the mockup's
-	-- header `border-bottom`, spanning the entire width -- unindented, unlike
-	-- every line above it).
-	table.insert(lines, string.rep("─", width))
-	table.insert(spans, { line = #lines - 1, line_hl_group = "AtlasBorder" })
 
 	return lines, spans, regions
 end
@@ -398,8 +395,71 @@ local function render_sidebar(gl, width)
 	return lines, spans, regions
 end
 
+--- Whether the description field (the "overview" tab's content) can be
+--- edited right now -- drives the content box's editable border color, same
+--- signal `register_edit_keymap` uses to decide whether "i" does anything.
+---@return boolean
+local function description_editable()
+	local core = state.provider and state.provider.capabilities.core
+	return state.current_tab == "overview"
+		and core ~= nil
+		and core.update_description ~= nil
+		and presentation.is_open(state.current_issue)
+end
+
+--- The Activity tab's own border color -- blue by default whenever the tab
+--- supports adding a top-level comment (mirrors the description tab always
+--- being blue while editable), escalating to orange only once actively
+--- typing a new top-level comment. A reply keeps its own comment box's
+--- border as the "is this actively being edited" signal, so the global
+--- border just stays blue for those. Grey on a closed issue -- only this
+--- outer pane border, not individual comment boxes (still blue when
+--- selected/active; see `border_hl` in the conversation renderer).
+---@return string|nil
+local function conversation_border_hl()
+	if state.current_tab ~= "conversation" then
+		return nil
+	end
+	if not presentation.is_open(state.current_issue) then
+		return "AtlasBorder"
+	end
+	local comments = state.provider and state.provider.capabilities.comments
+	if comments == nil or comments.add_comment == nil then
+		return nil
+	end
+	local composing = conversation_state.composing
+	if composing ~= nil and composing.kind == "add" and inline_field_edit.is_active() then
+		return "AtlasFieldBoxBorderEditing"
+	end
+	return "AtlasFieldBoxBorderEditable"
+end
+
+--- The content box's current border color -- reused for both the actual
+--- border (`detail_ui.set_content_border`) and the title's non-label
+--- characters, so the "-" separators/leading dash match the border instead
+--- of sitting at the default `FloatTitle` color.
+---@return string
+local function content_border_hl()
+	return conversation_border_hl() or (description_editable() and "AtlasFieldBoxBorderEditable" or "AtlasBorder")
+end
+
+--- Whether the Activity tab's "[i] - Add" footer hint should show: only on
+--- that tab, only when the provider supports adding a top-level comment, and
+--- not while a comment is already being inline-edited/composed (that box
+--- already shows its own Save/Cancel hint on its own border).
+---@return boolean
+local function conversation_addable()
+	local comments = state.provider and state.provider.capabilities.comments
+	return state.current_tab == "conversation"
+		and comments ~= nil
+		and comments.add_comment ~= nil
+		and not inline_field_edit.is_active()
+		and presentation.is_open(state.current_issue)
+end
+
 ---@param tab_items IssuesDetailTabDefinition[]
----@return { key: string, label: string }[] Icon-less -- the borderless in-buffer tab bar doesn't show icons.
+---@param active_tab string
+---@return { key: string, label: string, icon: AtlasIconStyle|nil }[]
 local function labeled_tabs(tab_items)
 	local out = {}
 	for _, tab in ipairs(tab_items) do
@@ -409,38 +469,24 @@ local function labeled_tabs(tab_items)
 		elseif tab.key == "merge_requests" and type(state.linked_merge_requests) == "table" then
 			label = label .. " " .. tostring(#state.linked_merge_requests)
 		end
-		table.insert(out, { key = tab.key, label = label })
+		table.insert(out, { key = tab.key, label = label, icon = tab.icon })
 	end
 	return out
 end
 
----@param text string
----@return string
-local function escape_statusline(text)
-	return (tostring(text):gsub("%%", "%%%%"))
-end
-
---- The tab row, rendered via the content window's native `winbar` (a real
---- single-line window chrome row, like a statusline) rather than as plain
---- buffer content -- the borderless layout has no border to host a native
---- title on, and prepending buffer lines would shift every tab module's own
---- line-indexed state (`state.line_map`, the conversation tab's comment
---- regions, the overview tab's task-line index) out from under them. `winbar`
---- sidesteps that entirely: zero buffer lines consumed, tab modules keep
---- rendering from line 0 exactly as before.
 ---@param tab_items IssuesDetailTabDefinition[]
 ---@param active_tab string
----@return string winbar
-local function render_tab_winbar(tab_items, active_tab)
+---@return { [1]: string, [2]: string }[]
+function M.title_chunks(tab_items, active_tab)
 	if #tab_items <= 1 then
-		return ""
+		return {}
 	end
-	local left = {}
-	for _, tab in ipairs(labeled_tabs(tab_items)) do
-		local hl = tab.key == active_tab and "AtlasDetailTabActiveUnderline" or "AtlasTextMuted"
-		table.insert(left, string.format("%%#%s# %s ", hl, escape_statusline(tab.label)))
-	end
-	return table.concat(left) .. "%=" .. "%#AtlasTextMuted# ⇥ switch tab "
+	return tabs.title_chunks(labeled_tabs(tab_items), active_tab, {
+		active_hl = "AtlasDetailTabActive",
+		inactive_hl = "AtlasTextMuted",
+		gap = " - ",
+		border_hl = content_border_hl(),
+	})
 end
 
 ---@param tab_items IssuesDetailTabDefinition[]
@@ -491,17 +537,44 @@ function M.render(tab_items, get_tab_module)
 		state.sidebar_regions = {}
 	end
 
-	pcall(vim.api.nvim_set_option_value, "winbar", render_tab_winbar(tab_items, state.current_tab), {
-		win = win,
-		scope = "local",
-	})
+	detail_ui.set_content_title(M.title_chunks(tab_items, state.current_tab))
+
+	-- Leading "─ " mirrors the top title's own border-dash prefix
+	-- (tabs.title_chunks), so the hint aligns with the title above it.
+	local footer_chunks
+	if inline_edit.is_active(buf) then
+		local hl = "AtlasFieldBoxBorderEditing"
+		footer_chunks = {
+			{ "─ ", hl },
+			{ utils.field_hint_label("ui.submit", "Save", true), hl },
+			{ " ── ", hl },
+			{ utils.field_hint_label("ui.field_edit.close", "Cancel", true), hl },
+			{ " ", hl },
+		}
+	elseif description_editable() then
+		local hl = content_border_hl()
+		footer_chunks = {
+			{ "─ ", hl },
+			{ utils.field_hint_label("ui.edit_description", "Edit", true), hl },
+			{ " ", hl },
+		}
+	elseif conversation_addable() then
+		local hl = content_border_hl()
+		footer_chunks = {
+			{ "─ ", hl },
+			{ utils.field_hint_label("issues.add_comment", "Add", true), "AtlasFooterInfo" },
+			{ " ", hl },
+		}
+	end
+	detail_ui.set_content_footer(footer_chunks)
 
 	if inline_edit.is_active(buf) then
-		-- Editing owns the content buffer directly (inline_edit swapped it to
-		-- a raw, modifiable textarea) -- don't let an unrelated re-render
-		-- (spinner tick, header update, ...) clobber the in-progress edit.
+		-- Editing owns the border color (AtlasFieldBoxBorderEditing) until it
+		-- finishes; don't let an unrelated re-render (spinner tick, header
+		-- update, ...) stomp it back to the merely-editable color mid-edit.
 		return
 	end
+	detail_ui.set_content_border(content_border_hl())
 
 	local width = vim.api.nvim_win_get_width(win)
 	local lines = {}

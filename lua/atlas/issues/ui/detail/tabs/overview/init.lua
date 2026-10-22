@@ -61,8 +61,7 @@ end
 
 ---@param win integer
 ---@param buf integer
----@param edit_key string|nil
-local function update_cursor_hint(win, buf, edit_key)
+local function update_cursor_hint(win, buf)
 	vim.api.nvim_buf_clear_namespace(buf, hint_ns, 0, -1)
 	if not vim.api.nvim_win_is_valid(win) then
 		return
@@ -81,11 +80,8 @@ local function update_cursor_hint(win, buf, edit_key)
 
 	-- `right_align` floats the hint to the content window's right edge
 	-- (DESIGN-detail-view.md §5), regardless of the task line's own length.
-	-- The edit key is resolved live (never hardcoded) so this stays correct
-	-- if the user rebinds `ui.edit_description`.
-	local text = edit_key and string.format("x toggle · %s edit", edit_key) or "x toggle"
 	vim.api.nvim_buf_set_extmark(buf, hint_ns, cursor_line, 0, {
-		virt_text = { { text, "AtlasTextMutedItalic" } },
+		virt_text = { { "x toggle", "AtlasTextMutedItalic" } },
 		virt_text_pos = "right_align",
 	})
 end
@@ -234,14 +230,13 @@ function M.activate(buf, refresh)
 	register_toggle_keymap(buf, refresh)
 
 	local win = detail.win
-	local edit_key = (keymaps.resolve("ui.edit_description") or {})[1]
 	local group = vim.api.nvim_create_augroup("AtlasIssuesDetailOverviewHint" .. tostring(buf), { clear = true })
 	vim.api.nvim_create_autocmd("CursorMoved", {
 		group = group,
 		buffer = buf,
 		callback = function()
 			if win and vim.api.nvim_win_is_valid(win) then
-				update_cursor_hint(win, buf, edit_key)
+				update_cursor_hint(win, buf)
 			end
 		end,
 	})

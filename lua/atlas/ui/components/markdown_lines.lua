@@ -120,7 +120,7 @@ function M.render(text, opts)
 		elseif checked ~= nil then
 			local glyph = checked and "✓" or "○"
 			local glyph_hl = checked and "AtlasProgressFill" or "AtlasKeyHint"
-			local text_hl = checked and "AtlasTextDone" or "AtlasTextBrightRegular"
+			local text_hl = checked and "AtlasTextDone" or "AtlasTextBright"
 			local rendered = string.format("%s %s", glyph, rest or "")
 			local line_no = #lines
 			table.insert(lines, rendered)
