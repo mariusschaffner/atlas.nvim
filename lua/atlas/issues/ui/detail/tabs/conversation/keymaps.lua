@@ -438,7 +438,7 @@ function M.attach_dock(buf, refresh)
 	local user = require("atlas.issues.state").current_user
 	dock.attach({
 		author = user and user.display_name or nil,
-		focus_hints = { { action_id = "issues.comment", label = "focus" } },
+		focus_hints = { { action_id = "issues.add_comment", label = "Comment" } },
 		hints = {
 			{ action_id = "ui.submit", label = "post" },
 		},
