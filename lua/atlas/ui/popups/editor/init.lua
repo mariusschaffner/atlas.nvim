@@ -116,6 +116,74 @@ local function limit_preview(preview)
 	return { lines = lines, highlights = highlights }
 end
 
+--- Wires a markdown completion provider (e.g. @mention completion) into an
+--- arbitrary insert-mode buffer: `completefunc` plus an auto-popup on the
+--- provider's trigger key. Shared by this editor and the inline comment
+--- composer (`atlas.ui.components.composer.session`).
+---@param buf integer
+---@param completion AtlasMarkdownCompletionProvider
+function M.attach_completion(buf, completion)
+	completion_provider_by_buf[buf] = completion
+	vim.api.nvim_set_option_value("completeopt", "menu,menuone,noselect,noinsert", { buf = buf })
+	vim.api.nvim_set_option_value("completefunc", "v:lua.__atlas_markdown_complete", { buf = buf })
+
+	local function open_completion_popup()
+		local provider = completion_provider_by_buf[buf]
+		if provider == nil then
+			return
+		end
+
+		if not vim.api.nvim_buf_is_valid(buf) or vim.api.nvim_get_current_buf() ~= buf then
+			return
+		end
+		if vim.fn.mode() ~= "i" or vim.fn.pumvisible() == 1 then
+			return
+		end
+
+		local cursor = vim.api.nvim_win_get_cursor(0)
+		local cursor_row = tonumber(cursor[1]) or 1
+		local cursor_col = tonumber(cursor[2]) or 0
+		local line = vim.api.nvim_buf_get_lines(buf, cursor_row - 1, cursor_row, false)[1] or ""
+		if type(line) ~= "string" then
+			return
+		end
+
+		local before = line:sub(1, cursor_col)
+		local start = provider.find_start(before, line, cursor_col)
+		if type(start) ~= "number" then
+			return
+		end
+
+		local base = before:sub(start + 1)
+		local items = provider.complete(tostring(base or ""), line, cursor_col)
+		if type(items) ~= "table" or #items == 0 then
+			return
+		end
+
+		vim.fn.complete(start + 1, items)
+	end
+
+	local trigger = completion.trigger
+	if type(trigger) == "string" and trigger ~= "" then
+		vim.keymap.set("i", trigger, function()
+			local provider = completion_provider_by_buf[buf]
+			if provider == nil then
+				return trigger
+			end
+			vim.schedule(open_completion_popup)
+			return trigger
+		end, { buffer = buf, silent = true, nowait = true, expr = true })
+	end
+
+	vim.api.nvim_create_autocmd("BufWipeout", {
+		buffer = buf,
+		once = true,
+		callback = function()
+			completion_provider_by_buf[buf] = nil
+		end,
+	})
+end
+
 ---@param opts AtlasMarkdownEditorOptions
 ---@return integer|nil, integer|nil
 function M.open(opts)
@@ -227,67 +295,8 @@ function M.open(opts)
 		reveal_preview()
 	end
 
-	local completion = opts.completion
-	if completion ~= nil then
-		completion_provider_by_buf[buf] = completion
-		vim.api.nvim_set_option_value("completeopt", "menu,menuone,noselect,noinsert", { buf = buf })
-		vim.api.nvim_set_option_value("completefunc", "v:lua.__atlas_markdown_complete", { buf = buf })
-
-		local function open_completion_popup()
-			local provider = completion_provider_by_buf[buf]
-			if provider == nil then
-				return
-			end
-
-			if not vim.api.nvim_buf_is_valid(buf) or vim.api.nvim_get_current_buf() ~= buf then
-				return
-			end
-			if vim.fn.mode() ~= "i" or vim.fn.pumvisible() == 1 then
-				return
-			end
-
-			local cursor = vim.api.nvim_win_get_cursor(0)
-			local cursor_row = tonumber(cursor[1]) or 1
-			local cursor_col = tonumber(cursor[2]) or 0
-			local line = vim.api.nvim_buf_get_lines(buf, cursor_row - 1, cursor_row, false)[1] or ""
-			if type(line) ~= "string" then
-				return
-			end
-
-			local before = line:sub(1, cursor_col)
-			local start = provider.find_start(before, line, cursor_col)
-			if type(start) ~= "number" then
-				return
-			end
-
-			local base = before:sub(start + 1)
-			local items = provider.complete(tostring(base or ""), line, cursor_col)
-			if type(items) ~= "table" or #items == 0 then
-				return
-			end
-
-			vim.fn.complete(start + 1, items)
-		end
-
-		local trigger = completion.trigger
-		if type(trigger) == "string" and trigger ~= "" then
-			vim.keymap.set("i", trigger, function()
-				local provider = completion_provider_by_buf[buf]
-				if provider == nil then
-					return trigger
-				end
-				vim.schedule(open_completion_popup)
-				return trigger
-			end, { buffer = buf, silent = true, nowait = true, expr = true })
-		end
-
-		vim.api.nvim_create_autocmd("BufWipeout", {
-			buffer = buf,
-			once = true,
-			callback = function()
-				completion_provider_by_buf[buf] = nil
-			end,
-		})
+	if opts.completion ~= nil then
+		M.attach_completion(buf, opts.completion)
 	end
 
 	local group = vim.api.nvim_create_augroup("AtlasMarkdownEditor" .. buf, { clear = true })
