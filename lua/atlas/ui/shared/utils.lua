@@ -432,6 +432,70 @@ function M.format_datetime_short(iso)
 	return string.format("%s:%s - %s.%s.%s", hh, mm, d, mo, y:sub(3, 4))
 end
 
+--- Parses an ISO-8601 timestamp ("2026-10-21T05:43:12Z", optionally with
+--- fractional seconds and a "+02:00"-style offset) into a UTC epoch.
+---@param iso string|nil
+---@return integer|nil
+function M.iso_epoch(iso)
+	if type(iso) ~= "string" or iso == "" then
+		return nil
+	end
+	local y, mo, d, hh, mm, ss = iso:match("^(%d%d%d%d)%-(%d%d)%-(%d%d)T(%d%d):(%d%d):(%d%d)")
+	if y == nil then
+		return nil
+	end
+	local epoch = utc_epoch(tonumber(y), tonumber(mo), tonumber(d), tonumber(hh), tonumber(mm), tonumber(ss))
+	local sign, off_h, off_m = iso:match("([+-])(%d%d):?(%d%d)$")
+	if sign then
+		local offset = tonumber(off_h) * 3600 + tonumber(off_m) * 60
+		epoch = sign == "+" and epoch - offset or epoch + offset
+	end
+	return epoch
+end
+
+--- Local wall-clock "HH:MM" for an ISO timestamp (the other `format_*`
+--- helpers print the raw UTC digits).
+---@param iso string|nil
+---@return string "" when `iso` doesn't parse
+function M.local_time(iso)
+	local epoch = M.iso_epoch(iso)
+	return epoch and os.date("%H:%M", epoch) or ""
+end
+
+--- Local calendar day ("YYYY-MM-DD") an ISO timestamp falls on, for
+--- grouping a timeline by day.
+---@param iso string|nil
+---@return string "" when `iso` doesn't parse
+function M.local_day_key(iso)
+	local epoch = M.iso_epoch(iso)
+	return epoch and os.date("%Y-%m-%d", epoch) or ""
+end
+
+--- Day-divider label: "TODAY · 22.10.2026", "YESTERDAY · 21.10.2026", or
+--- just "08.10.2026" for anything older/newer.
+---@param iso string|nil
+---@param now integer|nil Epoch to compare against (default `os.time()`).
+---@return string "" when `iso` doesn't parse
+function M.day_label(iso, now)
+	local epoch = M.iso_epoch(iso)
+	if epoch == nil then
+		return ""
+	end
+	now = now or os.time()
+	local day = os.date("%Y-%m-%d", epoch)
+	local date = os.date("%d.%m.%Y", epoch)
+	if day == os.date("%Y-%m-%d", now) then
+		return "TODAY · " .. date
+	end
+	-- Noon-anchored so a DST shift can't push "yesterday" two days back.
+	local today = os.date("*t", now)
+	local yesterday = os.time({ year = today.year, month = today.month, day = today.day - 1, hour = 12 })
+	if day == os.date("%Y-%m-%d", yesterday) then
+		return "YESTERDAY · " .. date
+	end
+	return date
+end
+
 ---@param bytes number|string|nil
 ---@return string
 function M.human_size(bytes)

@@ -36,4 +36,14 @@ function M.render(name, identifier_hl)
 	}
 end
 
+--- Renders just the initials as a background-colored chip, e.g. " MS " in
+--- the person's own stable color (timeline comment headers, composers).
+---@param name string|nil
+---@return string text
+---@return string hl_group
+function M.chip(name)
+	local hl = require("atlas.ui.shared.highlights").dynamic_for_bg(name) or "AtlasChipActive"
+	return " " .. M.initials(name) .. " ", hl
+end
+
 return M

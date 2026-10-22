@@ -89,6 +89,48 @@ local groups = {
 	-- (DESIGN-milestone-view.md §8/§6's "Goal block": subtle background,
 	-- yellow icon, bright text).
 	AtlasBgHighlight = { bg = "#1f2335" },
+
+	-- Timeline (day-grouped activity feed: issue Activity tab, reusable by the
+	-- milestone view / review threads).
+	AtlasTimelineDay = { fg = "#7f87ad" },
+	AtlasTimelineRule = { fg = "#2f3549" },
+	AtlasTimelineTime = { fg = "#7f87ad" },
+	AtlasTimelineActor = { fg = "#c0caf5", bold = true },
+	AtlasTimelineVerb = { fg = "#7f87ad" },
+	AtlasTimelineObject = { fg = "#c0caf5" },
+	AtlasTimelineRef = { fg = "#7dcfff", bold = true },
+	AtlasTimelineGuide = { fg = "#3b4261" },
+	AtlasTimelineGuideActive = { fg = "#e0af68" },
+	AtlasTimelineBody = { fg = "#e6eaff" },
+	AtlasTimelineIconAssign = { fg = "#bb9af7", bold = true },
+	AtlasTimelineIconMove = { fg = "#7dcfff", bold = true },
+	AtlasTimelineIconEdit = { fg = "#e0af68" },
+	AtlasTimelineIconTask = { fg = "#9ece6a", bold = true },
+	AtlasTimelineIconLabel = { fg = "#bb9af7" },
+	AtlasTimelineIconState = { fg = "#9ece6a" },
+	AtlasTimelineIconDefault = { fg = "#7f87ad" },
+	AtlasBadgeYou = { fg = "#7aa2f7", bg = "#24283b" },
+	AtlasBadgeUnresolved = { fg = "#e0af68" },
+	AtlasBadgeResolved = { fg = "#9ece6a" },
+	AtlasBadgeEditing = { fg = "#e0af68", bold = true },
+
+	-- Inline composer (reply/edit/new comment).
+	AtlasComposerBg = { bg = "#1f2335" },
+	AtlasComposerBar = { fg = "#e0af68", bg = "#1f2335" },
+	AtlasComposerTitle = { fg = "#e0af68", bg = "#1f2335", bold = true },
+	AtlasComposerText = { fg = "#e6eaff", bg = "#1f2335" },
+	AtlasComposerPlaceholder = { fg = "#565f89", bg = "#1f2335", italic = true },
+	AtlasComposerKey = { fg = "#e0af68", bg = "#1f2335" },
+	AtlasComposerHintLabel = { fg = "#7f87ad", bg = "#1f2335" },
+	AtlasComposerDirty = { fg = "#e0af68", bg = "#1f2335" },
+	AtlasComposerChip = { fg = "#c0caf5", bg = "#2f3549", bold = true },
+	AtlasComposerBorder = { fg = "#3b4261" },
+	AtlasComposerBorderActive = { fg = "#e0af68" },
+	AtlasComposerPrompt = { fg = "#7f87ad" },
+	AtlasComposerPromptPlaceholder = { fg = "#7f87ad", italic = true },
+	AtlasModeInsert = { fg = "#1a1b26", bg = "#e0af68", bold = true },
+	AtlasModeNormal = { fg = "#1a1b26", bg = "#7aa2f7", bold = true },
+	AtlasKeyHintLabel = { fg = "#7f87ad" },
 }
 
 function M.setup()
