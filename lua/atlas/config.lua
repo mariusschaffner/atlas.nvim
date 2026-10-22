@@ -191,7 +191,6 @@ M.options = {
 				edit = "gE",
 				react = "gr",
 				submit_resolve = "<C-r>",
-				full_buffer = "<C-e>",
 				toggle_resolved = "gX",
 			},
 			edit_description = "i",

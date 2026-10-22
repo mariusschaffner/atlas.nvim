@@ -17,6 +17,18 @@ local mode_badge = require("atlas.ui.components.mode_badge")
 local BAR = "▎"
 local BG = "AtlasComposerBg"
 
+--- Background-free stand-ins for the tinted composer groups (`transparent`).
+local TRANSPARENT = {
+	AtlasComposerBg = "Normal",
+	AtlasComposerBar = "AtlasTimelineGuideActive",
+	AtlasComposerTitle = "AtlasTimelineGuideActive",
+	AtlasComposerText = "AtlasTimelineBody",
+	AtlasComposerPlaceholder = "AtlasTextMutedItalic",
+	AtlasComposerKey = "AtlasKeyHint",
+	AtlasComposerHintLabel = "AtlasKeyHintLabel",
+	AtlasComposerDirty = "AtlasKeyHint",
+}
+
 ---@class AtlasComposerFrameOptions
 ---@field indent integer Display column the frame starts at.
 ---@field width integer Total width; every row's background runs to it.
@@ -32,6 +44,7 @@ local BG = "AtlasComposerBg"
 ---@field hints AtlasKeyHintSegment[]|nil
 ---@field dirty boolean|nil Shows "● unsaved" on the footer's right.
 ---@field separator boolean|nil Draws a rule between the text rows and the footer.
+---@field transparent boolean|nil No tinted background (e.g. the docked composer, which has its own border).
 
 ---@param text_lines string[]|nil
 ---@return boolean
@@ -142,6 +155,11 @@ function M.render(opts)
 	end
 	finish_row(footer)
 
+	if opts.transparent then
+		for _, span in ipairs(spans) do
+			span.hl_group = TRANSPARENT[span.hl_group] or span.hl_group
+		end
+	end
 	return lines,
 		spans,
 		{

@@ -127,7 +127,6 @@ function M.reply_hints(root)
 		table.insert(hints, { action_id = "ui.comments.submit_resolve", label = "post & resolve" })
 	end
 	table.insert(hints, { action_id = "ui.field_edit.close", label = "cancel" })
-	table.insert(hints, { action_id = "ui.comments.full_buffer", label = "full buffer" })
 	return hints
 end
 
@@ -135,7 +134,6 @@ end
 M.EDIT_HINTS = {
 	{ action_id = "ui.submit", label = "save" },
 	{ action_id = "ui.field_edit.close", label = "discard" },
-	{ action_id = "ui.comments.full_buffer", label = "full buffer" },
 }
 
 ---@return string|nil

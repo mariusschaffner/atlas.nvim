@@ -89,8 +89,8 @@ local function close_hint()
 		return nil
 	end
 	return {
-		{ keyhints.format_key(keys[1]), "AtlasComposerKey" },
-		{ " cancel", "AtlasComposerHintLabel" },
+		{ keyhints.format_key(keys[1]), "AtlasKeyHint" },
+		{ " cancel", "AtlasKeyHintLabel" },
 	}
 end
 
@@ -103,6 +103,7 @@ local function render_expanded(width)
 		indent = 0,
 		width = width,
 		bar = false,
+		transparent = true,
 		header_left = {
 			{ chip, chip_hl },
 			{ "  ", nil },
@@ -134,13 +135,14 @@ local function interior_rows()
 end
 
 --- Total rows the dock covers at the bottom of the content window
---- (interior + its rounded border), 0 when no dock is attached.
+--- (interior + its top border; its bottom border sits on the pane's own),
+--- 0 when no dock is attached.
 ---@return integer
 function M.total_height()
 	if active == nil then
 		return 0
 	end
-	return interior_rows() + 2
+	return interior_rows() + 1
 end
 
 ---@return boolean
@@ -161,8 +163,7 @@ local function redraw()
 	detail_ui.set_content_dock({
 		buf = active.buf,
 		height = interior_rows(),
-		winhighlight = active.expanded
-				and "Normal:AtlasComposerBg,NormalFloat:AtlasComposerBg,FloatBorder:AtlasComposerBorderActive"
+		winhighlight = active.expanded and "Normal:Normal,NormalFloat:Normal,FloatBorder:AtlasComposerBorderActive"
 			or "Normal:Normal,NormalFloat:Normal,FloatBorder:AtlasComposerBorder",
 	})
 	local width = dock_width()
@@ -256,6 +257,7 @@ function M.focus(seed_text)
 		region = region,
 		seed_text = seed_text or "",
 		placeholder = opts.placeholder,
+		transparent = true,
 		completion = opts.completion,
 		max_height = 10,
 		extra_keys = opts.extra_keys,

@@ -44,7 +44,6 @@ local M = {}
 ---@field edit? AtlasKeymapValue
 ---@field react? AtlasKeymapValue
 ---@field submit_resolve? AtlasKeymapValue Posts a reply and resolves its thread, from an inline reply composer.
----@field full_buffer? AtlasKeymapValue Moves an inline composer's draft into a whole-tab editor.
 ---@field toggle_resolved? AtlasKeymapValue Resolves/unresolves the comment thread under the cursor (issue Activity tab).
 
 ---@class AtlasUIFieldEditKeymaps
@@ -166,7 +165,6 @@ local M = {}
 ---| "ui.comments.edit"
 ---| "ui.comments.react"
 ---| "ui.comments.submit_resolve"
----| "ui.comments.full_buffer"
 ---| "ui.comments.toggle_resolved"
 ---| "ui.edit_description"
 ---| "ui.field_edit.close"

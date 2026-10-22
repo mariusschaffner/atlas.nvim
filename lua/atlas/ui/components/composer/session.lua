@@ -33,6 +33,7 @@ local DEFAULT_MAX_HEIGHT = 12
 ---@field seed_text string|nil
 ---@field placeholder string|nil
 ---@field max_height integer|nil Cap for `on_layout` growth (default 12).
+---@field transparent boolean|nil No tinted background (matches a `transparent` frame).
 ---@field completion AtlasMarkdownCompletionProvider|nil
 ---@field submit_keys string[]|nil Defaults to the resolved `ui.submit` keys.
 ---@field close_keys string[]|nil Normal-mode cancel; defaults to the resolved `ui.field_edit.close` keys.
@@ -119,7 +120,8 @@ function M.start(opts)
 		breakindent = false,
 		cursorline = false,
 		signcolumn = "no",
-		winhighlight = "Normal:AtlasComposerText,NormalFloat:AtlasComposerText,EndOfBuffer:AtlasComposerText",
+		winhighlight = opts.transparent and "Normal:Normal,NormalFloat:Normal,EndOfBuffer:Normal"
+			or "Normal:AtlasComposerText,NormalFloat:AtlasComposerText,EndOfBuffer:AtlasComposerText",
 	}) do
 		vim.api.nvim_set_option_value(name, value, { win = win, scope = "local" })
 	end
@@ -145,7 +147,7 @@ function M.start(opts)
 		vim.api.nvim_buf_clear_namespace(buf, placeholder_ns, 0, -1)
 		if opts.placeholder and get_text() == "" then
 			vim.api.nvim_buf_set_extmark(buf, placeholder_ns, 0, 0, {
-				virt_text = { { opts.placeholder, "AtlasComposerPlaceholder" } },
+				virt_text = { { opts.placeholder, opts.transparent and "AtlasTextMutedItalic" or "AtlasComposerPlaceholder" } },
 				virt_text_pos = "overlay",
 			})
 		end

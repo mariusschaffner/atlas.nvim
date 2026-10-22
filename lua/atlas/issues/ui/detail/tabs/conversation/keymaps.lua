@@ -188,57 +188,13 @@ local function scroll_to_end()
 	end)
 end
 
----@type fun(buf: integer, refresh: fun(), kind: "reply"|"edit", comment: IssueComment, root: IssueComment, seed_text: string)
-local open_inline_composer
-
---- Hands a draft to the whole-tab editor (`ui.comments.full_buffer`): the
---- Activity tab's buffer becomes one big edit box, like the Description
---- tab's editor. Saving runs `submit`; cancelling hands the (possibly
---- extended) draft back to `reopen`.
----@param buf integer
----@param refresh fun()
----@param draft string
----@param submit fun(text: string, done: fun(ok: boolean, err: string|nil))
----@param reopen fun(text: string)
-local function open_full_buffer(buf, refresh, draft, submit, reopen)
-	local cancelled_text = nil
-	vim.schedule(function()
-		if not vim.api.nvim_buf_is_valid(buf) then
-			return
-		end
-		vim.api.nvim_buf_clear_namespace(buf, hint_ns, 0, -1)
-		-- The dock would sit on top of the editor's last rows.
-		dock.detach()
-		inline_edit.start({
-			buf = buf,
-			text = draft,
-			on_save = function(text, done)
-				submit(vim.trim(text), done)
-			end,
-			on_cancel = function()
-				cancelled_text = table.concat(vim.api.nvim_buf_get_lines(buf, 0, -1, false), "\n")
-			end,
-			on_done = function()
-				M.attach_dock(buf, refresh)
-				refresh_and_follow(refresh)
-				if cancelled_text ~= nil then
-					local text = cancelled_text
-					vim.schedule(function()
-						reopen(text)
-					end)
-				end
-			end,
-		})
-	end)
-end
-
 ---@param buf integer
 ---@param refresh fun()
 ---@param kind "reply"|"edit"
 ---@param comment IssueComment Comment being edited, or the one replied to.
 ---@param root IssueComment Thread root.
 ---@param seed_text string
-open_inline_composer = function(buf, refresh, kind, comment, root, seed_text)
+local function open_inline_composer(buf, refresh, kind, comment, root, seed_text)
 	local issue = detail.current_issue
 	local win = content_win()
 	if issue == nil or win == nil then
@@ -279,19 +235,6 @@ open_inline_composer = function(buf, refresh, kind, comment, root, seed_text)
 	reveal(region)
 
 	local extra_keys = {}
-	local full_keys = resolver.resolve("ui.comments.full_buffer")
-	if full_keys then
-		table.insert(extra_keys, {
-			keys = full_keys,
-			callback = function(session)
-				local draft = session.get_text()
-				session.close()
-				open_full_buffer(buf, refresh, draft, submit, function(text)
-					open_inline_composer(buf, refresh, kind, comment, root, text)
-				end)
-			end,
-		})
-	end
 	local resolve_keys = resolver.resolve("ui.comments.submit_resolve")
 	local comments = comments_capability()
 	if kind == "reply" and resolve_keys and root.resolvable and not root.resolved and comments and comments.set_thread_resolved then
@@ -510,32 +453,15 @@ function M.attach_dock(buf, refresh)
 		return
 	end
 	local user = require("atlas.issues.state").current_user
-	local submit = dock_submit(refresh)
-	local extra_keys = {}
-	local full_keys = resolver.resolve("ui.comments.full_buffer")
-	if full_keys then
-		table.insert(extra_keys, {
-			keys = full_keys,
-			callback = function(session)
-				local draft = session.get_text()
-				session.close()
-				open_full_buffer(buf, refresh, draft, submit, function(text)
-					M.focus_dock(buf, refresh, text)
-				end)
-			end,
-		})
-	end
 	dock.attach({
 		author = user and user.display_name or nil,
 		focus_hints = { { action_id = "issues.comment", label = "focus" } },
 		hints = {
 			{ action_id = "ui.submit", label = "post" },
-			{ action_id = "ui.comments.full_buffer", label = "open in full buffer" },
 		},
 		placeholder = DOCK_PLACEHOLDER,
 		completion = actions.get_completion(issue),
-		extra_keys = extra_keys,
-		on_submit = submit,
+		on_submit = dock_submit(refresh),
 		on_resize = function()
 			refresh()
 			if dock.is_expanded() then

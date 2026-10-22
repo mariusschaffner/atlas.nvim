@@ -453,7 +453,6 @@ keymaps = {
       edit = "e",
       react = "gr",
       submit_resolve = "<C-r>", -- reply composer: post & resolve the thread
-      full_buffer = "<C-e>", -- move a composer draft into a whole-tab editor
       toggle_resolved = "gX", -- resolve/unresolve the thread under the cursor
     },
     toggle_panel = "p",
