@@ -343,27 +343,13 @@
 -- Detail UI
 --------------------------------------------------------------------------------
 
----@class PullsDetailHeaderField
----@field label string
----@field label_hl table[]|nil hl spans {start_col, end_col, hl_group} relative to the label, layered over border_hl
----@field value string|nil
----@field hl string|table[]|nil hl group name, or list of {start_col, end_col, hl_group} relative to the value
----@field editable boolean|nil whether this field can be edited from the detail panel (styled with a distinct border)
----@field border_hl string|nil explicit border color override, e.g. for a title field's open/merged/declined/draft status
----@field kind "toggle"|"text"|nil renders as a compact checkbox line, or a plain unboxed text line
----@field enabled boolean|nil toggle state, only used when kind == "toggle"
-
 ---@class PullsDetailChip
 ---@field label string
 ---@field hl string|nil
 
----@class PullsProviderHeaderFields
----@field assignee PullsDetailHeaderField|nil
----@field labels PullsDetailHeaderField|nil
----@field delete_source_branch PullsDetailHeaderField
-
 ---@class PullsProviderDetail
----@field header_fields (fun(pr: PullRequest, details: PullRequestDetails|nil, loading: boolean): PullsProviderHeaderFields)|nil
+---@field label_chip_hl (fun(hex: string|nil): string)|nil Tinted chip highlight for a label colour.
+---@field label_cap_hl (fun(hex: string|nil): string)|nil Fg-only chip end-cap highlight for a label colour.
 ---@field tabs (fun(): PullsDetailTab[])|nil
 
 ---@class PullsDetailTabModule

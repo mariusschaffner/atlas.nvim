@@ -1,101 +1,21 @@
 ---@type PullsProviderDetail
 local M = {}
 
-local header = require("atlas.pulls.ui.components.header")
 local icons = require("atlas.ui.shared.icons")
 local highlights = require("atlas.ui.shared.highlights")
-local spinner = require("atlas.ui.components.spinner")
-local actions = require("atlas.pulls.providers.gitlab.actions")
-local utils = require("atlas.ui.shared.utils")
-local presentation = require("atlas.pulls.ui.presentation")
 
----@param action_id string
----@return boolean
-local function supports(action_id)
-	for _, action in ipairs(actions.items or {}) do
-		if action.id == action_id then
-			return true
-		end
-	end
-	return false
-end
-
----@param pr PullRequest
----@return PullsDetailHeaderField
-local function remove_source_branch_field(pr)
-	---@cast pr GitLabPullRequest
-	return {
-		label = "Delete source branch",
-		kind = "toggle",
-		enabled = pr.remove_source_branch == true,
-		editable = presentation.is_open_or_draft(pr),
-	}
-end
-
+--- Tinted chip highlight for a label's own colour (sidebar LABELS field).
 ---@param hex string|nil
 ---@return string
-local function label_fg_hl(hex)
-	return highlights.label_fg_hl(hex, "AtlasGLPRLabelFg_", "AtlasChipActive")
+function M.label_chip_hl(hex)
+	return highlights.label_hl(hex, "AtlasGLPRLabelChip_", "AtlasChipActive")
 end
 
----@param details PullRequestDetails|nil
----@param loading boolean
----@return PullsDetailHeaderField
-local function labels_field(details, loading)
-	local editable = supports("edit_labels")
-	local label = utils.field_hint_label("pulls.edit_labels", "Labels", editable)
-
-	if loading then
-		return { id = "labels", label = label, value = spinner.with_text("Loading..."), hl = "AtlasTextMuted", editable = editable }
-	end
-
-	---@cast details GitLabPullRequestDetails
-	local names, spans, cursor = {}, {}, 0
-	for _, item in ipairs(details and details.labels or {}) do
-		local name = tostring(item.name or "")
-		if name ~= "" then
-			table.insert(spans, { start_col = cursor, end_col = cursor + #name, hl_group = label_fg_hl(item.color) })
-			table.insert(names, name)
-			cursor = cursor + #name + 2
-		end
-	end
-
-	if #names == 0 then
-		return { id = "labels", label = label, value = "None", hl = "AtlasTextMuted", editable = editable }
-	end
-
-	return { id = "labels", label = label, value = table.concat(names, ", "), hl = spans, editable = editable }
-end
-
----@param pr PullRequest
----@param details PullRequestDetails|nil
----@param loading boolean
----@return PullsProviderHeaderFields
-function M.header_fields(pr, details, loading)
-	local delete_source_branch = remove_source_branch_field(pr)
-	if details == nil then
-		local assignee = loading and header.loading_field("Assignees") or nil
-		return { assignee = assignee, delete_source_branch = delete_source_branch }
-	end
-	---@cast details GitLabPullRequestDetails
-
-	local logins = {}
-	for _, assignee in ipairs(details.assignees) do
-		local login = tostring(assignee.username or assignee.name or "")
-		if login ~= "" then
-			table.insert(logins, login)
-		end
-	end
-
-	local assignee_field = header.assignee_field(logins)
-	assignee_field.editable = supports("edit_assignees") and presentation.is_open_or_draft(pr)
-	assignee_field.label = utils.field_hint_label("pulls.edit_assignees", assignee_field.label, assignee_field.editable)
-
-	return {
-		assignee = assignee_field,
-		labels = labels_field(details, loading),
-		delete_source_branch = delete_source_branch,
-	}
+--- Fg-only variant of `label_chip_hl`, for a rounded chip's end-cap glyphs.
+---@param hex string|nil
+---@return string
+function M.label_cap_hl(hex)
+	return highlights.label_fg_hl(hex, "AtlasGLPRLabelCap_", "AtlasChipActive")
 end
 
 ---@return PullsDetailTab[]

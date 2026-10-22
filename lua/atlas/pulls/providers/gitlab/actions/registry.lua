@@ -156,9 +156,9 @@ local function edit_assignees(ctx, done)
 		return
 	end
 
-	local header_win = detail_state.header_win
-	local region = detail_state.header_regions and detail_state.header_regions.assignee
-	if header_win == nil or not vim.api.nvim_win_is_valid(header_win) or region == nil then
+	local sidebar_win = require("atlas.ui.detail").sidebar_win()
+	local region = detail_state.sidebar_regions and detail_state.sidebar_regions.assignee
+	if sidebar_win == nil or region == nil then
 		local message = "Assignee field is not visible"
 		notify(ctx, "warn", message)
 		done(nil, message)
@@ -200,7 +200,7 @@ local function edit_assignees(ctx, done)
 		end)
 
 		inline_field_edit.start({
-			anchor_win = header_win,
+			anchor_win = sidebar_win,
 			row = region.row,
 			col = region.col,
 			width = region.width,
@@ -283,9 +283,9 @@ local function edit_labels(ctx, done)
 		return
 	end
 
-	local header_win = detail_state.header_win
-	local region = detail_state.header_regions and detail_state.header_regions.labels
-	if header_win == nil or not vim.api.nvim_win_is_valid(header_win) or region == nil then
+	local sidebar_win = require("atlas.ui.detail").sidebar_win()
+	local region = detail_state.sidebar_regions and detail_state.sidebar_regions.labels
+	if sidebar_win == nil or region == nil then
 		local message = "Labels field is not visible"
 		notify(ctx, "warn", message)
 		done(nil, message)
@@ -306,7 +306,7 @@ local function edit_labels(ctx, done)
 		local completion = labels_completion.for_project(labels_api.list, path)
 
 		inline_field_edit.start({
-			anchor_win = header_win,
+			anchor_win = sidebar_win,
 			row = region.row,
 			col = region.col,
 			width = region.width,
@@ -390,9 +390,9 @@ end
 local function edit_target_branch(ctx, done)
 	local pr = ctx.pr
 
-	local header_win = detail_state.header_win
-	local region = detail_state.header_regions and detail_state.header_regions.target_branch
-	if header_win == nil or not vim.api.nvim_win_is_valid(header_win) or region == nil then
+	local sidebar_win = require("atlas.ui.detail").sidebar_win()
+	local region = detail_state.sidebar_regions and detail_state.sidebar_regions.target_branch
+	if sidebar_win == nil or region == nil then
 		local message = "Target branch field is not visible"
 		notify(ctx, "warn", message)
 		done(nil, message)
@@ -421,7 +421,7 @@ local function edit_target_branch(ctx, done)
 	}
 
 	inline_field_edit.start({
-		anchor_win = header_win,
+		anchor_win = sidebar_win,
 		row = region.row,
 		col = region.col,
 		width = region.width,

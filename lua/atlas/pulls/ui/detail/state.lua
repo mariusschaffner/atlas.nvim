@@ -18,6 +18,7 @@ local request_scope = require("atlas.core.requests")
 ---@field header_win integer|nil
 ---@field header_buf integer|nil
 ---@field header_regions table<string, AtlasFieldBoxRegion>
+---@field sidebar_regions table<string, AtlasFieldBoxRegion> Inline-edit anchors in the sidebar window.
 ---@field provider PullsProvider|nil
 ---@field on_update fun(pr: PullRequest, result: PullsActionResult|nil)|nil
 ---@field requests AtlasRequestScope
@@ -40,6 +41,7 @@ local M = {
 	header_win = nil,
 	header_buf = nil,
 	header_regions = {},
+	sidebar_regions = {},
 	provider = nil,
 	on_update = nil,
 	requests = request_scope.new(),
@@ -64,6 +66,7 @@ function M.reset()
 	M.header_win = nil
 	M.header_buf = nil
 	M.header_regions = {}
+	M.sidebar_regions = {}
 	M.provider = nil
 	M.on_update = nil
 	M.requests.cancel()

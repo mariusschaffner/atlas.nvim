@@ -5,6 +5,7 @@ local state = require("atlas.pulls.ui.detail.state")
 local detail_header = require("atlas.ui.components.detail_header")
 local strip = require("atlas.ui.components.strip")
 local detail_data = require("atlas.pulls.ui.detail.data")
+local detail_sidebar = require("atlas.pulls.ui.detail.sidebar")
 local detail_tabs = require("atlas.pulls.ui.components.tabs")
 local resolver = require("atlas.core.keymaps")
 local spinner = require("atlas.ui.components.spinner")
@@ -16,6 +17,7 @@ local conversation_state = require("atlas.pulls.ui.detail.tabs.conversation.stat
 
 local ns = vim.api.nvim_create_namespace("atlas.provider_detail")
 local header_ns = vim.api.nvim_create_namespace("atlas.provider_detail.header")
+local sidebar_ns = vim.api.nvim_create_namespace("atlas.provider_detail.sidebar")
 
 local PADDING_X = 1
 
@@ -264,6 +266,21 @@ function M.render(tab_items, get_tab_module)
 		utils.apply_spans_clamped(header_buf, header_ns, header_spans)
 		state.header_regions = header_regions
 		detail_ui.resize_header(#header_lines)
+	end
+
+	local sidebar_buf = detail_ui.sidebar_buf()
+	local sidebar_win = sidebar_buf and detail_ui.sidebar_win() or nil
+	if sidebar_buf and sidebar_win then
+		local sidebar_lines, sidebar_spans, sidebar_regions = {}, {}, {}
+		if pr ~= nil then
+			sidebar_lines, sidebar_spans, sidebar_regions =
+				detail_sidebar.render(pr, state.current_details, vim.api.nvim_win_get_width(sidebar_win))
+		end
+		set_lines(sidebar_buf, sidebar_lines)
+		utils.apply_spans_clamped(sidebar_buf, sidebar_ns, sidebar_spans)
+		state.sidebar_regions = sidebar_regions
+	else
+		state.sidebar_regions = {}
 	end
 
 	detail_ui.set_content_title(M.title_chunks(tab_items, state.current_tab))

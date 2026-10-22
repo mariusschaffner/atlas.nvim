@@ -23,10 +23,11 @@ end
 --- Renders a single-line "(XX) Name" value, e.g. for the Assignee field.
 ---@param name string
 ---@param identifier_hl string|nil Highlight group for the "(XX)" circle; defaults to a dynamic per-name color.
+---@param initials_from string|nil Name to take the initials from when it differs from the shown one (e.g. a username shown, the full name's initials).
 ---@return string line
 ---@return AtlasUIHighlight[] highlights Spans with `line = 0`.
-function M.render(name, identifier_hl)
-	local initials = M.initials(name)
+function M.render(name, identifier_hl, initials_from)
+	local initials = M.initials(initials_from or name)
 	local hl = identifier_hl or require("atlas.ui.shared.highlights").dynamic_for(name) or "AtlasTextMuted"
 	local badge = string.format("(%s)", initials)
 	local line = string.format("%s %s", badge, name)
