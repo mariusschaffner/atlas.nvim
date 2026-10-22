@@ -56,16 +56,23 @@ function Factory.new(host, state, actions)
 		return lines
 	end
 
-	---@param comment IssueComment
+	--- Thread-root header chips: where an inline (diff) thread sits, then its
+	--- resolved state.
+	---@param comment AtlasActivityComment
 	---@return AtlasTimelineEventSegment[]
 	local function thread_badges(comment)
-		if not comment.resolvable then
-			return {}
+		local badges = {}
+		if comment.context then
+			table.insert(badges, { comment.context, "AtlasTextMuted" })
 		end
-		if comment.resolved then
-			return { { "✓ resolved thread", "AtlasBadgeResolved" } }
+		if comment.resolvable then
+			if comment.resolved then
+				table.insert(badges, { "✓ resolved thread", "AtlasBadgeResolved" })
+			else
+				table.insert(badges, { "◷ unresolved thread", "AtlasBadgeUnresolved" })
+			end
 		end
-		return { { "◷ unresolved thread", "AtlasBadgeUnresolved" } }
+		return badges
 	end
 
 	---@param node IssuesCommentThreadNode

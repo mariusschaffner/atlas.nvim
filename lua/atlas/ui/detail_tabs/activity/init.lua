@@ -14,6 +14,7 @@ local notify = require("atlas.core.notify")
 ---@field display_name string
 
 ---@class AtlasActivityComment : IssueComment
+---@field context string|nil Thread root only: where an inline thread sits, e.g. "⎇ webhook/app.py:42".
 
 ---@class AtlasActivityComments
 ---@field fetch_conversation (fun(subject: table, opts: { force_refresh: boolean|nil }|nil, on_done: fun(items: IssueConversationItem[]|nil, err: string|nil)): { cancel: fun() }|nil)|nil

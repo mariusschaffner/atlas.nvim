@@ -13,7 +13,7 @@ local presentation = require("atlas.pulls.ui.presentation")
 local detail_ui = require("atlas.ui.detail")
 local inline_edit = require("atlas.ui.inline_edit")
 local inline_field_edit = require("atlas.ui.inline_field_edit")
-local conversation_state = require("atlas.pulls.ui.detail.tabs.conversation.state")
+local composer_dock = require("atlas.ui.components.composer.dock")
 
 local ns = vim.api.nvim_create_namespace("atlas.provider_detail")
 local header_ns = vim.api.nvim_create_namespace("atlas.provider_detail.header")
@@ -181,26 +181,24 @@ local function description_editable()
 	return false
 end
 
---- The Activity tab's own border color -- blue by default whenever the tab
---- supports adding a top-level comment (mirrors the description tab always
---- being blue while editable), escalating to orange only once actively
---- typing a new top-level comment. A reply keeps its own comment box's
---- border as the "is this actively being edited" signal, so the global
---- border just stays blue for those.
+--- The Activity tab's own border color, same rules as the issue view: blue
+--- whenever a top-level comment can be added, orange while any composer
+--- (docked new comment, inline reply/edit) is open, grey once the MR is
+--- merged/closed.
 ---@return string|nil
 local function conversation_border_hl()
 	if state.current_tab ~= "conversation" then
 		return nil
 	end
+	if not presentation.is_open_or_draft(state.current_pr) then
+		return "AtlasBorder"
+	end
 	local comments = state.provider and state.provider.capabilities.comments
 	if comments == nil or comments.add_comment == nil then
 		return nil
 	end
-	if not presentation.is_open_or_draft(state.current_pr) then
-		return nil
-	end
-	local composing = conversation_state.composing
-	if composing ~= nil and composing.kind == "add" and inline_field_edit.is_active() then
+	local session = require("atlas.pulls.ui.detail.tabs.conversation").state.session
+	if (session ~= nil and session.is_open()) or composer_dock.is_expanded() then
 		return "AtlasFieldBoxBorderEditing"
 	end
 	return "AtlasFieldBoxBorderEditable"
@@ -217,8 +215,8 @@ end
 
 --- Whether the Activity tab's "[i] - Add" footer hint should show: only on
 --- that tab, only when the provider supports adding a top-level comment, and
---- not while a comment is already being inline-edited/composed (that box
---- already shows its own Save/Cancel hint on its own border).
+--- not while the docked composer is there (it carries its own hint) or a
+--- comment is already being inline-edited.
 ---@return boolean
 local function conversation_addable()
 	local comments = state.provider and state.provider.capabilities.comments
@@ -227,6 +225,7 @@ local function conversation_addable()
 		and comments.add_comment ~= nil
 		and presentation.is_open_or_draft(state.current_pr)
 		and not inline_field_edit.is_active()
+		and not composer_dock.is_attached()
 end
 
 ---@param tab_items PullsDetailTab[]
@@ -239,12 +238,15 @@ function M.title_chunks(tab_items, active_tab)
 	-- "Changes 7" once the diffstat is in, plus "2 of 7 viewed" on the
 	-- right while the Changes tab is active.
 	local changes = require("atlas.pulls.ui.detail.tabs.changes")
+	local conversation = require("atlas.pulls.ui.detail.tabs.conversation")
 	local viewed_count, total = changes.viewed_counts()
 	local labeled = {}
 	for _, tab in ipairs(tab_items) do
 		local label = tab.label
 		if tab.key == "changes" and viewed_count ~= nil then
 			label = label .. " " .. tostring(total)
+		elseif tab.key == "conversation" and type(conversation.state.items) == "table" then
+			label = label .. " " .. tostring(#conversation.state.items)
 		end
 		table.insert(labeled, { key = tab.key, label = label, icon = tab.icon })
 	end
