@@ -286,32 +286,6 @@ local function milestone_entry(gl, width)
 	}
 end
 
-local DAY_SECONDS = 86400
-
----@param due_date string|nil
----@return string
-local function due_hl(due_date)
-	if due_date == nil or due_date == "" then
-		return "AtlasTextBright"
-	end
-	local y, m, d = due_date:match("^(%d%d%d%d)-(%d%d)-(%d%d)")
-	if not y then
-		return "AtlasTextBright"
-	end
-	local ok, due_epoch = pcall(os.time, { year = tonumber(y), month = tonumber(m), day = tonumber(d), hour = 12 })
-	if not ok then
-		return "AtlasTextBright"
-	end
-	local diff_days = math.floor((due_epoch - os.time()) / DAY_SECONDS)
-	if diff_days < 0 then
-		return "AtlasLogError"
-	end
-	if diff_days <= 2 then
-		return "AtlasOrange"
-	end
-	return "AtlasTextBright"
-end
-
 --- Builds the split "START gs | gd DUE" label line: start left-aligned with
 --- its hint, due right-aligned with its hint, a dimmed "|" centered between
 --- them. Each side's label turns orange while that specific field (not its
@@ -396,7 +370,8 @@ local function dates_entry(width)
 		label_spans = label_spans,
 		value_lines = { text },
 		value_highlights = {
-			{ line = 0, start_col = #text - #due_text, end_col = #text, hl_group = due_hl(dates.due_date) },
+			{ line = 0, start_col = 0, end_col = #start_text, hl_group = "AtlasPurple" },
+			{ line = 0, start_col = #text - #due_text, end_col = #text, hl_group = "AtlasPurple" },
 		},
 	}
 end
@@ -629,7 +604,7 @@ function M.render(tab_items, get_tab_module)
 		local hl = content_border_hl()
 		footer_chunks = {
 			{ "─ ", hl },
-			{ utils.field_hint_label("ui.edit_description", "Edit", true), hl },
+			{ utils.field_hint_label("ui.edit_description", "Edit", true), "AtlasKeyHint" },
 			{ " ", hl },
 		}
 	elseif conversation_addable() then
