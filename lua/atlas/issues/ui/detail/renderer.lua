@@ -606,7 +606,7 @@ function M.render(tab_items, get_tab_module)
 		local hl = content_border_hl()
 		footer_chunks = {
 			{ "─ ", hl },
-			{ utils.field_hint_label("ui.edit_description", "Edit", true), "AtlasKeyHint" },
+			{ utils.field_hint_label("ui.edit_description", "Edit", true), hl },
 			{ " ", hl },
 		}
 	elseif conversation_addable() then

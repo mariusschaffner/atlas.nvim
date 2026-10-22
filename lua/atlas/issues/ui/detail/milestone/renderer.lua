@@ -236,21 +236,74 @@ local function render_timeline_unpadded(milestone, width, today_iso)
 
 	local marker_col = timeline.column_for(today_iso, start_iso, due_iso, width)
 
-	-- Line 1: date ticks.
+	-- Line 1: date ticks, with "gs"/"gd" right next to the start/due labels
+	-- (the start date's tick is always ticks[1], the due date's is always
+	-- ticks[#ticks] -- `timeline.date_ticks` guarantees both are present).
 	do
 		local ticks = timeline.date_ticks(start_iso, due_iso, width)
-		local cells = build_cells(width)
-		for _, tick in ipairs(ticks) do
-			set_glyph(cells, tick.col, "│")
-			if tick.text then
-				local start_col = tick.right_aligned and (tick.col - #tick.text + 1) or tick.col
-				set_text(cells, start_col, tick.text)
+		local gs_hint = key_hint("issues.change_milestone_start_date")
+		local gd_hint = key_hint("issues.change_milestone_due_date")
+
+		-- The hints extend the start/due ticks' occupied range beyond what
+		-- `timeline.date_ticks`'s own overlap-drop already accounted for (it
+		-- only knows about the plain date text, not these appended hints).
+		-- Start/due take priority over their immediate neighbor on collision.
+		if gs_hint and ticks[1].text and ticks[2] and ticks[2].text then
+			-- +1 so the two labels keep at least one column of breathing room
+			-- instead of just touching.
+			local start_end = ticks[1].col + #ticks[1].text + 1 + #gs_hint + 1
+			if start_end > ticks[2].col then
+				ticks[2].text = nil
 			end
 		end
+		if gd_hint and #ticks >= 2 then
+			local due_tick = ticks[#ticks]
+			local neighbor = ticks[#ticks - 1]
+			if due_tick.text and neighbor.text then
+				local due_start = due_tick.col - #due_tick.text + 1 - 1 - #gd_hint
+				if due_start <= neighbor.col + #neighbor.text then
+					neighbor.text = nil
+				end
+			end
+		end
+
+		local cells = build_cells(width)
+		local hint_ranges = {}
+
+		for idx, tick in ipairs(ticks) do
+			set_glyph(cells, tick.col, "│")
+			if tick.text then
+				local text_start = tick.right_aligned and (tick.col - #tick.text + 1) or tick.col
+
+				if idx == 1 and gs_hint then
+					-- Start date: hint follows the date, growing rightward.
+					set_text(cells, text_start, tick.text)
+					local hint_col = text_start + #tick.text + 1
+					set_text(cells, hint_col, gs_hint)
+					table.insert(hint_ranges, { start_col = hint_col, end_col = hint_col + #gs_hint })
+				elseif idx == #ticks and gd_hint then
+					-- Due date: hint precedes the date so the date itself stays
+					-- flush against the strip's closing border.
+					local hint_col = text_start - 1 - #gd_hint
+					if hint_col >= 0 then
+						set_text(cells, hint_col, gd_hint)
+						table.insert(hint_ranges, { start_col = hint_col, end_col = hint_col + #gd_hint })
+					end
+					set_text(cells, text_start, tick.text)
+				else
+					set_text(cells, text_start, tick.text)
+				end
+			end
+		end
+
 		local line, byte_range = finalize_cells(cells)
 		table.insert(lines, line)
 		local s0, s1 = byte_range(0, width)
 		table.insert(spans, { line = 0, start_col = s0, end_col = s1, hl_group = "AtlasTextMuted" })
+		for _, hint_range in ipairs(hint_ranges) do
+			local h0, h1 = byte_range(hint_range.start_col, hint_range.end_col)
+			table.insert(spans, { line = 0, start_col = h0, end_col = h1, hl_group = "AtlasKeyHint" })
+		end
 	end
 
 	-- Line 2: bar.
@@ -304,7 +357,8 @@ local function render_timeline_unpadded(milestone, width, today_iso)
 		end
 	end
 
-	-- Line 3: labels.
+	-- Line 3: label only -- "gs"/"gd" now sit next to the dates themselves on
+	-- line 1, so there's no separate key-hint to show here any more.
 	do
 		local label_text
 		if bar.state == "before_start" then
@@ -317,9 +371,6 @@ local function render_timeline_unpadded(milestone, width, today_iso)
 			label_text = "today"
 		end
 
-		local hint = dates_hint()
-		local hint_text = (hint and (hint .. " dates")) or "dates"
-
 		local label_col = 0
 		if bar.state == "in_progress" and marker_col then
 			local half = math.floor(ui_utils.text_width(label_text) / 2)
@@ -329,28 +380,12 @@ local function render_timeline_unpadded(milestone, width, today_iso)
 		local cells = build_cells(width)
 		set_text(cells, label_col, label_text)
 
-		local hint_col = width - #hint_text
-		local hint_fits = hint_col > label_col + #label_text
-		if hint_fits then
-			set_text(cells, hint_col, hint_text)
-		end
-
 		local line, byte_range = finalize_cells(cells)
 		table.insert(lines, line)
 		local line_no = #lines - 1
 
 		local l0, l1 = byte_range(label_col, label_col + #label_text)
 		table.insert(spans, { line = line_no, start_col = l0, end_col = l1, hl_group = "AtlasTextBright" })
-
-		if hint_fits then
-			local key_part = hint or ""
-			if #key_part > 0 then
-				local h0, h1 = byte_range(hint_col, hint_col + #key_part)
-				table.insert(spans, { line = line_no, start_col = h0, end_col = h1, hl_group = "AtlasKeyHint" })
-			end
-			local d0, d1 = byte_range(hint_col + #key_part, width)
-			table.insert(spans, { line = line_no, start_col = d0, end_col = d1, hl_group = "AtlasTextMuted" })
-		end
 	end
 
 	return lines, spans
