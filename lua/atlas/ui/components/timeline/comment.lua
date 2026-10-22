@@ -17,6 +17,7 @@ local utils = require("atlas.ui.shared.utils")
 
 local GUIDE_MID = "├"
 local GUIDE_LAST = "└"
+local GUIDE_LINE = "│"
 --- Each nesting level shifts the avatar/text columns right by this much.
 local DEPTH_STEP = 7
 --- Text column relative to the avatar chip's start (" XX " + one space).
@@ -62,7 +63,9 @@ local DEFAULT_WIDTH_RATIO = 0.8
 ---@return integer chip_col, integer text_col, integer guide_col
 local function columns(pad, depth)
 	local chip_col = pad + depth * DEPTH_STEP
-	return chip_col, chip_col + TEXT_OFFSET, chip_col - 2
+	-- The guide sits in the parent's accent-bar column (the parent's text
+	-- column minus one), so the thread line continues straight down from it.
+	return chip_col, chip_col + TEXT_OFFSET, chip_col - DEPTH_STEP + TEXT_OFFSET - 1
 end
 
 ---@class AtlasTimelineCommentBlockStyle
@@ -157,6 +160,9 @@ function M.render(node, width, opts)
 	local lines, spans, line_map, regions = {}, {}, {}, {}
 	---@type table<integer, integer> 1-based row -> nesting level, for `opts.block`.
 	local row_depth = {}
+	-- With a block style the thread guide shares the accent bar's color, so
+	-- bar and guide read as one line.
+	local guide_hl = opts.block and opts.block.bar_hl or "AtlasTimelineGuide"
 
 	---@param row_kind string
 	---@param current AtlasTimelineCommentNode
@@ -211,10 +217,53 @@ function M.render(node, width, opts)
 		line:push(lines, spans)
 	end
 
+	--- Writes a single-cell glyph over the space at display column `col` of
+	--- 1-based `row` (padding the row out if it is shorter), shifting the
+	--- row's later spans by the glyph's extra bytes.
+	---@param row integer
+	---@param col integer
+	---@param glyph string
+	---@param hl string
+	local function put_glyph(row, col, glyph, hl)
+		local line = lines[row]
+		local display = vim.fn.strdisplaywidth(line)
+		if display <= col then
+			line = line .. string.rep(" ", col - display + 1)
+		end
+		-- Everything left of a guide column is one cell per character.
+		local offset = vim.fn.byteidx(line, col)
+		if offset < 0 or line:sub(offset + 1, offset + 1) ~= " " then
+			return
+		end
+		lines[row] = line:sub(1, offset) .. glyph .. line:sub(offset + 2)
+		local shift = #glyph - 1
+		for _, span in ipairs(spans) do
+			if span.line == row - 1 and span.start_col ~= nil then
+				if span.start_col > offset then
+					span.start_col = span.start_col + shift
+				end
+				if span.end_col > offset then
+					span.end_col = span.end_col + shift
+				end
+			end
+		end
+		table.insert(spans, { line = row - 1, start_col = offset, end_col = offset + #glyph, hl_group = hl })
+	end
+
+	--- An untinted gap row between a comment block and the reply below it,
+	--- carrying the thread's vertical guide.
+	---@param guide_col integer
+	local function push_gap(guide_col)
+		table.insert(lines, "")
+		line_map[#lines] = { kind = "spacer" }
+		put_glyph(#lines, guide_col, GUIDE_LINE, guide_hl)
+	end
+
 	---@param current AtlasTimelineCommentNode
 	---@param root AtlasTimelineCommentNode
 	---@param depth integer
 	---@param guide string|nil
+	---@return integer header_row 1-based row of this comment's header.
 	local function render_node(current, root, depth, guide)
 		local chip_col, text_col, guide_col = columns(pad, depth)
 		local editing = opts.editing_id ~= nil and opts.editing_id == current.id and opts.render_editor ~= nil
@@ -235,7 +284,7 @@ function M.render(node, width, opts)
 		local header = line_builder.new()
 		if guide then
 			header:pad_to(guide_col)
-			header:add(guide, "AtlasTimelineGuide")
+			header:add(guide, guide_hl)
 		end
 		header:pad_to(chip_col)
 		local chip, chip_hl = avatar.chip(current.author)
@@ -336,17 +385,34 @@ function M.render(node, width, opts)
 			)
 			map_row("collapsed", current, root, depth)
 			push_padding()
-			return
+			return header_row + 1
 		end
 		push_padding()
 
 		local has_reply = depth == 0 and opts.render_reply ~= nil and opts.reply_parent_id == current.id
+		local _, _, child_guide_col = columns(pad, depth + 1)
+		-- The guide runs unbroken from right below this comment down to the
+		-- last reply's header: "│" on every row in between, "├"/"└" on the
+		-- reply headers themselves.
 		for index, child in ipairs(children) do
 			local last = index == #children and not has_reply
-			render_node(child, root, depth + 1, last and GUIDE_LAST or GUIDE_MID)
+			if opts.block then
+				push_gap(child_guide_col)
+			end
+			local first_row = #lines + 1
+			local child_header = render_node(child, root, depth + 1, last and GUIDE_LAST or GUIDE_MID)
+			local through = last and child_header - 1 or #lines
+			for row = first_row, through do
+				if row ~= child_header then
+					put_glyph(row, child_guide_col, GUIDE_LINE, guide_hl)
+				end
+			end
 		end
 
 		if has_reply then
+			if opts.block then
+				push_gap(child_guide_col)
+			end
 			local reply_chip_col, reply_text_col, reply_guide_col = columns(pad, depth + 1)
 			local prefix = line_builder.new()
 			prefix:pad_to(reply_guide_col)
@@ -358,6 +424,7 @@ function M.render(node, width, opts)
 				opts.render_reply({ indent = reply_text_col, width = width, prefix = prefix })
 			append_composer(block_lines, block_spans, region, current, root, depth + 1)
 		end
+		return header_row + 1
 	end
 
 	render_node(node, node, 0, nil)
