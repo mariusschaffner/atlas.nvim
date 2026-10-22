@@ -314,9 +314,17 @@ local function create_split(sidebar_enabled)
 	vim.api.nvim_win_set_buf(header_win, header_buf)
 	configure_header(header_win)
 
+	-- `configure_header`, not `configure`: this split is pure invisible
+	-- chrome (an empty scratch buffer, entirely covered by the content/
+	-- sidebar floats) -- it never shows real text, so it should never grow a
+	-- real statusline row either. `configure` would attach the live Atlas
+	-- statusline here, but since this buffer never has keymaps/hints
+	-- registered, that row only ever rendered blank -- a bar with no content,
+	-- spanning the full width below both floats. The real statusline lives
+	-- on the content float's own border/footer instead (`set_content_footer`).
 	local spacer_buf = vim.api.nvim_create_buf(false, true)
 	vim.api.nvim_set_option_value("bufhidden", "wipe", { buf = spacer_buf })
-	local spacer_win = utils.window.create(header_win, "belowright split", spacer_buf, configure)
+	local spacer_win = utils.window.create(header_win, "belowright split", spacer_buf, configure_header)
 	pcall(vim.api.nvim_win_set_height, header_win, MIN_HEADER_HEIGHT)
 
 	state.spacer_win = spacer_win
