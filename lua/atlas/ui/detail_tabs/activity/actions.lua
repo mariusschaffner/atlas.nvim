@@ -1,0 +1,230 @@
+local Factory = {}
+
+local notify = require("atlas.core.notify")
+
+function Factory.new(host, state)
+	local M = {}
+
+	---@return AtlasActivityComments|nil
+	local function get_comments()
+		return host.comments()
+	end
+
+	---@param issue table
+	---@return AtlasMarkdownCompletionProvider|nil
+	local function get_completion(issue)
+		return host.completion(issue, state.comments())
+	end
+	M.get_completion = get_completion
+
+	---@param issue table
+	---@param amount integer
+	local function adjust_comment_count(issue, amount)
+		if host.on_comment_count then
+			host.on_comment_count(issue, amount)
+		end
+	end
+
+	--- Whether `comment` was authored by the currently signed-in user, used to
+	--- gate the Edit/Delete bottom-border hints to your own comments. Compares
+	--- `id` first, falling back to `account_id` -- the dashboard-level
+	--- `current_user` (populated by `fetch_current_user()` on every dashboard
+	--- load, so it's reliably available by the time a detail view is open).
+	---@param comment IssueComment|nil
+	---@return boolean
+	function M.is_own_comment(comment)
+		local user = host.current_user()
+		local author = comment and comment.author
+		if user == nil or author == nil then
+			return false
+		end
+		if user.id ~= nil and author.id ~= nil then
+			return user.id == author.id
+		end
+		if user.account_id ~= nil and user.account_id ~= "" and author.account_id ~= nil and author.account_id ~= "" then
+			return user.account_id == author.account_id
+		end
+		return false
+	end
+
+	---@param issue Issue
+	---@param text string
+	---@param done fun(ok: boolean, err: string|nil)
+	function M.add(issue, text, done)
+		if not text or vim.trim(text) == "" then
+			done(false, "Comment is empty")
+			return
+		end
+		local comments = get_comments()
+		if not comments or not comments.add_comment then
+			done(false, "Not supported")
+			return
+		end
+		notify.loading("Adding comment...")
+		comments.add_comment(issue, text, function(created, err)
+			if not state.is_current(issue) then
+				done(true)
+				return
+			end
+			if err then
+				notify.error("Add comment failed: " .. err)
+				done(false, err)
+				return
+			end
+			if created then
+				state.upsert_comment(created)
+				adjust_comment_count(issue, 1)
+				state.follow_id = tostring(created.id)
+			end
+			notify.success("Comment added", { timeout = 1200 })
+			done(true)
+		end)
+	end
+
+	---@param issue Issue
+	---@param parent IssueComment
+	---@param text string
+	---@param done fun(ok: boolean, err: string|nil)
+	function M.reply(issue, parent, text, done)
+		if not text or vim.trim(text) == "" then
+			done(false, "Reply is empty")
+			return
+		end
+		local comments = get_comments()
+		if not comments or not comments.add_comment then
+			done(false, "Not supported")
+			return
+		end
+		notify.loading("Sending reply...")
+		local function on_result(created, err)
+			if not state.is_current(issue) then
+				done(true)
+				return
+			end
+			if err then
+				notify.error("Reply failed: " .. err)
+				done(false, err)
+				return
+			end
+			if created then
+				state.upsert_comment(created)
+				adjust_comment_count(issue, 1)
+				state.follow_id = tostring(created.id)
+			end
+			notify.success("Reply added", { timeout = 1200 })
+			done(true)
+		end
+		if comments.reply_comment then
+			comments.reply_comment(issue, parent, text, on_result)
+		else
+			comments.add_comment(issue, text, on_result)
+		end
+	end
+
+	---@param issue Issue
+	---@param comment IssueComment
+	---@param text string
+	---@param done fun(ok: boolean, err: string|nil)
+	function M.edit(issue, comment, text, done)
+		if not text or vim.trim(text) == "" then
+			done(false, "Comment is empty")
+			return
+		end
+		local comments = get_comments()
+		if not comments or not comments.edit_comment then
+			done(false, "Not supported")
+			return
+		end
+		notify.loading("Editing comment...")
+		comments.edit_comment(issue, comment, text, function(updated, err)
+			if not state.is_current(issue) then
+				done(true)
+				return
+			end
+			if err then
+				notify.error("Edit failed: " .. err)
+				done(false, err)
+				return
+			end
+			if updated then
+				updated.parent_id = updated.parent_id or comment.parent_id
+				updated._raw = vim.tbl_extend("keep", updated._raw or {}, comment._raw or {})
+				-- Thread resolution isn't part of a note's own payload.
+				updated.resolvable = comment.resolvable
+				updated.resolved = comment.resolved
+				updated.resolved_by = comment.resolved_by
+				state.upsert_comment(updated)
+			else
+				comment.body = text
+			end
+			notify.success("Comment updated", { timeout = 1200 })
+			done(true)
+		end)
+	end
+
+	---@param issue Issue
+	---@param comment IssueComment
+	---@param refresh fun()
+	function M.delete(issue, comment, refresh)
+		local comments = get_comments()
+		if not comments or not comments.delete_comment then
+			return
+		end
+
+		vim.ui.input({ prompt = "Delete comment? [y/N]: " }, function(input)
+			local confirmed = input and vim.trim(input):lower()
+			if confirmed ~= "y" and confirmed ~= "yes" then
+				return
+			end
+			notify.loading("Deleting comment...")
+			comments.delete_comment(issue, comment, function(_, err)
+				if not state.is_current(issue) then
+					return
+				end
+				if err then
+					notify.error("Delete failed: " .. err)
+					return
+				end
+				state.remove_comment(comment)
+				adjust_comment_count(issue, -1)
+				notify.success("Comment deleted", { timeout = 1200 })
+				refresh()
+			end)
+		end)
+	end
+
+	--- Resolves/unresolves a thread; updates the root optimistically once the
+	--- provider confirms.
+	---@param issue Issue
+	---@param root IssueComment
+	---@param resolved boolean
+	---@param done fun(ok: boolean, err: string|nil)
+	function M.set_resolved(issue, root, resolved, done)
+		local comments = get_comments()
+		if not comments or not comments.set_thread_resolved then
+			done(false, "Not supported")
+			return
+		end
+		notify.loading(resolved and "Resolving thread..." or "Reopening thread...")
+		comments.set_thread_resolved(issue, root, resolved, function(ok, err)
+			if not state.is_current(issue) then
+				done(true)
+				return
+			end
+			if err or not ok then
+				notify.error((resolved and "Resolve failed: " or "Reopen failed: ") .. tostring(err))
+				done(false, err)
+				return
+			end
+			root.resolved = resolved
+			root.resolved_by = resolved and host.current_user() or nil
+			notify.success(resolved and "Thread resolved" or "Thread reopened", { timeout = 1200 })
+			done(true)
+		end)
+	end
+
+
+	return M
+end
+
+return Factory
