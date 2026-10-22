@@ -100,7 +100,7 @@ local groups = {
 	AtlasTimelineVerb = { fg = "#7f87ad" },
 	AtlasTimelineObject = { fg = "#c0caf5" },
 	AtlasTimelineRef = { fg = "#7dcfff", bold = true },
-	AtlasTimelineGuide = { fg = "#3b4261" },
+	AtlasTimelineGuide = { fg = "#565f89" },
 	AtlasTimelineGuideActive = { fg = "#e0af68" },
 	AtlasTimelineBody = { fg = "#e6eaff" },
 	AtlasTimelineIconAssign = { fg = "#bb9af7", bold = true },

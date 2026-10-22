@@ -18,6 +18,7 @@ local utils = require("atlas.ui.shared.utils")
 local GUIDE_MID = "├"
 local GUIDE_LAST = "└"
 local GUIDE_LINE = "│"
+local GUIDE_RUN = "─"
 --- Each nesting level shifts the avatar/text columns right by this much.
 local DEPTH_STEP = 7
 --- Text column relative to the avatar chip's start (" XX " + one space).
@@ -63,9 +64,9 @@ local DEFAULT_WIDTH_RATIO = 0.8
 ---@return integer chip_col, integer text_col, integer guide_col
 local function columns(pad, depth)
 	local chip_col = pad + depth * DEPTH_STEP
-	-- The guide sits in the parent's accent-bar column (the parent's text
-	-- column minus one), so the thread line continues straight down from it.
-	return chip_col, chip_col + TEXT_OFFSET, chip_col - DEPTH_STEP + TEXT_OFFSET - 1
+	-- The guide drops straight down from under the parent's avatar chip and
+	-- then runs across ("└──") into this comment's chip.
+	return chip_col, chip_col + TEXT_OFFSET, chip_col - DEPTH_STEP + 1
 end
 
 ---@class AtlasTimelineCommentBlockStyle
@@ -160,9 +161,7 @@ function M.render(node, width, opts)
 	local lines, spans, line_map, regions = {}, {}, {}, {}
 	---@type table<integer, integer> 1-based row -> nesting level, for `opts.block`.
 	local row_depth = {}
-	-- With a block style the thread guide shares the accent bar's color, so
-	-- bar and guide read as one line.
-	local guide_hl = opts.block and opts.block.bar_hl or "AtlasTimelineGuide"
+	local guide_hl = "AtlasTimelineGuide"
 
 	---@param row_kind string
 	---@param current AtlasTimelineCommentNode
@@ -253,10 +252,9 @@ function M.render(node, width, opts)
 	--- An untinted gap row between a comment block and the reply below it,
 	--- carrying the thread's vertical guide.
 	---@param guide_col integer
-	local function push_gap(guide_col)
+	local function push_gap()
 		table.insert(lines, "")
 		line_map[#lines] = { kind = "spacer" }
-		put_glyph(#lines, guide_col, GUIDE_LINE, guide_hl)
 	end
 
 	---@param current AtlasTimelineCommentNode
@@ -285,6 +283,7 @@ function M.render(node, width, opts)
 		if guide then
 			header:pad_to(guide_col)
 			header:add(guide, guide_hl)
+			header:add(string.rep(GUIDE_RUN, math.max(0, chip_col - guide_col - 1)), guide_hl)
 		end
 		header:pad_to(chip_col)
 		local chip, chip_hl = avatar.chip(current.author)
@@ -391,38 +390,41 @@ function M.render(node, width, opts)
 
 		local has_reply = depth == 0 and opts.render_reply ~= nil and opts.reply_parent_id == current.id
 		local _, _, child_guide_col = columns(pad, depth + 1)
-		-- The guide runs unbroken from right below this comment down to the
-		-- last reply's header: "│" on every row in between, "├"/"└" on the
-		-- reply headers themselves.
+		-- The guide runs unbroken from right below this comment's avatar chip
+		-- down to the last reply's header: "│" on every row in between,
+		-- "├──"/"└──" into each reply's chip.
+		local last_header = nil
 		for index, child in ipairs(children) do
 			local last = index == #children and not has_reply
 			if opts.block then
-				push_gap(child_guide_col)
+				push_gap()
 			end
-			local first_row = #lines + 1
-			local child_header = render_node(child, root, depth + 1, last and GUIDE_LAST or GUIDE_MID)
-			local through = last and child_header - 1 or #lines
-			for row = first_row, through do
-				if row ~= child_header then
-					put_glyph(row, child_guide_col, GUIDE_LINE, guide_hl)
-				end
-			end
+			last_header = render_node(child, root, depth + 1, last and GUIDE_LAST or GUIDE_MID)
 		end
 
 		if has_reply then
 			if opts.block then
-				push_gap(child_guide_col)
+				push_gap()
 			end
+			last_header = #lines + 1
 			local reply_chip_col, reply_text_col, reply_guide_col = columns(pad, depth + 1)
 			local prefix = line_builder.new()
 			prefix:pad_to(reply_guide_col)
 			prefix:add(GUIDE_LAST, "AtlasTimelineGuideActive")
+			prefix:add(string.rep(GUIDE_RUN, math.max(0, reply_chip_col - reply_guide_col - 1)), "AtlasTimelineGuideActive")
 			prefix:pad_to(reply_chip_col)
 			local reply_chip, reply_chip_hl = avatar.chip(opts.reply_author)
 			prefix:add(reply_chip, reply_chip_hl)
 			local block_lines, block_spans, region =
 				opts.render_reply({ indent = reply_text_col, width = width, prefix = prefix })
 			append_composer(block_lines, block_spans, region, current, root, depth + 1)
+		end
+
+		if last_header then
+			-- Rows that already hold a junction ("├"/"└") are left as they are.
+			for row = header_row + 2, last_header - 1 do
+				put_glyph(row, child_guide_col, GUIDE_LINE, guide_hl)
+			end
 		end
 		return header_row + 1
 	end
