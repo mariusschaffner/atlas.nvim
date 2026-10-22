@@ -7,6 +7,7 @@ local MIN_HEADER_HEIGHT = 3
 local MAX_HEADER_RATIO = 0.55
 local CONTENT_BORDER = "rounded"
 local SIDEBAR_WIDTH = 34
+local SIDEBAR_GAP = 1
 local SIDEBAR_COLLAPSE_COLUMNS = 100
 
 local state = {
@@ -16,11 +17,10 @@ local state = {
 	buf = nil, -- content buffer (both layouts)
 	header_win = nil, -- sticky header window (split layout only)
 	header_buf = nil, -- sticky header buffer (split layout only)
-	spacer_win = nil, -- hidden split the content float overlays (split layout only)
+	spacer_win = nil, -- hidden split both the content and sidebar floats overlay (split layout only)
 	sidebar_enabled = false, -- whether the current kind opted into a sidebar region
 	sidebar_win = nil, -- sidebar floating window (split layout only, when not collapsed)
 	sidebar_buf = nil, -- sidebar buffer; kept alive (bufhidden=hide) across collapse/expand
-	sidebar_spacer_win = nil, -- hidden split the sidebar float overlays
 	sidebar_collapsed = false, -- true when narrow-terminal collapse hid the sidebar
 	previous_win = nil,
 	cleanup = nil,
@@ -162,75 +162,87 @@ local function create_single()
 	})
 end
 
---- Interior width/height the content float should have so that its border
---- ring lands exactly on `spacer_win`'s edges (i.e. float+border fills the
---- spacer's rectangle).
+--- Both floats (content, and sidebar when shown) overlay the *same* spacer
+--- split, side by side, rather than each getting its own spacer -- a plain
+--- split window always reserves its own statusline row (visible as a stray
+--- bar once its content is just a blank/invisible filler), while floating
+--- windows never show one. One shared spacer keeps that row count at
+--- exactly one (the content pane's own, already handled deliberately -- see
+--- `configure`'s doc comment) regardless of whether the sidebar is shown.
 ---@param spacer_win integer
----@return integer width, integer height
-local function content_geometry(spacer_win)
-	local width = math.max(1, vim.api.nvim_win_get_width(spacer_win) - 2)
+---@return integer content_width, integer content_col, integer|nil sidebar_width, integer|nil sidebar_col, integer height
+local function split_geometry(spacer_win)
+	local total = math.max(1, vim.api.nvim_win_get_width(spacer_win))
 	local height = math.max(1, vim.api.nvim_win_get_height(spacer_win) - 2)
-	return width, height
+	if state.sidebar_enabled and not state.sidebar_collapsed then
+		-- Reserve SIDEBAR_WIDTH + a gap column for the sidebar, but never let
+		-- the content pane shrink below a usable minimum.
+		local sidebar_box = math.min(SIDEBAR_WIDTH, math.max(1, total - 24))
+		local content_box = math.max(1, total - sidebar_box - SIDEBAR_GAP)
+		local content_width = math.max(1, content_box - 2)
+		local sidebar_width = math.max(1, sidebar_box - 2)
+		local sidebar_col = 1 + content_width + 2 + SIDEBAR_GAP
+		return content_width, 1, sidebar_width, sidebar_col, height
+	end
+	return math.max(1, total - 2), 1, nil, nil, height
 end
 
 --- Re-syncs the content float's position/size to whatever `state.spacer_win`
 --- currently measures -- called whenever the spacer's geometry could have
---- changed (header resize, VimResized).
+--- changed (header resize, VimResized, sidebar collapse/expand).
 local function sync_content_float()
 	if state.layout ~= "split" or not utils.window.valid(state.spacer_win) or not utils.window.valid(state.win) then
 		return
 	end
-	local width, height = content_geometry(state.spacer_win)
+	local content_width, content_col, _, _, height = split_geometry(state.spacer_win)
 	pcall(vim.api.nvim_win_set_config, state.win, {
 		relative = "win",
 		win = state.spacer_win,
 		row = 1,
-		col = 1,
-		width = width,
+		col = content_col,
+		width = content_width,
 		height = height,
 	})
 end
 
---- Re-syncs the sidebar float's position/size to whatever
---- `state.sidebar_spacer_win` currently measures.
+--- Re-syncs the sidebar float's position/size to whatever `state.spacer_win`
+--- currently measures.
 local function sync_sidebar_float()
 	if
 		state.layout ~= "split"
 		or not state.sidebar_enabled
-		or not utils.window.valid(state.sidebar_spacer_win)
+		or state.sidebar_collapsed
+		or not utils.window.valid(state.spacer_win)
 		or not utils.window.valid(state.sidebar_win)
 	then
 		return
 	end
-	local width, height = content_geometry(state.sidebar_spacer_win)
+	local _, _, sidebar_width, sidebar_col, height = split_geometry(state.spacer_win)
+	if sidebar_width == nil then
+		return
+	end
 	pcall(vim.api.nvim_win_set_config, state.sidebar_win, {
 		relative = "win",
-		win = state.sidebar_spacer_win,
+		win = state.spacer_win,
 		row = 1,
-		col = 1,
-		width = width,
+		col = sidebar_col,
+		width = sidebar_width,
 		height = height,
 	})
 end
 
---- Tears down the sidebar's spacer split and floating window (if present).
---- Closing the spacer split lets Neovim's layout engine hand its width back
---- to `state.spacer_win` automatically -- this is what narrow-terminal
---- collapse relies on. The sidebar buffer itself is left alone (bufhidden is
---- "hide", not "wipe") so its last rendered content survives a later expand.
-local function destroy_sidebar_windows()
+--- Closes the sidebar floating window (if present). The sidebar buffer
+--- itself is left alone (bufhidden is "hide", not "wipe") so its last
+--- rendered content survives a later expand.
+local function destroy_sidebar_window()
 	if utils.window.valid(state.sidebar_win) then
 		pcall(vim.api.nvim_win_close, state.sidebar_win, true)
 	end
-	if utils.window.valid(state.sidebar_spacer_win) then
-		pcall(vim.api.nvim_win_close, state.sidebar_spacer_win, true)
-	end
 	state.sidebar_win = nil
-	state.sidebar_spacer_win = nil
 end
 
 ---@param tab integer
-local function create_sidebar_windows(tab)
+local function create_sidebar_window(tab)
 	if not utils.window.valid(state.spacer_win) then
 		return
 	end
@@ -240,18 +252,16 @@ local function create_sidebar_windows(tab)
 		state.sidebar_buf = sidebar_buf
 	end
 
-	local sidebar_spacer_buf = vim.api.nvim_create_buf(false, true)
-	vim.api.nvim_set_option_value("bufhidden", "wipe", { buf = sidebar_spacer_buf })
-	local sidebar_spacer_win = utils.window.create(state.spacer_win, "belowright vsplit", sidebar_spacer_buf, configure_header)
-	pcall(vim.api.nvim_win_set_width, sidebar_spacer_win, SIDEBAR_WIDTH)
-
-	local width, height = content_geometry(sidebar_spacer_win)
+	local _, _, sidebar_width, sidebar_col, height = split_geometry(state.spacer_win)
+	if sidebar_width == nil then
+		return
+	end
 	local sidebar_win = vim.api.nvim_open_win(state.sidebar_buf, false, {
 		relative = "win",
-		win = sidebar_spacer_win,
+		win = state.spacer_win,
 		row = 1,
-		col = 1,
-		width = width,
+		col = sidebar_col,
+		width = sidebar_width,
 		height = height,
 		border = CONTENT_BORDER,
 		style = "minimal",
@@ -260,7 +270,6 @@ local function create_sidebar_windows(tab)
 	configure_header(sidebar_win)
 	vim.api.nvim_set_option_value("winhighlight", content_winhighlight("AtlasBorder"), { win = sidebar_win, scope = "local" })
 
-	state.sidebar_spacer_win = sidebar_spacer_win
 	state.sidebar_win = sidebar_win
 end
 
@@ -277,9 +286,9 @@ local function update_sidebar_collapse()
 	end
 	state.sidebar_collapsed = should_collapse
 	if should_collapse then
-		destroy_sidebar_windows()
+		destroy_sidebar_window()
 	else
-		create_sidebar_windows(vim.api.nvim_win_get_tabpage(state.spacer_win))
+		create_sidebar_window(vim.api.nvim_win_get_tabpage(state.spacer_win))
 	end
 end
 
@@ -314,18 +323,16 @@ local function create_split(sidebar_enabled)
 	state.sidebar_enabled = sidebar_enabled
 	state.sidebar_collapsed = sidebar_enabled and vim.o.columns < SIDEBAR_COLLAPSE_COLUMNS
 	if sidebar_enabled and not state.sidebar_collapsed then
-		create_sidebar_windows(tab)
+		create_sidebar_window(tab)
 	end
 
-	-- Computed after the sidebar vsplit (if any) has already taken its share
-	-- of spacer_win's width, so the content float gets the remaining space.
-	local width, height = content_geometry(spacer_win)
+	local content_width, content_col, _, _, height = split_geometry(spacer_win)
 	local content_win = vim.api.nvim_open_win(content_buf, false, {
 		relative = "win",
 		win = spacer_win,
 		row = 1,
-		col = 1,
-		width = width,
+		col = content_col,
+		width = content_width,
 		height = height,
 		border = CONTENT_BORDER,
 		style = "minimal",
@@ -354,10 +361,7 @@ local function create_split(sidebar_enabled)
 		group = focus_guard,
 		callback = function()
 			local current = vim.api.nvim_get_current_win()
-			local is_sidechrome = current == header_win
-				or current == spacer_win
-				or current == state.sidebar_win
-				or current == state.sidebar_spacer_win
+			local is_sidechrome = current == header_win or current == spacer_win or current == state.sidebar_win
 			if is_sidechrome and utils.window.valid(content_win) then
 				vim.api.nvim_set_current_win(content_win)
 			end
@@ -370,7 +374,7 @@ local function create_split(sidebar_enabled)
 				return
 			end
 			local sidebar_buf = state.sidebar_buf
-			destroy_sidebar_windows()
+			destroy_sidebar_window()
 			utils.buffer.delete(sidebar_buf)
 			state.sidebar_enabled = false
 			state.sidebar_buf = nil
@@ -599,7 +603,7 @@ function M.close(tab)
 	deactivate()
 	state.win, state.buf, state.header_win, state.header_buf, state.spacer_win, state.layout =
 		nil, nil, nil, nil, nil, nil
-	state.sidebar_win, state.sidebar_spacer_win, state.sidebar_buf = nil, nil, nil
+	state.sidebar_win, state.sidebar_buf = nil, nil
 	state.sidebar_enabled, state.sidebar_collapsed = false, false
 	if layout == "split" and utils.window.valid(win) then
 		local tabpage = vim.api.nvim_win_get_tabpage(win)
