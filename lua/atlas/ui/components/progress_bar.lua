@@ -1,6 +1,6 @@
 -- Pure-render progress indicators shared across detail views: a compact
 -- tick-segment bar (DESIGN-detail-view.md §3's checklist progress, e.g.
--- "●●●●○○ 4/6 criteria") and a bracketed block gauge with a percentage
+-- "● ● ● ● ○ ○ 4/6 criteria") and a bracketed block gauge with a percentage
 -- (the milestone detail view's "[██████░░░░] 67% (2/3)").
 local M = {}
 
@@ -22,17 +22,18 @@ function M.render_segments(completed, total, opts)
 		filled = math.max(0, math.min(segments, math.floor((completed / total) * segments + 0.5)))
 	end
 
-	local filled_str = string.rep(fill_char, filled)
-	local empty_str = string.rep(empty_char, segments - filled)
-	local value = filled_str .. empty_str
-
-	local spans = {}
-	if #filled_str > 0 then
-		table.insert(spans, { start_col = 0, end_col = #filled_str, hl_group = fill_hl })
+	-- Built (and colored) one char at a time, space-separated, rather than
+	-- `string.rep` + two blob spans -- the gap between segments needs each
+	-- circle's own start/end tracked individually.
+	local parts, spans = {}, {}
+	local col = 0
+	for i = 1, segments do
+		local char = i <= filled and fill_char or empty_char
+		table.insert(parts, char)
+		table.insert(spans, { start_col = col, end_col = col + #char, hl_group = i <= filled and fill_hl or empty_hl })
+		col = col + #char + 1
 	end
-	if #empty_str > 0 then
-		table.insert(spans, { start_col = #filled_str, end_col = #value, hl_group = empty_hl })
-	end
+	local value = table.concat(parts, " ")
 	return value, spans
 end
 
