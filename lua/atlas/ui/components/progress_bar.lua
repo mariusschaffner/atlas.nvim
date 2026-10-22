@@ -133,20 +133,24 @@ function M.render_tri_segments(done, doing, todo, opts)
 		end
 	end
 
+	-- Solid "●" for done/doing (progress has happened), hollow "○" for todo --
+	-- same glyphs as the issue detail header's checklist bar
+	-- (`M.render_segments`), just split across 3 colors instead of 2.
 	local parts, spans = {}, {}
 	local col = 0
 	---@param count integer
 	---@param hl_group string
-	local function add_segments(count, hl_group)
+	---@param glyph string
+	local function add_segments(count, hl_group, glyph)
 		for _ = 1, count do
-			table.insert(parts, "▰")
-			table.insert(spans, { start_col = col, end_col = col + 1, hl_group = hl_group })
-			col = col + 2
+			table.insert(parts, glyph)
+			table.insert(spans, { start_col = col, end_col = col + #glyph, hl_group = hl_group })
+			col = col + #glyph + 1
 		end
 	end
-	add_segments(done_n, done_hl)
-	add_segments(doing_n, doing_hl)
-	add_segments(todo_n, todo_hl)
+	add_segments(done_n, done_hl, "●")
+	add_segments(doing_n, doing_hl, "●")
+	add_segments(todo_n, todo_hl, "○")
 
 	return table.concat(parts, " "), spans
 end

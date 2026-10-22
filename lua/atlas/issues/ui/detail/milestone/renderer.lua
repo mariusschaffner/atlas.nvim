@@ -208,11 +208,11 @@ end
 --- math. Returns 1 line (the "+ set dates" hint) when there isn't enough
 --- date information to draw a proportional bar, 3 lines otherwise.
 ---@param milestone IssueMilestone
----@param width integer
+---@param width integer Inner width, already excluding the left/right pad.
 ---@param today_iso string
 ---@return string[] lines
 ---@return AtlasUIHighlight[] highlights
-local function render_timeline(milestone, width, today_iso)
+local function render_timeline_unpadded(milestone, width, today_iso)
 	width = math.max(1, width)
 	local lines, spans = {}, {}
 	local closed = milestone.state == "closed"
@@ -356,6 +356,33 @@ local function render_timeline(milestone, width, today_iso)
 	return lines, spans
 end
 
+--- Pads the timeline strip to the same left/right margin as the header
+--- (`header.LEFT_PAD`), so its left edge lines up under the state pill/title
+--- instead of running flush to the window border.
+---@param milestone IssueMilestone
+---@param outer_width integer
+---@param today_iso string
+---@return string[] lines
+---@return AtlasUIHighlight[] highlights
+local function render_timeline(milestone, outer_width, today_iso)
+	local pad = header.LEFT_PAD
+	local pad_str = string.rep(" ", pad)
+	local inner_width = math.max(1, outer_width - 2 * pad)
+	local lines, spans = render_timeline_unpadded(milestone, inner_width, today_iso)
+
+	for i, line in ipairs(lines) do
+		lines[i] = pad_str .. line
+	end
+	for _, span in ipairs(spans) do
+		if span.line_hl_group == nil then
+			span.start_col = span.start_col + pad
+			span.end_col = span.end_col + pad
+		end
+	end
+
+	return lines, spans
+end
+
 ---@param work_items Issue[]
 ---@return { todo: integer, doing: integer, done: integer } counts
 ---@return integer unassigned
@@ -393,14 +420,12 @@ end
 
 ---@param milestone IssueMilestone
 ---@param work_items Issue[]|nil
----@param merge_requests PullRequest[]|nil
 ---@param width integer
 ---@return string[] lines
 ---@return AtlasUIHighlight[] highlights
 ---@return table<string, AtlasFieldBoxRegion> regions
-local function render_sidebar(milestone, work_items, merge_requests, width)
+local function render_sidebar(milestone, work_items, width)
 	work_items = work_items or {}
-	merge_requests = merge_requests or {}
 	local counts, unassigned = work_item_buckets(work_items)
 	local total = counts.todo + counts.doing + counts.done
 
@@ -446,31 +471,6 @@ local function render_sidebar(milestone, work_items, merge_requests, width)
 		table.insert(entries, { label = "Work items", value_lines = lines, value_highlights = spans })
 	end
 
-	-- MERGE REQUESTS
-	do
-		if #merge_requests == 0 then
-			table.insert(entries, { label = "Merge requests", empty = true, empty_text = "none linked yet" })
-		else
-			local lines, spans = {}, {}
-			local shown = math.min(3, #merge_requests)
-			for i = 1, shown do
-				local mr = merge_requests[i]
-				local text = string.format("!%s %s", tostring(mr.id), tostring(mr.title or ""))
-				if ui_utils.text_width(text) > width then
-					text = utils.truncate(text, width)
-				end
-				table.insert(spans, { line = #lines, start_col = 0, end_col = #text, hl_group = "AtlasTextMuted" })
-				table.insert(lines, text)
-			end
-			if #merge_requests > shown then
-				local more = string.format("+%d more", #merge_requests - shown)
-				table.insert(spans, { line = #lines, start_col = 0, end_col = #more, hl_group = "AtlasTextMuted" })
-				table.insert(lines, more)
-			end
-			table.insert(entries, { label = "Merge requests", value_lines = lines, value_highlights = spans })
-		end
-	end
-
 	-- IN PROGRESS (hidden entirely when empty, per DESIGN-milestone-view.md §5)
 	do
 		local doing_items = {}
@@ -501,11 +501,8 @@ local function render_sidebar(milestone, work_items, merge_requests, width)
 	return sidebar.render(entries, width)
 end
 
----@param active_tab string
----@param width integer
----@return string[] lines
----@return AtlasUIHighlight[] highlights
-local function render_tab_bar(active_tab, width)
+---@return { key: string, label: string }[]
+local function labeled_tabs()
 	local items = {}
 	for _, tab in ipairs(TABS) do
 		local label = tab.label
@@ -516,14 +513,7 @@ local function render_tab_bar(active_tab, width)
 		end
 		table.insert(items, { key = tab.key, label = label })
 	end
-	return tabs.render(items, active_tab, width, {
-		active_hl = "AtlasDetailTabActive",
-		inactive_hl = "AtlasTextMuted",
-		divider_hl = "AtlasBorder",
-		gap = "   ",
-		hint = "⇥ switch tab",
-		hint_hl = "AtlasTextMuted",
-	})
+	return items
 end
 
 ---@param width integer
@@ -694,12 +684,26 @@ local function description_editable()
 end
 
 --- The content box's current border color -- reused for both the actual
---- border (`detail_ui.set_content_border`) and (previously) the native
---- title's non-label characters; the tab bar is now buffer content, not a
---- native title, but the border itself still reflects editability.
+--- border (`detail_ui.set_content_border`) and the title's non-label
+--- characters (leading dash, "-" separators, trailing space), so the "-"s
+--- match the border instead of sitting at the default `FloatTitle` color.
 ---@return string
 local function content_border_hl()
 	return description_editable() and "AtlasFieldBoxBorderEditable" or "AtlasBorder"
+end
+
+--- The tab bar, rendered as the content window's native title -- same
+--- bordered-box-with-tabs look as the issue detail view
+--- (`issues/ui/detail/renderer.lua`'s own `M.title_chunks`).
+---@param active_tab string
+---@return { [1]: string, [2]: string }[]
+function M.title_chunks(active_tab)
+	return tabs.title_chunks(labeled_tabs(), active_tab, {
+		active_hl = "AtlasDetailTabActive",
+		inactive_hl = "AtlasTextMuted",
+		gap = " - ",
+		border_hl = content_border_hl(),
+	})
 end
 
 function M.render()
@@ -741,16 +745,13 @@ function M.render()
 		local sidebar_lines, sidebar_spans = {}, {}
 		if milestone ~= nil then
 			local width = math.max(1, vim.api.nvim_win_get_width(sidebar_win) - 2 * sidebar.PAD_X)
-			sidebar_lines, sidebar_spans = render_sidebar(milestone, state.work_items, state.merge_requests, width)
+			sidebar_lines, sidebar_spans = render_sidebar(milestone, state.work_items, width)
 		end
 		set_lines(sidebar_buf, sidebar_lines)
 		utils.apply_spans(sidebar_buf, sidebar_ns, sidebar_spans)
 	end
 
-	-- No native window title any more (DESIGN-milestone-view.md §1's tab bar
-	-- is buffer content, not window chrome) -- clear whatever a previous
-	-- render (or the issue view, if this window is reused) left behind.
-	detail_ui.set_content_title(nil)
+	detail_ui.set_content_title(M.title_chunks(state.current_tab))
 
 	local footer_chunks
 	if inline_edit.is_active(buf) then
@@ -790,10 +791,6 @@ function M.render()
 	if milestone == nil then
 		lines = { "", "  Nothing selected..." }
 	else
-		local tab_lines, tab_spans = render_tab_bar(state.current_tab, width)
-		lines, spans = tab_lines, tab_spans
-		table.insert(lines, "")
-
 		local content_lines, content_spans, content_line_map
 		if state.current_tab == "work_items" then
 			content_lines, content_spans, content_line_map = render_work_items(width)
@@ -803,10 +800,9 @@ function M.render()
 			content_lines, content_spans = render_description(width)
 		end
 
-		local base = #lines
-		utils.append_block(lines, spans, { lines = content_lines, highlights = content_spans })
+		lines, spans = content_lines, content_spans
 		for lnum, row in pairs(content_line_map or {}) do
-			line_map[lnum + base] = row
+			line_map[lnum] = row
 		end
 	end
 
