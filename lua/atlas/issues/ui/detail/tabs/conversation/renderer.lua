@@ -285,7 +285,7 @@ local function render_thread(ctx, thread)
 			bar = "▎",
 			bar_hl = "AtlasCommentBar",
 			bg = { "AtlasCommentBg", "AtlasCommentReplyBg" },
-			width_ratio = 0.8,
+			width_ratio = 0.9,
 		},
 		body_spans = mention_spans,
 		truncated_hints = { { action_id = "ui.toggle_fold", label = "expand" } },

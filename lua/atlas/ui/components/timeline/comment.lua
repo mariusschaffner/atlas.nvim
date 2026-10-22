@@ -250,6 +250,10 @@ function M.render(node, width, opts)
 			end_col = header.bytes,
 			hl_group = highlights.dynamic_for(current.author) or "AtlasTextBright",
 		})
+		if current.time and current.time ~= "" then
+			header:add("  ")
+			header:add(current.time, "AtlasTimelineTime")
+		end
 		if current.is_you then
 			header:add("  ")
 			header:add(" you ", "AtlasBadgeYou")
@@ -258,9 +262,6 @@ function M.render(node, width, opts)
 		for _, badge in ipairs(badges) do
 			header:add("  ")
 			header:add(badge[1], badge[2])
-		end
-		if current.time and current.time ~= "" then
-			header:right(current.time, "AtlasTimelineTime", width)
 		end
 		local header_row = header:push(lines, spans)
 		map_row("header", current, root, depth)
