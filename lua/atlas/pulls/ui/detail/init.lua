@@ -259,8 +259,16 @@ local function set_provider(provider)
 	local provider_tabs = detail and detail.tabs and detail.tabs()
 	state.tabs = provider_tabs and #provider_tabs > 0 and provider_tabs or DEFAULT_TABS
 
-	local first_tab = state.tabs[1]
-	set_tab(first_tab and first_tab.key or nil)
+	-- Changes is the default tab when the provider has one
+	-- (DESIGN-merge-request-view.md §6), else the first.
+	local default_tab = state.tabs[1]
+	for _, tab in ipairs(state.tabs) do
+		if tab.key == "changes" then
+			default_tab = tab
+			break
+		end
+	end
+	set_tab(default_tab and default_tab.key or nil)
 	if state.buf and vim.api.nvim_buf_is_valid(state.buf) then
 		detail_keymaps.register(state.buf)
 	end

@@ -19,13 +19,16 @@ end
 ---@param items PullsDetailTab[]|PullsRepoDetailTab[]
 ---@param active_tab string
 ---@param border_hl string|nil
+---@param right { text: string, width: integer }|nil Right-aligned dim info for the active tab.
 ---@return { [1]: string, [2]: string }[]
-function M.title_chunks(items, active_tab, border_hl)
+function M.title_chunks(items, active_tab, border_hl, right)
 	return tabs.title_chunks(items, active_tab, {
 		active_hl = "AtlasDetailTabActive",
 		inactive_hl = "AtlasTextMuted",
 		gap = " - ",
 		border_hl = border_hl,
+		right_text = right and right.text or nil,
+		width = right and right.width or nil,
 	})
 end
 

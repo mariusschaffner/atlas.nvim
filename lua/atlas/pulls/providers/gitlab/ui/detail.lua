@@ -23,7 +23,7 @@ function M.tabs()
 	local overview_icon, overview_hl = icons.general("overview")
 	local pipeline_icon, pipeline_hl = icons.pulls("pipeline")
 	local conversation_icon, conversation_hl = icons.general("conversation")
-	local review_icon, review_hl = icons.pulls("review")
+	local changes_icon, changes_hl = icons.pulls("review")
 	local commit_icon, commit_hl = icons.pulls("commit")
 	return {
 		{
@@ -39,10 +39,10 @@ function M.tabs()
 			mod = require("atlas.pulls.ui.detail.tabs.conversation"),
 		},
 		{
-			key = "review",
-			label = "Review",
-			icon = { icon = review_icon, hl_group = review_hl },
-			mod = require("atlas.pulls.ui.detail.tabs.review"),
+			key = "changes",
+			label = "Changes",
+			icon = { icon = changes_icon, hl_group = changes_hl },
+			mod = require("atlas.pulls.ui.detail.tabs.changes"),
 		},
 		{
 			key = "commits",

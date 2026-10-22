@@ -106,9 +106,14 @@ end
 --- `opts.border_hl` -- the box's own current border color -- rather than
 --- left at the default `FloatTitle` highlight, which wouldn't track the
 --- border's editable/editing color changes.
+---
+--- With `opts.right_text` and `opts.width` (the window's inner width), the
+--- title is padded with border dashes so `right_text` sits right-aligned at
+--- the end of the top border, e.g. the MR view's "2 of 7 viewed"
+--- (DESIGN-merge-request-view.md §6).
 ---@param items { key: string, label: string, icon: AtlasIconStyle|nil }[]
 ---@param active_tab string
----@param opts? { inactive_hl?: string, active_hl?: string, gap?: string, border_hl?: string }
+---@param opts? { inactive_hl?: string, active_hl?: string, gap?: string, border_hl?: string, right_text?: string, right_hl?: string, width?: integer }
 ---@return { [1]: string, [2]: string }[]
 function M.title_chunks(items, active_tab, opts)
 	opts = opts or {}
@@ -126,6 +131,21 @@ function M.title_chunks(items, active_tab, opts)
 		end
 	end
 	table.insert(chunks, { " ", border_hl })
+
+	local right_text = opts.right_text
+	if right_text and right_text ~= "" and opts.width then
+		local used = 0
+		for _, chunk in ipairs(chunks) do
+			used = used + vim.api.nvim_strwidth(chunk[1])
+		end
+		-- " right_text ─" at the end, the gap filled with border dashes.
+		local fill = opts.width - used - vim.api.nvim_strwidth(right_text) - 3
+		if fill >= 1 then
+			table.insert(chunks, { string.rep("─", fill) .. " ", border_hl })
+			table.insert(chunks, { right_text, opts.right_hl or inactive_hl })
+			table.insert(chunks, { " ─", border_hl })
+		end
+	end
 
 	return chunks
 end
