@@ -454,8 +454,7 @@ function M.attach_dock(buf, refresh)
 	})
 end
 
---- Expands the dock and focuses it (`issues.add_comment` here, and the
---- detail view's global `issues.comment`).
+--- Expands the dock and focuses it (`issues.add_comment`).
 ---@param buf integer
 ---@param refresh fun()
 ---@param seed_text string|nil
@@ -472,15 +471,6 @@ function M.focus_dock(buf, refresh, seed_text)
 	end
 	vim.api.nvim_buf_clear_namespace(buf, hint_ns, 0, -1)
 	dock.focus(seed_text)
-end
-
---- Opens the Activity tab's comment composer. Exported so the detail view's
---- global `c` keymap (bound to `issues.comment`, reachable from any tab) can
---- reuse it after switching here.
----@param buf integer
----@param refresh fun()
-function M.start_add(buf, refresh)
-	M.focus_dock(buf, refresh)
 end
 
 ---@param buf integer

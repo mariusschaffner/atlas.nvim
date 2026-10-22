@@ -439,24 +439,6 @@ function M.register(buf, opts)
 		})
 	)
 
-	local comments = provider.capabilities.comments
-	if comments and comments.add_comment then
-		utils.insert_if(
-			items,
-			resolver.item("issues.comment", {
-				desc = "Add comment",
-				hint = false,
-				opts = { nowait = true, silent = true },
-				callback = function()
-					require("atlas.issues.ui.detail").select_tab("conversation")
-					require("atlas.issues.ui.detail.tabs.conversation.keymaps").start_add(buf, function()
-						require("atlas.issues.ui.detail").rerender()
-					end)
-				end,
-			})
-		)
-	end
-
 	utils.insert_if(
 		items,
 		resolver.item("ui.open_in_browser", {
@@ -548,7 +530,6 @@ function M.remove(buf)
 	utils.insert_if(general, resolver.remove_item("issues.go_to_pull"))
 	utils.insert_if(general, resolver.remove_item("issues.create_pull_for_issue"))
 	utils.insert_if(general, resolver.remove_item("issues.go_to_milestone"))
-	utils.insert_if(general, resolver.remove_item("issues.comment"))
 	utils.insert_if(general, resolver.remove_item("ui.open_in_browser"))
 	utils.insert_if(general, resolver.remove_item("ui.next_panel_tab"))
 	utils.insert_if(general, resolver.remove_item("ui.previous_panel_tab"))
