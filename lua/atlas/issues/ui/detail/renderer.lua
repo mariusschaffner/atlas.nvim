@@ -519,8 +519,6 @@ local function labeled_tabs(tab_items)
 		local label = tab.label
 		if tab.key == "conversation" and type(conversation_state.items) == "table" then
 			label = label .. " " .. tostring(#conversation_state.items)
-		elseif tab.key == "merge_requests" and type(state.linked_merge_requests) == "table" then
-			label = label .. " " .. tostring(#state.linked_merge_requests)
 		end
 		table.insert(out, { key = tab.key, label = label, icon = tab.icon })
 	end

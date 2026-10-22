@@ -17,14 +17,14 @@ the screenshot are placeholders.
 ## 1. Layout
 
 ```
-┌────────────────────────────────────────────────────────────────────────────────┐
-│ atlas / semesterarbeit › milestones › %630        group milestone · updated 1d │ header
-│ ● Active  Entwicklung & Deployment  %630                                       │
-├────────────────────────────────────────────────────────────────────────────────┤
-│ │20.10.        │27.10.        │03.11.        │10.11.            16.11.│      │ timeline
-│ ━━━━━━┃──────────────────────────────────────────────────────────────────      │ strip
-│     today                                                    gs gd dates      │
-├─────────────────────────────────────────────────────────┬──────────────────────┤
+┌─────────────────────────────────────────────────────────────────────────────────┐
+│ atlas / semesterarbeit › milestones › %630        group milestone · updated 1d  │ header
+│ ● Active  Entwicklung & Deployment  %630                                        │
+├─────────────────────────────────────────────────────────────────────────────────┤
+│ │20.10.        │27.10.        │03.11.        │10.11.              16.11.│       │ timeline
+│ ━━━━━━┃──────────────────────────────────────────────────────────────────       │ strip
+│     today                                                     gs gd dates       │
+├──────────────────────────────────────────────────────────┬──────────────────────┤
 │ Description   Work items 12   Merge requests 0  ⇥ switch │ PROGRESS             │
 │ ───────────                                              │ ▰▰▱▱▱▱▱▱▱▱▱▱         │
 │ Meilenstein                                              │ 0/12 closed          │
@@ -166,6 +166,4 @@ Use the highlight groups from `DESIGN-detail-view.md` §8. New usages only:
 - [ ] Header, tab bar, sidebar fields and colours reuse the issue view components (no duplicates).
 - [ ] The timeline strip handles every edge case in §4 and redraws after `gs`/`gd`.
 - [ ] PROGRESS and WORK ITEMS counts agree with the Work items tab.
-- [ ] The description hides a dates-only `Zeitplan` section and shows the goal block first.
-- [ ] No bordered boxes, no statusline, no `None` values.
 - [ ] Existing tests pass; new pure logic (timeline column maths, WF-label mapping, markdown section parsing) has unit tests.

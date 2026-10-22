@@ -91,7 +91,6 @@ end
 function M.tabs()
 	local overview_icon, overview_hl = icons.general("overview")
 	local conversation_icon, conversation_hl = icons.general("conversation")
-	local pr_icon, pr_hl = icons.pulls("pr")
 	return {
 		{
 			key = "overview",
@@ -104,12 +103,6 @@ function M.tabs()
 			label = "Activity",
 			icon = { icon = conversation_icon, hl_group = conversation_hl },
 			mod = require("atlas.issues.ui.detail.tabs.conversation"),
-		},
-		{
-			key = "merge_requests",
-			label = "Merge requests",
-			icon = { icon = pr_icon, hl_group = pr_hl },
-			mod = require("atlas.issues.ui.detail.tabs.merge_requests"),
 		},
 	}
 end
