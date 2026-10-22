@@ -126,6 +126,7 @@ end
 ---@param today_iso string
 ---@return string[] lines
 ---@return AtlasUIHighlight[] highlights
+---@return table<string, AtlasFieldBoxRegion> regions Only `title`, for anchoring its inline-edit overlay.
 local function render_header(milestone, width, today_iso)
 	local pill = timeline.state_pill(milestone, today_iso)
 	local data = {
@@ -136,7 +137,7 @@ local function render_header(milestone, width, today_iso)
 		title = milestone.title or "",
 		iid_text = "%" .. tostring(milestone.id or ""),
 	}
-	local lines, spans = header.render(data, width)
+	local lines, spans, regions = header.render(data, width)
 
 	if detail_ui.is_sidebar_collapsed() then
 		local strip = "    " .. narrow_meta_strip(milestone, state.work_items, state.merge_requests)
@@ -144,7 +145,7 @@ local function render_header(milestone, width, today_iso)
 		table.insert(spans, { line = #lines - 1, start_col = 4, end_col = #strip, hl_group = "AtlasTextMuted" })
 	end
 
-	return lines, spans
+	return lines, spans, regions
 end
 
 ---@param width integer
@@ -212,9 +213,10 @@ end
 ---@param today_iso string
 ---@return string[] lines
 ---@return AtlasUIHighlight[] highlights
+---@return table<string, AtlasFieldBoxRegion> regions `start_date`/`due_date` inline-edit anchors.
 local function render_timeline_unpadded(milestone, width, today_iso)
 	width = math.max(1, width)
-	local lines, spans = {}, {}
+	local lines, spans, regions = {}, {}, {}
 	local closed = milestone.state == "closed"
 	local start_iso = timeline.resolve_start(milestone)
 	local due_iso = (milestone.due_date and milestone.due_date ~= "") and milestone.due_date or nil
@@ -230,8 +232,14 @@ local function render_timeline_unpadded(milestone, width, today_iso)
 		table.insert(spans, { line = 0, start_col = 0, end_col = #text, hl_group = "AtlasTextMutedItalic" })
 		if hint then
 			table.insert(spans, { line = 0, start_col = #full - #hint, end_col = #full, hl_group = "AtlasKeyHint" })
+			-- No separate start/due anchors to point at here (neither date is
+			-- set yet) -- both keys open their picker anchored over the hint.
+			-- Two distinct tables (not the same one aliased twice), since a
+			-- caller may adjust one's `col` independently of the other's.
+			regions.start_date = { row = 0, col = #full - #hint, width = #hint, height = 1 }
+			regions.due_date = { row = 0, col = #full - #hint, width = #hint, height = 1 }
 		end
-		return lines, spans
+		return lines, spans, regions
 	end
 
 	local marker_col = timeline.column_for(today_iso, start_iso, due_iso, width)
@@ -269,6 +277,10 @@ local function render_timeline_unpadded(milestone, width, today_iso)
 
 		local cells = build_cells(width)
 		local hint_ranges = {}
+		-- Byte-independent column ranges of the start/due date text itself
+		-- (not the "gs"/"gd" hint), so an inline edit opens right over the
+		-- date -- converted to byte offsets once the line is finalized below.
+		local date_col_ranges = {}
 
 		for idx, tick in ipairs(ticks) do
 			set_glyph(cells, tick.col, "│")
@@ -278,6 +290,7 @@ local function render_timeline_unpadded(milestone, width, today_iso)
 				if idx == 1 and gs_hint then
 					-- Start date: hint follows the date, growing rightward.
 					set_text(cells, text_start, tick.text)
+					date_col_ranges.start_date = { col = text_start, len = #tick.text }
 					local hint_col = text_start + #tick.text + 1
 					set_text(cells, hint_col, gs_hint)
 					table.insert(hint_ranges, { start_col = hint_col, end_col = hint_col + #gs_hint })
@@ -290,8 +303,15 @@ local function render_timeline_unpadded(milestone, width, today_iso)
 						table.insert(hint_ranges, { start_col = hint_col, end_col = hint_col + #gd_hint })
 					end
 					set_text(cells, text_start, tick.text)
+					date_col_ranges.due_date = { col = text_start, len = #tick.text }
 				else
 					set_text(cells, text_start, tick.text)
+				end
+
+				if idx == 1 and date_col_ranges.start_date == nil then
+					date_col_ranges.start_date = { col = text_start, len = #tick.text }
+				elseif idx == #ticks and date_col_ranges.due_date == nil then
+					date_col_ranges.due_date = { col = text_start, len = #tick.text }
 				end
 			end
 		end
@@ -303,6 +323,11 @@ local function render_timeline_unpadded(milestone, width, today_iso)
 		for _, hint_range in ipairs(hint_ranges) do
 			local h0, h1 = byte_range(hint_range.start_col, hint_range.end_col)
 			table.insert(spans, { line = 0, start_col = h0, end_col = h1, hl_group = "AtlasKeyHint" })
+		end
+
+		for field, range in pairs(date_col_ranges) do
+			local b0, b1 = byte_range(range.col, range.col + range.len)
+			regions[field] = { row = 0, col = b0, width = math.max(1, b1 - b0), height = 1 }
 		end
 	end
 
@@ -388,7 +413,7 @@ local function render_timeline_unpadded(milestone, width, today_iso)
 		table.insert(spans, { line = line_no, start_col = l0, end_col = l1, hl_group = "AtlasTextBright" })
 	end
 
-	return lines, spans
+	return lines, spans, regions
 end
 
 --- Pads the timeline strip to the same left/right margin as the header
@@ -399,11 +424,12 @@ end
 ---@param today_iso string
 ---@return string[] lines
 ---@return AtlasUIHighlight[] highlights
+---@return table<string, AtlasFieldBoxRegion> regions `start_date`/`due_date` inline-edit anchors.
 local function render_timeline(milestone, outer_width, today_iso)
 	local pad = header.LEFT_PAD
 	local pad_str = string.rep(" ", pad)
 	local inner_width = math.max(1, outer_width - 2 * pad)
-	local lines, spans = render_timeline_unpadded(milestone, inner_width, today_iso)
+	local lines, spans, regions = render_timeline_unpadded(milestone, inner_width, today_iso)
 
 	for i, line in ipairs(lines) do
 		lines[i] = pad_str .. line
@@ -414,8 +440,11 @@ local function render_timeline(milestone, outer_width, today_iso)
 			span.end_col = span.end_col + pad
 		end
 	end
+	for _, region in pairs(regions) do
+		region.col = region.col + pad
+	end
 
-	return lines, spans
+	return lines, spans, regions
 end
 
 ---@param work_items Issue[]
@@ -761,17 +790,23 @@ function M.render()
 	local has_header = utils.window.valid(header_win) and utils.buffer.valid(header_buf)
 
 	if has_header then
-		local header_lines, header_spans = {}, {}
+		local header_lines, header_spans, header_regions = {}, {}, {}
 		if milestone ~= nil then
 			local width = vim.api.nvim_win_get_width(header_win)
-			local h_lines, h_spans = render_header(milestone, width, today_iso)
-			local t_lines, t_spans = render_timeline(milestone, width, today_iso)
+			local h_lines, h_spans, h_regions = render_header(milestone, width, today_iso)
+			local t_lines, t_spans, t_regions = render_timeline(milestone, width, today_iso)
 			header_lines, header_spans = h_lines, h_spans
+			header_regions = h_regions or {}
+			local base = #header_lines
 			utils.append_block(header_lines, header_spans, { lines = t_lines, highlights = t_spans })
+			for id, region in pairs(t_regions or {}) do
+				header_regions[id] = { row = base + region.row, col = region.col, width = region.width, height = region.height }
+			end
 		end
 		set_lines(header_buf, header_lines)
 		utils.apply_spans(header_buf, header_ns, header_spans)
 		detail_ui.resize_header(#header_lines)
+		state.header_regions = header_regions
 	end
 
 	local sidebar_buf = state.buf and detail_ui.sidebar_buf() or nil
