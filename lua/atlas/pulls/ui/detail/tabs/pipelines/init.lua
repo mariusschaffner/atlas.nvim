@@ -203,8 +203,14 @@ end
 ---@param _entry table
 ---@return boolean|nil
 function M.on_enter(pr, _entry)
-	-- `<CR>` aliases to the same toggle as `za`, acting on whatever is
-	-- currently `state.active_entry()` rather than the literal cursor line.
+	-- `<CR>` on a pipeline opens it in the pipeline view
+	-- (DESIGN-merge-request-view.md §6); on a job it toggles the log like
+	-- `za`. Both act on `state.active_entry()`, not the literal cursor line.
+	local active = state.active_entry()
+	if active and active.kind == "pipeline" then
+		require("atlas.pulls.ui.detail.data").open_pipeline(active.pipeline)
+		return true
+	end
 	return keymaps.toggle_fold(pr, current_refresh)
 end
 

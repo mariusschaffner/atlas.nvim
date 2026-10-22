@@ -53,7 +53,7 @@ function M.toggle_fold(pr, refresh)
 		-- `nav_id` (prefixed) is the navigable/active/expanded_pipelines
 		-- namespace; `raw_id` (unprefixed) is what `ensure_pipeline_details`
 		-- and `state.details_by_id` have always been keyed by (see
-		-- renderer.lua's `append_pipeline_box` for the same split). Don't mix
+		-- renderer.lua's `render_pipeline` for the same split). Don't mix
 		-- the two up.
 		local raw_id = tostring(entry.pipeline.id)
 		local nav_id = "pipeline:" .. raw_id
