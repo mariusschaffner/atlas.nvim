@@ -54,6 +54,47 @@ local DEFAULT_WIDTH_RATIO = 0.8
 ---@field reply_parent_id string|nil Thread root a reply composer is appended to.
 ---@field render_reply AtlasTimelineComposerRender|nil
 ---@field reply_author string|nil Name whose avatar leads the reply composer.
+---@field block AtlasTimelineCommentBlockStyle|nil Tinted background + accent bar behind the thread.
+
+---@class AtlasTimelineCommentBlockStyle
+---@field bar string|nil Left accent glyph drawn in column 0 (needs `padding_x >= 1`), e.g. "▎".
+---@field bar_hl string|nil
+---@field bg string[] Line background per nesting level (last entry reused for deeper levels).
+
+--- Tints every row of the thread (full window width, via `line_hl_group`,
+--- so other highlights layer on top) and swaps column 0's padding space for
+--- the accent bar.
+---@param lines string[]
+---@param spans AtlasUIHighlight[]
+---@param row_depth table<integer, integer>
+---@param style AtlasTimelineCommentBlockStyle
+---@param pad integer
+local function apply_block_style(lines, spans, row_depth, style, pad)
+	local bar = style.bar
+	local shift = bar and pad >= 1 and (#bar - 1) or 0
+	local block_spans = {}
+	for row, line in ipairs(lines) do
+		local depth = row_depth[row] or 0
+		local bg = style.bg[math.min(depth + 1, #style.bg)]
+		if bg then
+			table.insert(block_spans, { line = row - 1, line_hl_group = bg })
+		end
+		if shift > 0 and line:sub(1, 1) == " " then
+			lines[row] = bar .. line:sub(2)
+			for _, span in ipairs(spans) do
+				if span.line == row - 1 and span.start_col ~= nil then
+					span.start_col = span.start_col + (span.start_col > 0 and shift or 0)
+					span.end_col = span.end_col + shift
+				end
+			end
+			table.insert(block_spans, { line = row - 1, start_col = 0, end_col = #bar, hl_group = style.bar_hl or "AtlasCommentBar" })
+		end
+	end
+	-- Prepended so the tint sits underneath every other highlight.
+	for i = #block_spans, 1, -1 do
+		table.insert(spans, 1, block_spans[i])
+	end
+end
 
 ---@param pad integer
 ---@param depth integer
@@ -75,11 +116,15 @@ function M.render(node, width, opts)
 	local pad = opts.padding_x or 1
 	local ratio = opts.width_ratio or DEFAULT_WIDTH_RATIO
 	local lines, spans, line_map, regions = {}, {}, {}, {}
+	---@type table<integer, integer> 1-based row -> nesting level, for `opts.block`.
+	local row_depth = {}
 
 	---@param row_kind string
 	---@param current AtlasTimelineCommentNode
 	---@param root AtlasTimelineCommentNode
-	local function map_row(row_kind, current, root)
+	---@param depth integer
+	local function map_row(row_kind, current, root, depth)
+		row_depth[#lines] = depth
 		line_map[#lines] = {
 			kind = "comment",
 			row_kind = row_kind,
@@ -94,9 +139,11 @@ function M.render(node, width, opts)
 	---@param region AtlasFieldBoxRegion|nil
 	---@param current AtlasTimelineCommentNode
 	---@param root AtlasTimelineCommentNode
-	local function append_composer(block_lines, block_spans, region, current, root)
+	---@param depth integer Nesting level the composer belongs to (tints its rows).
+	local function append_composer(block_lines, block_spans, region, current, root, depth)
 		local base = line_builder.splice(lines, spans, block_lines, block_spans)
 		for i = 1, #block_lines do
+			row_depth[base + i] = depth
 			line_map[base + i] = {
 				kind = "comment",
 				row_kind = "composer",
@@ -157,13 +204,13 @@ function M.render(node, width, opts)
 			header:right(current.time, "AtlasTimelineTime", width)
 		end
 		local header_row = header:push(lines, spans)
-		map_row("header", current, root)
+		map_row("header", current, root, depth)
 
 		-- Body (or the inline editor replacing it).
 		local body_start = #lines
 		if editing then
 			local block_lines, block_spans, region = opts.render_editor({ indent = text_col, width = width })
-			append_composer(block_lines, block_spans, region, current, root)
+			append_composer(block_lines, block_spans, region, current, root, depth)
 		else
 			local wrap_width = math.max(10, math.floor((width - text_col) * ratio))
 			local raw = current.body_lines or {}
@@ -186,12 +233,12 @@ function M.render(node, width, opts)
 						})
 					end
 					line:push(lines, spans)
-					map_row("body", current, root)
+					map_row("body", current, root, depth)
 				end
 			end
 			if truncated then
 				push_meta_row(text_col, "…", "AtlasTimelineVerb", opts.truncated_hints)
-				map_row("body", current, root)
+				map_row("body", current, root, depth)
 			end
 		end
 		regions["comment:" .. current.id] = {
@@ -214,7 +261,7 @@ function M.render(node, width, opts)
 				})
 			end
 			line:push(lines, spans)
-			map_row("reactions", current, root)
+			map_row("reactions", current, root, depth)
 		end
 
 		local children = current.children or {}
@@ -226,7 +273,7 @@ function M.render(node, width, opts)
 				"AtlasTimelineVerb",
 				opts.collapsed_hints
 			)
-			map_row("collapsed", current, root)
+			map_row("collapsed", current, root, depth)
 			return
 		end
 
@@ -246,11 +293,14 @@ function M.render(node, width, opts)
 			prefix:add(reply_chip, reply_chip_hl)
 			local block_lines, block_spans, region =
 				opts.render_reply({ indent = reply_text_col, width = width, prefix = prefix })
-			append_composer(block_lines, block_spans, region, current, root)
+			append_composer(block_lines, block_spans, region, current, root, depth + 1)
 		end
 	end
 
 	render_node(node, node, 0, nil)
+	if opts.block then
+		apply_block_style(lines, spans, row_depth, opts.block, pad)
+	end
 	return lines, spans, line_map, regions
 end
 

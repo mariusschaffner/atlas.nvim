@@ -135,14 +135,13 @@ local function interior_rows()
 end
 
 --- Total rows the dock covers at the bottom of the content window
---- (interior + its top border; its bottom border sits on the pane's own),
---- 0 when no dock is attached.
+--- (interior + its rounded border), 0 when no dock is attached.
 ---@return integer
 function M.total_height()
 	if active == nil then
 		return 0
 	end
-	return interior_rows() + 1
+	return interior_rows() + 2
 end
 
 ---@return boolean

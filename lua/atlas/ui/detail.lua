@@ -114,21 +114,14 @@ local function reset_content()
 	end
 end
 
---- The dock's border joins the content pane's own: its top edge tees into
---- the pane's sides ("├───┤") and its bottom edge lands exactly on the
---- pane's bottom border, so the dock reads as the pane's last section
---- instead of a second box stacked above it.
-local DOCK_BORDER = { "├", "─", "┤", "│", "╯", "─", "╰", "│" }
-
 --- Geometry of the content dock float: pinned to the content window's bottom
---- rows, spanning the pane's full outer width (one column into each side
---- border) with its bottom border drawn over the pane's.
----@param height integer Interior rows.
+--- rows, full content width, inside the content pane's own border.
+---@param height integer Interior rows (the dock's own rounded border adds 2).
 ---@return integer row, integer col, integer width
 local function dock_geometry(height)
 	local win_height = vim.api.nvim_win_get_height(state.win)
 	local win_width = vim.api.nvim_win_get_width(state.win)
-	return math.max(0, win_height - height - 1), -1, math.max(1, win_width)
+	return math.max(0, win_height - height - 2), 0, math.max(1, win_width - 2)
 end
 
 local function close_dock()
@@ -166,7 +159,7 @@ local function sync_dock()
 		dock.buf,
 		false,
 		vim.tbl_extend("force", config, {
-			border = DOCK_BORDER,
+			border = "rounded",
 			style = "minimal",
 			zindex = 60,
 			focusable = false,
@@ -688,7 +681,7 @@ end
 --- Calling it again with the same buffer just updates height/colors. Pass
 --- `nil` to remove it. The dock is not focusable: callers that need input
 --- open their own float anchored to `M.content_dock_win()`. The content
---- buffer should reserve `height + 1` trailing rows so its last lines can
+--- buffer should reserve `height + 2` trailing rows so its last lines can
 --- scroll clear of the dock.
 ---@param spec AtlasDetailDockSpec|nil
 function M.set_content_dock(spec)

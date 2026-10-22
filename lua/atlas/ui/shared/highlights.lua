@@ -109,7 +109,12 @@ local groups = {
 	AtlasTimelineIconLabel = { fg = "#bb9af7" },
 	AtlasTimelineIconState = { fg = "#9ece6a" },
 	AtlasTimelineIconDefault = { fg = "#7f87ad" },
-	AtlasBadgeYou = { fg = "#7aa2f7", bg = "#24283b" },
+	AtlasBadgeYou = { fg = "#7aa2f7", bg = "#2f3549" },
+	-- Comment blocks: a subtle tint behind each comment (replies one step
+	-- lighter than their thread root) plus a left accent bar.
+	AtlasCommentBg = { bg = "#1f2335" },
+	AtlasCommentReplyBg = { bg = "#232741" },
+	AtlasCommentBar = { fg = "#3d59a1" },
 	AtlasBadgeUnresolved = { fg = "#e0af68" },
 	AtlasBadgeResolved = { fg = "#9ece6a" },
 	AtlasBadgeEditing = { fg = "#e0af68", bold = true },
