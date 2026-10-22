@@ -132,7 +132,7 @@ function M.open(milestone, opts)
 	state.requests.cancel()
 	state.requests = request_scope.new()
 	state.win, state.buf, state.header_win, state.header_buf =
-		detail_ui.open("milestone", cleanup, render, { sidebar = true })
+		detail_ui.open("milestone", cleanup, render, { sidebar = true, boxed_header = true })
 	state.provider = opts.provider
 	state.project_path = opts.project_path
 	state.current_milestone = milestone

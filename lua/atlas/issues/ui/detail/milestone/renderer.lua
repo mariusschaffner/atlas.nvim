@@ -1,6 +1,6 @@
--- The milestone detail view (DESIGN-milestone-view.md): a borderless header
--- (meta line + state pill/title, reusing `issues.ui.detail.components.header`),
--- a 3-line timeline strip appended below it in the same sticky header buffer,
+-- The milestone detail view (DESIGN-milestone-view.md): a boxed header
+-- (meta line in the top border + state pill/title, reusing
+-- `issues.ui.detail.components.header`) with a 3-line timeline strip inside it,
 -- a tab bar + per-tab main pane content, and a sidebar (reusing
 -- `atlas.ui.components.sidebar`/`sidebar_field`) with PROGRESS/WORK ITEMS/
 -- MERGE REQUESTS/IN PROGRESS fields. Mirrors the issue detail view's renderer
@@ -122,30 +122,21 @@ local function narrow_meta_strip(milestone, work_items, merge_requests)
 end
 
 ---@param milestone IssueMilestone
----@param width integer
 ---@param today_iso string
----@return string[] lines
----@return AtlasUIHighlight[] highlights
----@return table<string, AtlasFieldBoxRegion> regions Only `title`, for anchoring its inline-edit overlay.
-local function render_header(milestone, width, today_iso)
+---@return IssuesDetailHeaderData
+local function header_data(milestone, today_iso)
 	local pill = timeline.state_pill(milestone, today_iso)
-	local data = {
+	return {
 		breadcrumb = breadcrumb(milestone),
 		meta_right = meta_right(milestone),
 		state_label = pill.label,
 		state_hl = pill.hl,
 		title = milestone.title or "",
 		iid_text = "%" .. tostring(milestone.id or ""),
+		meta_strip = detail_ui.is_sidebar_collapsed()
+				and narrow_meta_strip(milestone, state.work_items, state.merge_requests)
+			or nil,
 	}
-	local lines, spans, regions = header.render(data, width)
-
-	if detail_ui.is_sidebar_collapsed() then
-		local strip = "    " .. narrow_meta_strip(milestone, state.work_items, state.merge_requests)
-		table.insert(lines, strip)
-		table.insert(spans, { line = #lines - 1, start_col = 4, end_col = #strip, hl_group = "AtlasTextMuted" })
-	end
-
-	return lines, spans, regions
 end
 
 ---@param width integer
@@ -325,9 +316,11 @@ local function render_timeline_unpadded(milestone, width, today_iso)
 			table.insert(spans, { line = 0, start_col = h0, end_col = h1, hl_group = "AtlasKeyHint" })
 		end
 
+		-- Display columns (every cell is 1 column wide), not byte offsets:
+		-- the "│" tick glyphs before a date are multi-byte, and the inline
+		-- edit overlay is positioned by screen column.
 		for field, range in pairs(date_col_ranges) do
-			local b0, b1 = byte_range(range.col, range.col + range.len)
-			regions[field] = { row = 0, col = b0, width = math.max(1, b1 - b0), height = 1 }
+			regions[field] = { row = 0, col = range.col, width = math.max(1, range.len), height = 1 }
 		end
 	end
 
@@ -416,35 +409,21 @@ local function render_timeline_unpadded(milestone, width, today_iso)
 	return lines, spans, regions
 end
 
---- Pads the timeline strip to the same left/right margin as the header
---- (`header.LEFT_PAD`), so its left edge lines up under the state pill/title
---- instead of running flush to the window border.
+--- The boxed header with the timeline strip inside it, below the title.
 ---@param milestone IssueMilestone
 ---@param outer_width integer
 ---@param today_iso string
 ---@return string[] lines
 ---@return AtlasUIHighlight[] highlights
----@return table<string, AtlasFieldBoxRegion> regions `start_date`/`due_date` inline-edit anchors.
-local function render_timeline(milestone, outer_width, today_iso)
-	local pad = header.LEFT_PAD
-	local pad_str = string.rep(" ", pad)
-	local inner_width = math.max(1, outer_width - 2 * pad)
-	local lines, spans, regions = render_timeline_unpadded(milestone, inner_width, today_iso)
-
-	for i, line in ipairs(lines) do
-		lines[i] = pad_str .. line
-	end
-	for _, span in ipairs(spans) do
-		if span.line_hl_group == nil then
-			span.start_col = span.start_col + pad
-			span.end_col = span.end_col + pad
-		end
-	end
-	for _, region in pairs(regions) do
-		region.col = region.col + pad
-	end
-
-	return lines, spans, regions
+---@return table<string, AtlasFieldBoxRegion> regions `title`, `start_date`, `due_date` inline-edit anchors.
+local function render_header(milestone, outer_width, today_iso)
+	local t_lines, t_spans, t_regions =
+		render_timeline_unpadded(milestone, header.inner_width(outer_width), today_iso)
+	return header.render(
+		header_data(milestone, today_iso),
+		outer_width,
+		{ lines = t_lines, highlights = t_spans, regions = t_regions }
+	)
 end
 
 ---@param work_items Issue[]
@@ -792,16 +771,8 @@ function M.render()
 	if has_header then
 		local header_lines, header_spans, header_regions = {}, {}, {}
 		if milestone ~= nil then
-			local width = vim.api.nvim_win_get_width(header_win)
-			local h_lines, h_spans, h_regions = render_header(milestone, width, today_iso)
-			local t_lines, t_spans, t_regions = render_timeline(milestone, width, today_iso)
-			header_lines, header_spans = h_lines, h_spans
-			header_regions = h_regions or {}
-			local base = #header_lines
-			utils.append_block(header_lines, header_spans, { lines = t_lines, highlights = t_spans })
-			for id, region in pairs(t_regions or {}) do
-				header_regions[id] = { row = base + region.row, col = region.col, width = region.width, height = region.height }
-			end
+			header_lines, header_spans, header_regions =
+				render_header(milestone, vim.api.nvim_win_get_width(header_win), today_iso)
 		end
 		set_lines(header_buf, header_lines)
 		utils.apply_spans(header_buf, header_ns, header_spans)

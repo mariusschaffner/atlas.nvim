@@ -1,34 +1,27 @@
--- The issue detail view's header (DESIGN-detail-view.md §3): a dim meta line
--- (breadcrumb left, author/updated right), a title line (tinted state pill +
--- bold title + dim #iid), and a chip row (label chips, milestone, checklist
--- progress). Rendered either as plain lines (the milestone view, which appends
--- its own timeline strip below) or, with `opts.boxed`, inside a rounded box
--- whose top border carries the meta line.
+-- The issue/milestone detail views' header (DESIGN-detail-view.md §3): a
+-- rounded box whose top border carries the meta line (breadcrumb left,
+-- author/updated right), holding a title line (tinted state pill + bold title
+-- + dim #iid), a chip row (label chips, milestone, checklist progress), and
+-- optionally a caller-provided block below (the milestone view's timeline).
 local M = {}
 
 local utils = require("atlas.ui.shared.utils")
-local ui_utils = require("atlas.ui.utils")
 
--- Left-indents every header line to line up with where the content box's own
--- title text starts: 1 column for the float's own offset from the spacer's
--- edge, 1 for its rounded-border corner glyph, and 2 for the title's leading
--- "- " (see `tabs.title_chunks`) -- so e.g. "Description" and the header's
--- breadcrumb/title/chips all start in the same screen column.
-local LEFT_PAD = 4
-local LEFT_PAD_STR = string.rep(" ", LEFT_PAD)
--- Exported so other callers appending their own lines below this header's
--- (e.g. the milestone detail view's timeline strip) can left-align to the
--- same column.
-M.LEFT_PAD = LEFT_PAD
+-- Not `ui_utils.text_width` (strdisplaywidth): that measures against the
+-- current window, and with 'breakindent' on there a line with leading
+-- whitespace that's wider than the window counts its repeated indent too --
+-- which would nudge the box's right border out of place.
+local text_width = vim.api.nvim_strwidth
 
--- Boxed layout, by screen column: the box's left border sits at column 1
--- (same as the content float's), its right border on the window's last
--- column, and content keeps the same 2-column gap from each border -- so it
--- still starts at `LEFT_PAD`.
+-- By screen column: the box's left border sits at column 1 (same as the
+-- content float's), its right border on the window's last column, and
+-- content keeps a 2-column gap from each border -- so it starts at column 4,
+-- right where the content box's own title text ("Description", ...) starts.
 local BOX_LEFT = " │  "
 local BOX_RIGHT = "  │"
 local BOX_LEFT_COLS = 4
 local BOX_RIGHT_COLS = 3
+local MIN_BREADCRUMB = 20
 
 ---@class IssuesDetailHeaderData
 ---@field breadcrumb string e.g. "atlas / semesterarbeit > issues > #17".
@@ -44,24 +37,35 @@ local BOX_RIGHT_COLS = 3
 ---@field progress_text string|nil e.g. "4/6 criteria".
 ---@field meta_strip string|nil Dim one-line summary under the chip row (narrow-terminal sidebar fallback).
 
---- Title line, blank, chip row (and the optional meta strip), unpadded.
+---@class IssuesDetailHeaderBlock
+---@field lines string[] Rendered at `M.inner_width`, unpadded.
+---@field highlights AtlasUIHighlight[]
+---@field regions table<string, AtlasFieldBoxRegion>|nil Display columns, relative to the block.
+
+--- Width available for content inside the box.
+---@param outer_width integer
+---@return integer
+function M.inner_width(outer_width)
+	return math.max(1, outer_width - BOX_LEFT_COLS - BOX_RIGHT_COLS)
+end
+
+--- Title line, then (when there's anything to show) a blank and the chip row,
+--- then the optional meta strip. Unpadded.
 ---@param data IssuesDetailHeaderData
 ---@param width integer
 ---@return string[] lines
 ---@return AtlasUIHighlight[] highlights
----@return integer title_line_no
----@return integer title_col Display column where the title text starts.
+---@return integer title_col Display column where the title text starts (title is line 0).
 local function render_body(data, width)
 	local lines, spans = {}, {}
 
-	-- Title line: state pill + title + dim #iid.
 	local pill = string.format(" %s %s ", "●", data.state_label or "")
 	local title_prefix = pill .. " "
 	local iid_text = data.iid_text or ""
 	local iid_suffix = iid_text ~= "" and (" " .. iid_text) or ""
 	local title_text = data.title or ""
-	local title_room = width - ui_utils.text_width(title_prefix) - ui_utils.text_width(iid_suffix)
-	if title_room > 0 and ui_utils.text_width(title_text) > title_room then
+	local title_room = width - text_width(title_prefix) - text_width(iid_suffix)
+	if title_room > 0 and text_width(title_text) > title_room then
 		title_text = utils.truncate(title_text, title_room)
 	end
 	local title_line = title_prefix .. title_text .. iid_suffix
@@ -76,16 +80,12 @@ local function render_body(data, width)
 	if iid_text ~= "" then
 		table.insert(spans, { line = 0, start_col = #title_line - #iid_text, end_col = #title_line, hl_group = "AtlasTextMuted" })
 	end
-	table.insert(lines, "")
 
 	-- Chip row: label chips, then milestone + progress appended to the last
 	-- chip line (or a fresh one if there are no labels).
 	local chip_lines, chip_spans = {}, {}
 	if data.chips and #data.chips > 0 then
 		chip_lines, chip_spans = utils.render_chips(data.chips, { width = width, padding_x = 0, rounded = true })
-	end
-	if #chip_lines == 0 then
-		chip_lines = { "" }
 	end
 
 	local trailer, trailer_spans = "", {}
@@ -115,6 +115,9 @@ local function render_body(data, width)
 	end
 
 	if trailer ~= "" then
+		if #chip_lines == 0 then
+			chip_lines = { "" }
+		end
 		local last_idx = #chip_lines
 		local base = chip_lines[last_idx]
 		local sep2 = (base ~= "") and "  " or ""
@@ -128,132 +131,111 @@ local function render_body(data, width)
 		end
 	end
 
-	utils.append_block(lines, spans, { lines = chip_lines, highlights = chip_spans })
+	if #chip_lines > 0 then
+		table.insert(lines, "")
+		utils.append_block(lines, spans, { lines = chip_lines, highlights = chip_spans })
+	end
 
 	if data.meta_strip and data.meta_strip ~= "" then
 		table.insert(lines, data.meta_strip)
 		table.insert(spans, { line = #lines - 1, start_col = 0, end_col = #data.meta_strip, hl_group = "AtlasTextMuted" })
 	end
 
-	return lines, spans, 0, ui_utils.text_width(title_prefix)
+	return lines, spans, text_width(title_prefix)
 end
 
---- Highlights the trailing "#iid" of a breadcrumb like the key hints, the
---- rest of it dim.
+--- Highlights the trailing "#iid"/"%id" of a breadcrumb like the key hints,
+--- the rest of it dim.
 ---@param spans AtlasUIHighlight[]
----@param line integer
----@param col integer Byte column where the breadcrumb starts.
+---@param col integer Byte column where the breadcrumb starts on line 0.
 ---@param breadcrumb string
-local function breadcrumb_spans(spans, line, col, breadcrumb)
-	local iid = breadcrumb:match("#%d+$") or ""
-	local head = #breadcrumb - #iid
-	table.insert(spans, { line = line, start_col = col, end_col = col + head, hl_group = "AtlasTextMuted" })
-	if iid ~= "" then
-		table.insert(spans, { line = line, start_col = col + head, end_col = col + #breadcrumb, hl_group = "AtlasKeyHint" })
+local function breadcrumb_spans(spans, col, breadcrumb)
+	local id = breadcrumb:match("[#%%]%d+$") or ""
+	local head = #breadcrumb - #id
+	table.insert(spans, { line = 0, start_col = col, end_col = col + head, hl_group = "AtlasTextMuted" })
+	if id ~= "" then
+		table.insert(spans, { line = 0, start_col = col + head, end_col = col + #breadcrumb, hl_group = "AtlasKeyHint" })
 	end
 end
 
+--- Top border: " ╭─ breadcrumb ───── meta_right ─╮", exactly `outer_width`
+--- wide. Too narrow: shortens the breadcrumb from its start (keeping its
+--- "› #iid" end) down to MIN_BREADCRUMB, then the meta text.
 ---@param data IssuesDetailHeaderData
 ---@param outer_width integer
----@return string[] lines
+---@return string line
 ---@return AtlasUIHighlight[] highlights
----@return table<string, AtlasFieldBoxRegion> regions
-local function render_plain(data, outer_width)
-	local width = math.max(1, outer_width - LEFT_PAD)
-	local lines, spans = {}, {}
-
-	local meta_left = data.breadcrumb or ""
-	local meta_right = data.meta_right or ""
-	local meta_gap = math.max(1, width - ui_utils.text_width(meta_left) - ui_utils.text_width(meta_right))
-	local meta_line = meta_left .. string.rep(" ", meta_gap) .. meta_right
-	table.insert(lines, meta_line)
-	table.insert(spans, { line = 0, start_col = 0, end_col = #meta_left, hl_group = "AtlasTextMuted" })
-	table.insert(
-		spans,
-		{ line = 0, start_col = #meta_line - #meta_right, end_col = #meta_line, hl_group = "AtlasTextMuted" }
-	)
-	table.insert(lines, "")
-
-	local base = #lines
-	local body_lines, body_spans, title_line, title_col = render_body(data, width)
-	utils.append_block(lines, spans, { lines = body_lines, highlights = body_spans })
-
-	for i, line in ipairs(lines) do
-		lines[i] = line ~= "" and (LEFT_PAD_STR .. line) or line
-	end
-	for _, span in ipairs(spans) do
-		if span.line_hl_group == nil then
-			span.start_col = span.start_col + LEFT_PAD
-			span.end_col = span.end_col + LEFT_PAD
-		end
-	end
-
-	local regions = {
-		title = {
-			row = base + title_line,
-			col = LEFT_PAD + title_col,
-			width = math.max(1, width - title_col),
-			height = 1,
-		},
-	}
-	return lines, spans, regions
-end
-
----@param data IssuesDetailHeaderData
----@param outer_width integer
----@return string[] lines
----@return AtlasUIHighlight[] highlights
----@return table<string, AtlasFieldBoxRegion> regions
-local function render_boxed(data, outer_width)
-	local width = math.max(1, outer_width - BOX_LEFT_COLS - BOX_RIGHT_COLS)
-	local lines, spans = {}, {}
-
-	-- Top border: " ╭─ breadcrumb ───── meta_right ─╮", same total width as
-	-- the content lines below.
+local function render_top_border(data, outer_width)
 	local meta_left = data.breadcrumb or ""
 	local meta_right = data.meta_right or ""
 	local head = " ╭─ "
 	local tail = " ─╮"
-	-- Room for both texts after the corners, the 2 spaces around the fill, and
-	-- at least 1 fill dash. Too narrow: shorten the breadcrumb from its start
-	-- (keeping the "› #iid" end) down to MIN_BREADCRUMB, then the meta text.
-	local MIN_BREADCRUMB = 20
-	local room = math.max(0, outer_width - ui_utils.text_width(head) - ui_utils.text_width(tail) - 3)
-	local over = ui_utils.text_width(meta_left) + ui_utils.text_width(meta_right) - room
+	-- Room for both texts after the corners, the 2 spaces around the fill,
+	-- and at least 1 fill dash.
+	local room = math.max(0, outer_width - text_width(head) - text_width(tail) - 3)
+	local over = text_width(meta_left) + text_width(meta_right) - room
 	if over > 0 then
-		local left_w = math.max(math.min(MIN_BREADCRUMB, ui_utils.text_width(meta_left)), ui_utils.text_width(meta_left) - over)
-		meta_left = utils.truncate(meta_left, left_w, true)
-		meta_right = utils.truncate(meta_right, math.max(0, room - ui_utils.text_width(meta_left)))
+		local left_w = text_width(meta_left)
+		meta_left = utils.truncate(meta_left, math.max(math.min(MIN_BREADCRUMB, left_w), left_w - over), true)
+		meta_right = utils.truncate(meta_right, math.max(0, room - text_width(meta_left)))
 	end
 	local fill = math.max(
 		1,
 		outer_width
-			- ui_utils.text_width(head)
-			- ui_utils.text_width(meta_left)
-			- ui_utils.text_width(meta_right)
-			- ui_utils.text_width(tail)
+			- text_width(head)
+			- text_width(meta_left)
+			- text_width(meta_right)
+			- text_width(tail)
 			- 2
 	)
+
 	local left_part = head .. meta_left .. " "
 	local fill_str = string.rep("─", fill)
-	local top = left_part .. fill_str .. " " .. meta_right .. tail
-	table.insert(lines, top)
-	table.insert(spans, { line = 0, start_col = 0, end_col = #head, hl_group = "AtlasBorder" })
-	breadcrumb_spans(spans, 0, #head, meta_left)
-	local fill_start = #left_part
-	table.insert(spans, { line = 0, start_col = fill_start, end_col = fill_start + #fill_str, hl_group = "AtlasBorder" })
-	table.insert(spans, { line = 0, start_col = #top - #tail - #meta_right, end_col = #top - #tail, hl_group = "AtlasTextMuted" })
-	table.insert(spans, { line = 0, start_col = #top - #tail, end_col = #top, hl_group = "AtlasBorder" })
+	local line = left_part .. fill_str .. " " .. meta_right .. tail
+	local spans = { { line = 0, start_col = 0, end_col = #head, hl_group = "AtlasBorder" } }
+	breadcrumb_spans(spans, #head, meta_left)
+	table.insert(spans, {
+		line = 0,
+		start_col = #left_part,
+		end_col = #left_part + #fill_str,
+		hl_group = "AtlasBorder",
+	})
+	table.insert(spans, {
+		line = 0,
+		start_col = #line - #tail - #meta_right,
+		end_col = #line - #tail,
+		hl_group = "AtlasTextMuted",
+	})
+	table.insert(spans, { line = 0, start_col = #line - #tail, end_col = #line, hl_group = "AtlasBorder" })
+	return line, spans
+end
 
-	local body_lines, body_spans, title_line, title_col = render_body(data, width)
-	local inner = { "" }
-	local inner_spans = {}
+---@param data IssuesDetailHeaderData
+---@param outer_width integer
+---@param extra IssuesDetailHeaderBlock|nil Rendered inside the box, below a blank line after the body.
+---@return string[] lines
+---@return AtlasUIHighlight[] highlights
+---@return table<string, AtlasFieldBoxRegion> regions `title`, plus `extra`'s regions moved into place.
+function M.render(data, outer_width, extra)
+	local width = M.inner_width(outer_width)
+
+	local top, top_spans = render_top_border(data, outer_width)
+	local lines, spans = { top }, top_spans
+
+	-- Inner rows: a blank padding row, the body, then `extra` after a blank.
+	local body_lines, body_spans, title_col = render_body(data, width)
+	local inner, inner_spans = { "" }, {}
+	local title_row = 1
 	utils.append_block(inner, inner_spans, { lines = body_lines, highlights = body_spans })
-	table.insert(inner, "")
-	local title_row = #lines + 1 + title_line
+	local extra_row
+	if extra and #extra.lines > 0 then
+		table.insert(inner, "")
+		extra_row = #inner
+		utils.append_block(inner, inner_spans, { lines = extra.lines, highlights = extra.highlights })
+	end
 
 	for _, line in ipairs(inner) do
-		local pad = math.max(0, width - ui_utils.text_width(line))
+		local pad = math.max(0, width - text_width(line))
 		local row = #lines
 		local text = BOX_LEFT .. line .. string.rep(" ", pad) .. BOX_RIGHT
 		table.insert(lines, text)
@@ -277,26 +259,23 @@ local function render_boxed(data, outer_width)
 
 	local regions = {
 		title = {
-			row = title_row,
+			row = 1 + title_row,
 			col = BOX_LEFT_COLS + title_col,
 			width = math.max(1, width - title_col),
 			height = 1,
 		},
 	}
-	return lines, spans, regions
-end
-
----@param data IssuesDetailHeaderData
----@param outer_width integer
----@param opts { boxed: boolean|nil }|nil
----@return string[] lines
----@return AtlasUIHighlight[] highlights
----@return table<string, AtlasFieldBoxRegion> regions Only `title`, for anchoring its inline-edit overlay.
-function M.render(data, outer_width, opts)
-	if opts and opts.boxed then
-		return render_boxed(data, outer_width)
+	if extra_row then
+		for id, region in pairs(extra.regions or {}) do
+			regions[id] = {
+				row = 1 + extra_row + region.row,
+				col = BOX_LEFT_COLS + region.col,
+				width = region.width,
+				height = region.height,
+			}
+		end
 	end
-	return render_plain(data, outer_width)
+	return lines, spans, regions
 end
 
 return M

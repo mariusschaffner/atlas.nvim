@@ -165,7 +165,7 @@ local function render_header(issue, gl, width)
 		data.meta_strip = table.concat(parts, " · ")
 	end
 
-	return header.render(data, width, { boxed = true })
+	return header.render(data, width)
 end
 
 --- The label highlight for a sidebar field: orange while it's the one

@@ -22,6 +22,7 @@ local state = {
 	sidebar_win = nil, -- sidebar floating window (split layout only, when not collapsed)
 	sidebar_buf = nil, -- sidebar buffer; kept alive (bufhidden=hide) across collapse/expand
 	sidebar_collapsed = false, -- true when narrow-terminal collapse hid the sidebar
+	boxed_header = false, -- header draws its own box: floats start on the spacer's first row (no gap row)
 	previous_win = nil,
 	cleanup = nil,
 	render = nil,
@@ -170,10 +171,14 @@ end
 --- exactly one (the content pane's own, already handled deliberately -- see
 --- `configure`'s doc comment) regardless of whether the sidebar is shown.
 ---@param spacer_win integer
----@return integer content_width, integer content_col, integer|nil sidebar_width, integer|nil sidebar_col, integer height
+---@return integer content_width, integer content_col, integer|nil sidebar_width, integer|nil sidebar_col, integer height, integer row
 local function split_geometry(spacer_win)
 	local total = math.max(1, vim.api.nvim_win_get_width(spacer_win))
-	local height = math.max(1, vim.api.nvim_win_get_height(spacer_win) - 2)
+	-- A boxed header already ends in its own bottom border, so the floats
+	-- start on the spacer's first row instead of leaving a gap row above them.
+	-- They grow by that row too, keeping their bottom edge where it was.
+	local row = state.boxed_header and 0 or 1
+	local height = math.max(1, vim.api.nvim_win_get_height(spacer_win) - 1 - row)
 	if state.sidebar_enabled and not state.sidebar_collapsed then
 		-- Reserve SIDEBAR_WIDTH + a gap column for the sidebar, but never let
 		-- the content pane shrink below a usable minimum.
@@ -182,9 +187,9 @@ local function split_geometry(spacer_win)
 		local content_width = math.max(1, content_box - 2)
 		local sidebar_width = math.max(1, sidebar_box - 2)
 		local sidebar_col = 1 + content_width + 2 + SIDEBAR_GAP
-		return content_width, 1, sidebar_width, sidebar_col, height
+		return content_width, 1, sidebar_width, sidebar_col, height, row
 	end
-	return math.max(1, total - 2), 1, nil, nil, height
+	return math.max(1, total - 2), 1, nil, nil, height, row
 end
 
 --- Re-syncs the content float's position/size to whatever `state.spacer_win`
@@ -194,11 +199,11 @@ local function sync_content_float()
 	if state.layout ~= "split" or not utils.window.valid(state.spacer_win) or not utils.window.valid(state.win) then
 		return
 	end
-	local content_width, content_col, _, _, height = split_geometry(state.spacer_win)
+	local content_width, content_col, _, _, height, row = split_geometry(state.spacer_win)
 	pcall(vim.api.nvim_win_set_config, state.win, {
 		relative = "win",
 		win = state.spacer_win,
-		row = 1,
+		row = row,
 		col = content_col,
 		width = content_width,
 		height = height,
@@ -217,14 +222,14 @@ local function sync_sidebar_float()
 	then
 		return
 	end
-	local _, _, sidebar_width, sidebar_col, height = split_geometry(state.spacer_win)
+	local _, _, sidebar_width, sidebar_col, height, row = split_geometry(state.spacer_win)
 	if sidebar_width == nil then
 		return
 	end
 	pcall(vim.api.nvim_win_set_config, state.sidebar_win, {
 		relative = "win",
 		win = state.spacer_win,
-		row = 1,
+		row = row,
 		col = sidebar_col,
 		width = sidebar_width,
 		height = height,
@@ -252,14 +257,14 @@ local function create_sidebar_window(tab)
 		state.sidebar_buf = sidebar_buf
 	end
 
-	local _, _, sidebar_width, sidebar_col, height = split_geometry(state.spacer_win)
+	local _, _, sidebar_width, sidebar_col, height, row = split_geometry(state.spacer_win)
 	if sidebar_width == nil then
 		return
 	end
 	local sidebar_win = vim.api.nvim_open_win(state.sidebar_buf, false, {
 		relative = "win",
 		win = state.spacer_win,
-		row = 1,
+		row = row,
 		col = sidebar_col,
 		width = sidebar_width,
 		height = height,
@@ -300,7 +305,8 @@ end
 -- tracked via Neovim's own split layout engine instead of manual math
 -- against tabline/cmdheight/laststatus.
 ---@param sidebar_enabled boolean
-local function create_split(sidebar_enabled)
+---@param boxed_header boolean
+local function create_split(sidebar_enabled, boxed_header)
 	vim.cmd("tabnew")
 	local tab = vim.api.nvim_get_current_tabpage()
 	local placeholder_buf = vim.api.nvim_get_current_buf()
@@ -328,17 +334,18 @@ local function create_split(sidebar_enabled)
 	pcall(vim.api.nvim_win_set_height, header_win, MIN_HEADER_HEIGHT)
 
 	state.spacer_win = spacer_win
+	state.boxed_header = boxed_header
 	state.sidebar_enabled = sidebar_enabled
 	state.sidebar_collapsed = sidebar_enabled and vim.o.columns < SIDEBAR_COLLAPSE_COLUMNS
 	if sidebar_enabled and not state.sidebar_collapsed then
 		create_sidebar_window(tab)
 	end
 
-	local content_width, content_col, _, _, height = split_geometry(spacer_win)
+	local content_width, content_col, _, _, height, row = split_geometry(spacer_win)
 	local content_win = vim.api.nvim_open_win(content_buf, false, {
 		relative = "win",
 		win = spacer_win,
-		row = 1,
+		row = row,
 		col = content_col,
 		width = content_width,
 		height = height,
@@ -387,6 +394,7 @@ local function create_split(sidebar_enabled)
 			state.sidebar_enabled = false
 			state.sidebar_buf = nil
 			state.sidebar_collapsed = false
+			state.boxed_header = false
 			deactivate()
 			pcall(vim.api.nvim_del_augroup_by_id, focus_guard)
 			if vim.api.nvim_tabpage_is_valid(tab) then
@@ -418,6 +426,7 @@ end
 
 ---@class AtlasDetailOpenOpts
 ---@field sidebar boolean|nil -- opt into the fixed-width sidebar region (split layout only)
+---@field boxed_header boolean|nil -- header renders its own bordered box; no gap row above the content box (split layout only)
 
 ---@param kind "issues"|"pulls"|"repo"|"milestone"|"pipelines"|"create"
 ---@param cleanup fun()
@@ -428,17 +437,25 @@ function M.open(kind, cleanup, render, opts)
 	require("atlas.ui.shared.highlights").setup()
 	local wanted_layout = layout_for(kind)
 	local wanted_sidebar = wanted_layout == "split" and opts ~= nil and opts.sidebar == true
+	local wanted_boxed = wanted_layout == "split" and opts ~= nil and opts.boxed_header == true
 	if M.is_open() and vim.api.nvim_win_get_tabpage(state.win) ~= vim.api.nvim_get_current_tabpage() then
 		M.close()
 	end
-	if M.is_open() and (state.layout ~= wanted_layout or state.sidebar_enabled ~= wanted_sidebar) then
+	if
+		M.is_open()
+		and (
+			state.layout ~= wanted_layout
+			or state.sidebar_enabled ~= wanted_sidebar
+			or state.boxed_header ~= wanted_boxed
+		)
+	then
 		M.close()
 	end
 	if not M.is_open() then
 		deactivate()
 		state.win, state.buf, state.header_win, state.header_buf, state.spacer_win = nil, nil, nil, nil, nil
 		if wanted_layout == "split" then
-			create_split(wanted_sidebar)
+			create_split(wanted_sidebar, wanted_boxed)
 		else
 			create_single()
 		end
@@ -613,6 +630,7 @@ function M.close(tab)
 		nil, nil, nil, nil, nil, nil
 	state.sidebar_win, state.sidebar_buf = nil, nil
 	state.sidebar_enabled, state.sidebar_collapsed = false, false
+	state.boxed_header = false
 	if layout == "split" and utils.window.valid(win) then
 		local tabpage = vim.api.nvim_win_get_tabpage(win)
 		pcall(vim.cmd, "tabclose " .. vim.api.nvim_tabpage_get_number(tabpage))
