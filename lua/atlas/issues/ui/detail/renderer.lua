@@ -426,11 +426,15 @@ local function development_entry()
 end
 
 ---@param gl IssuesGitLabHeaderData
----@param width integer
+---@param outer_width integer Sidebar window's full width.
 ---@return string[] lines
 ---@return AtlasUIHighlight[] highlights
 ---@return table<string, AtlasFieldBoxRegion> regions
-local function render_sidebar(gl, width)
+local function render_sidebar(gl, outer_width)
+	-- Entries are built against the same inner width `sidebar.render` lays
+	-- them out at, so e.g. the Start/Due split line's hint ends exactly where
+	-- the padded value lines end, not where the unpadded window does.
+	local width = math.max(1, outer_width - 2 * sidebar.PAD_X)
 	local entries = {
 		assignee_entry(gl),
 		labels_entry(gl, width),

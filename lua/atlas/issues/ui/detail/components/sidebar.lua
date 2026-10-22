@@ -8,6 +8,14 @@ local M = {}
 local sidebar_field = require("atlas.ui.components.sidebar_field")
 local shared_utils = require("atlas.ui.shared.utils")
 
+-- Breathing room between the sidebar's content and the panel border on both
+-- sides (DESIGN-detail-view.md §4's fields previously ran flush to the
+-- border). Exported so the renderer can size entries (chip wrapping, the
+-- Start/Due split line, ...) against the same inner width this module lays
+-- them out at, rather than the window's full outer width.
+M.PAD_X = 1
+local PAD_STR = string.rep(" ", M.PAD_X)
+
 ---@class IssuesSidebarEntry : AtlasSidebarField
 ---@field id string|nil When set, the field's region is reported back via `regions`.
 ---@field ids string[]|nil Like `id`, but reports the same region under several keys (e.g. a combined "Start -> Due" line anchors both `start_date` and `due_date` edits).
@@ -15,7 +23,7 @@ local shared_utils = require("atlas.ui.shared.utils")
 ---@field text string|nil When set (no `id`/`divider`), renders a single dim plain line (e.g. the footer).
 
 ---@param entries IssuesSidebarEntry[]
----@param width integer
+---@param width integer Inner content width (already excludes `M.PAD_X` on each side) -- the same width entries were built against.
 ---@return string[] lines
 ---@return AtlasUIHighlight[] highlights
 ---@return table<string, AtlasFieldBoxRegion> regions
@@ -40,13 +48,23 @@ function M.render(entries, width)
 			-- Value area starts right after the label line -- good enough for
 			-- `inline_field_edit`'s positioning needs (it just needs a
 			-- row/col/width/height to float its overlay over).
-			local region = { row = base + 1, col = 0, width = width, height = math.max(1, #field_lines - 1) }
+			local region = { row = base + 1, col = M.PAD_X, width = width, height = math.max(1, #field_lines - 1) }
 			if entry.id then
 				regions[entry.id] = region
 			end
 			for _, id in ipairs(entry.ids or {}) do
 				regions[id] = region
 			end
+		end
+	end
+
+	for i, line in ipairs(lines) do
+		lines[i] = line ~= "" and (PAD_STR .. line) or line
+	end
+	for _, span in ipairs(spans) do
+		if span.line_hl_group == nil then
+			span.start_col = span.start_col + M.PAD_X
+			span.end_col = span.end_col + M.PAD_X
 		end
 	end
 

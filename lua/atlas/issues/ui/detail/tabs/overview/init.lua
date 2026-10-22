@@ -10,6 +10,9 @@ local markdown_lines = require("atlas.ui.components.markdown_lines")
 
 local PADDING_X = 1
 local PADDING = string.rep(" ", PADDING_X)
+-- Extra right-side breathing room for a heading's right-aligned "n of m done"
+-- suffix, so it doesn't sit flush against the content pane's border.
+local RIGHT_HINT_PAD_X = 1
 local hint_ns = vim.api.nvim_create_namespace("atlas.issues.detail.overview.hint")
 
 --- The last render's task index (buffer line -> source line / checked),
@@ -30,7 +33,8 @@ function M.render(_issue, details, width)
 	end
 
 	local description = tostring(details.description or "")
-	local rendered_lines, rendered_spans, tasks = markdown_lines.render(description, { width = width - PADDING_X })
+	local rendered_lines, rendered_spans, tasks =
+		markdown_lines.render(description, { width = width - PADDING_X - RIGHT_HINT_PAD_X })
 	last_tasks = tasks
 
 	if #rendered_lines == 0 then
