@@ -386,19 +386,26 @@ local function dates_entry(width)
 	end
 	local start_text = dates.start_date or "?"
 	local due_text = dates.due_date or "?"
-	local text = string.format("%s → %s", start_text, due_text)
+	-- Due date flush right (mirroring the label line's left/right split): the
+	-- arrow sits right before it, with the gap after `start_text` absorbing
+	-- whatever space is left.
+	local right_part = "→ " .. due_text
+	local gap = math.max(1, width - #start_text - #right_part)
+	local text = start_text .. string.rep(" ", gap) .. right_part
 	return {
 		ids = { "start_date", "due_date" },
 		label_line = label_line,
 		label_spans = label_spans,
 		value_lines = { text },
-		value_highlights = { { line = 0, start_col = #text - #due_text, end_col = #text, hl_group = due_hl(dates.due_date) } },
+		value_highlights = {
+			{ line = 0, start_col = #start_text + gap, end_col = #text - #due_text, hl_group = "AtlasTextMuted" },
+			{ line = 0, start_col = #text - #due_text, end_col = #text, hl_group = due_hl(dates.due_date) },
+		},
 	}
 end
 
----@param width integer
 ---@return IssuesSidebarEntry
-local function development_entry(width)
+local function development_entry()
 	local branches = state.linked_branches
 	local mrs = state.linked_merge_requests
 	local lines, spans = {}, {}
@@ -423,8 +430,7 @@ local function development_entry(width)
 			add("+ link branch", "AtlasTextMutedItalic")
 		end
 
-		spans[#spans + 1] = { line = #lines, line_hl_group = "AtlasBorder" }
-		lines[#lines + 1] = string.rep("─", width)
+		lines[#lines + 1] = ""
 
 		if type(mrs) == "table" and #mrs > 0 then
 			for _, mr in ipairs(mrs) do
@@ -459,7 +465,7 @@ local function render_sidebar(gl, width)
 		milestone_entry(gl, width),
 		dates_entry(width),
 		{ divider = true },
-		development_entry(width),
+		development_entry(),
 	}
 	local lines, spans, regions = sidebar.render(entries, width)
 
