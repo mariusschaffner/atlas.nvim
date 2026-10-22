@@ -15,6 +15,9 @@ local ui_utils = require("atlas.ui.utils")
 ---@field value_highlights AtlasUIHighlight[]|nil Spans relative to `value_lines` (0-indexed `line`).
 ---@field empty boolean|nil When true, renders `empty_text` instead of `value_lines`.
 ---@field empty_text string|nil Empty-state text, e.g. "+ assign" or "not scheduled".
+---@field label_hl string|nil Label highlight group override, default "AtlasTextMuted" (e.g. "AtlasFieldBoxBorderEditing" while the field is actively being edited).
+---@field label_line string|nil Pre-rendered label line, bypassing the usual "LABEL ... hint" layout (e.g. the split Start/Due line). Used together with `label_spans`.
+---@field label_spans AtlasUIHighlight[]|nil Spans for `label_line` (0-indexed `line`, always 0 here).
 
 ---@param field AtlasSidebarField
 ---@param width integer
@@ -24,19 +27,26 @@ function M.render(field, width)
 	width = math.max(1, width)
 	local lines, spans = {}, {}
 
-	local label = string.upper(field.label or "")
-	local hint = field.key_hint
-	local label_line
-	if hint and hint ~= "" then
-		local gap = math.max(1, width - ui_utils.text_width(label) - ui_utils.text_width(hint))
-		label_line = label .. string.rep(" ", gap) .. hint
+	if field.label_line ~= nil then
+		table.insert(lines, field.label_line)
+		for _, span in ipairs(field.label_spans or {}) do
+			table.insert(spans, { line = 0, start_col = span.start_col, end_col = span.end_col, hl_group = span.hl_group })
+		end
 	else
-		label_line = label
-	end
-	table.insert(lines, label_line)
-	table.insert(spans, { line = 0, start_col = 0, end_col = #label, hl_group = "AtlasTextMuted" })
-	if hint and hint ~= "" then
-		table.insert(spans, { line = 0, start_col = #label_line - #hint, end_col = #label_line, hl_group = "AtlasKeyHint" })
+		local label = string.upper(field.label or "")
+		local hint = field.key_hint
+		local label_line
+		if hint and hint ~= "" then
+			local gap = math.max(1, width - ui_utils.text_width(label) - ui_utils.text_width(hint))
+			label_line = label .. string.rep(" ", gap) .. hint
+		else
+			label_line = label
+		end
+		table.insert(lines, label_line)
+		table.insert(spans, { line = 0, start_col = 0, end_col = #label, hl_group = field.label_hl or "AtlasTextMuted" })
+		if hint and hint ~= "" then
+			table.insert(spans, { line = 0, start_col = #label_line - #hint, end_col = #label_line, hl_group = "AtlasKeyHint" })
+		end
 	end
 
 	if field.empty then

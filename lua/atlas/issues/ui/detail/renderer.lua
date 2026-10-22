@@ -173,6 +173,15 @@ local function render_header(issue, gl, width)
 	return lines, spans, regions
 end
 
+--- The label highlight for a sidebar field: orange while it's the one
+--- currently under inline edit (mirrors the description border's editing
+--- color), muted otherwise.
+---@param field_id string
+---@return string
+local function field_label_hl(field_id)
+	return state.editing_field == field_id and "AtlasFieldBoxBorderEditing" or "AtlasTextMuted"
+end
+
 ---@param gl IssuesGitLabHeaderData
 ---@return IssuesSidebarEntry
 local function assignee_entry(gl)
@@ -182,6 +191,7 @@ local function assignee_entry(gl)
 			id = "assignee",
 			label = "Assignee",
 			key_hint = key_hint("issues.change_assignee"),
+			label_hl = field_label_hl("assignee"),
 			empty = true,
 			empty_text = "+ assign",
 		}
@@ -200,6 +210,7 @@ local function assignee_entry(gl)
 		id = "assignee",
 		label = "Assignee",
 		key_hint = key_hint("issues.change_assignee"),
+		label_hl = field_label_hl("assignee"),
 		value_lines = lines,
 		value_highlights = spans,
 	}
@@ -229,6 +240,7 @@ local function labels_entry(gl, width)
 			id = "labels",
 			label = "Labels",
 			key_hint = key_hint("issues.change_label"),
+			label_hl = field_label_hl("labels"),
 			empty = true,
 			empty_text = "+ add label",
 		}
@@ -238,6 +250,7 @@ local function labels_entry(gl, width)
 		id = "labels",
 		label = "Labels",
 		key_hint = key_hint("issues.change_label"),
+		label_hl = field_label_hl("labels"),
 		value_lines = lines,
 		value_highlights = spans,
 	}
@@ -248,9 +261,17 @@ end
 ---@return IssuesSidebarEntry
 local function milestone_entry(gl, width)
 	local hints = key_hints({ "issues.go_to_milestone", "issues.change_milestone" })
+	local label_hl = field_label_hl("milestone")
 	local milestone = gl.milestone
 	if milestone == nil then
-		return { id = "milestone", label = "Milestone", key_hint = hints, empty = true, empty_text = "+ set milestone" }
+		return {
+			id = "milestone",
+			label = "Milestone",
+			key_hint = hints,
+			label_hl = label_hl,
+			empty = true,
+			empty_text = "+ set milestone",
+		}
 	end
 	local title = ui_utils.text_width(milestone.title or "") > width - 2 and utils.truncate(milestone.title, width - 2)
 		or tostring(milestone.title or "")
@@ -259,6 +280,7 @@ local function milestone_entry(gl, width)
 		id = "milestone",
 		label = "Milestone",
 		key_hint = hints,
+		label_hl = label_hl,
 		value_lines = { text },
 		value_highlights = { { line = 0, start_col = 0, end_col = #text, hl_group = "AtlasCyan" } },
 	}
@@ -290,20 +312,65 @@ local function due_hl(due_date)
 	return "AtlasTextBright"
 end
 
+--- Builds the split "START gs | gd DUE" label line: start left-aligned with
+--- its hint, due right-aligned with its hint, a dimmed "|" centered between
+--- them. Each side's label turns orange while that specific field (not its
+--- sibling) is under inline edit.
+---@param width integer
+---@return string label_line
+---@return AtlasUIHighlight[] label_spans
+local function dates_label(width)
+	local start_hint = key_hint("issues.change_start_date")
+	local due_hint = key_hint("issues.change_due_date")
+	local start_hl = field_label_hl("start_date")
+	local due_hl_group = field_label_hl("due_date")
+
+	local left = "START"
+	local right = "DUE"
+	local left_text = start_hint and (left .. " " .. start_hint) or left
+	local right_text = due_hint and (right .. " " .. due_hint) or right
+
+	local free = math.max(1, width - ui_utils.text_width(left_text) - ui_utils.text_width(right_text) - 1)
+	local left_pad = math.floor(free / 2)
+	local right_pad = free - left_pad
+	local line = left_text .. string.rep(" ", left_pad) .. "|" .. string.rep(" ", right_pad) .. right_text
+
+	local spans = { { start_col = 0, end_col = #left, hl_group = start_hl } }
+	if start_hint then
+		table.insert(spans, { start_col = #left + 1, end_col = #left_text, hl_group = "AtlasKeyHint" })
+	end
+	local pipe_col = #left_text + left_pad
+	table.insert(spans, { start_col = pipe_col, end_col = pipe_col + 1, hl_group = "AtlasTextMuted" })
+	local right_col = pipe_col + 1 + right_pad
+	table.insert(spans, { start_col = right_col, end_col = right_col + #right, hl_group = due_hl_group })
+	if due_hint then
+		table.insert(
+			spans,
+			{ start_col = right_col + #right + 1, end_col = right_col + #right_text, hl_group = "AtlasKeyHint" }
+		)
+	end
+
+	return line, spans
+end
+
+---@param width integer
 ---@return IssuesSidebarEntry
-local function dates_entry()
-	local hints = key_hints({ "issues.change_start_date", "issues.change_due_date" })
+local function dates_entry(width)
+	local label_line, label_spans = dates_label(width)
 	local dates = state.dates
 	if dates == "loading" then
-		return { ids = { "start_date", "due_date" }, label = "Start → Due", key_hint = hints, value_lines = {
-			spinner.with_text("Loading..."),
-		} }
+		return {
+			ids = { "start_date", "due_date" },
+			label_line = label_line,
+			label_spans = label_spans,
+			value_lines = { spinner.with_text("Loading...") },
+		}
 	end
 	if type(dates) == "string" then
 		return {
 			ids = { "start_date", "due_date" },
-			label = "Start → Due",
-			key_hint = hints,
+			label_line = label_line,
+			label_spans = label_spans,
 			value_lines = { dates },
 			value_highlights = { { line = 0, start_col = 0, end_col = #dates, hl_group = "AtlasLogError" } },
 		}
@@ -311,8 +378,8 @@ local function dates_entry()
 	if type(dates) ~= "table" or (not dates.start_date and not dates.due_date) then
 		return {
 			ids = { "start_date", "due_date" },
-			label = "Start → Due",
-			key_hint = hints,
+			label_line = label_line,
+			label_spans = label_spans,
 			empty = true,
 			empty_text = "not scheduled",
 		}
@@ -322,15 +389,16 @@ local function dates_entry()
 	local text = string.format("%s → %s", start_text, due_text)
 	return {
 		ids = { "start_date", "due_date" },
-		label = "Start → Due",
-		key_hint = hints,
+		label_line = label_line,
+		label_spans = label_spans,
 		value_lines = { text },
 		value_highlights = { { line = 0, start_col = #text - #due_text, end_col = #text, hl_group = due_hl(dates.due_date) } },
 	}
 end
 
+---@param width integer
 ---@return IssuesSidebarEntry
-local function development_entry()
+local function development_entry(width)
 	local branches = state.linked_branches
 	local mrs = state.linked_merge_requests
 	local lines, spans = {}, {}
@@ -354,6 +422,9 @@ local function development_entry()
 		else
 			add("+ link branch", "AtlasTextMutedItalic")
 		end
+
+		spans[#spans + 1] = { line = #lines, line_hl_group = "AtlasBorder" }
+		lines[#lines + 1] = string.rep("─", width)
 
 		if type(mrs) == "table" and #mrs > 0 then
 			for _, mr in ipairs(mrs) do
@@ -386,9 +457,9 @@ local function render_sidebar(gl, width)
 		assignee_entry(gl),
 		labels_entry(gl, width),
 		milestone_entry(gl, width),
-		dates_entry(),
+		dates_entry(width),
 		{ divider = true },
-		development_entry(),
+		development_entry(width),
 	}
 	local lines, spans, regions = sidebar.render(entries, width)
 

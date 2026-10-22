@@ -18,6 +18,16 @@ local milestones_completion = require("atlas.providers.gitlab.completion.milesto
 local detail_state = require("atlas.issues.ui.detail.state")
 local presentation = require("atlas.issues.ui.presentation")
 
+--- Marks `field_id` as under inline edit (orange sidebar label) and repaints,
+--- or clears it. Lazily required -- `atlas.issues.ui.detail` never requires
+--- this registry, but routing through `require` here (rather than a
+--- top-level import) keeps that non-dependency explicit at each call site.
+---@param field_id string|nil
+local function set_editing_field(field_id)
+	detail_state.editing_field = field_id
+	require("atlas.issues.ui.detail").rerender()
+end
+
 ---@param ctx AtlasIssueActionContext
 ---@return boolean
 local function has_issue(ctx)
@@ -220,6 +230,7 @@ local function assign(ctx, done)
 			end
 		end)
 
+		set_editing_field("assignee")
 		inline_field_edit.start({
 			anchor_win = sidebar_win,
 			row = region.row,
@@ -274,7 +285,9 @@ local function assign(ctx, done)
 			on_cancel = function()
 				done(nil, nil)
 			end,
-			on_done = function() end,
+			on_done = function()
+				set_editing_field(nil)
+			end,
 		})
 	end)
 end
@@ -323,6 +336,7 @@ local function labels(ctx, done)
 
 		local completion = labels_completion.for_project(labels_api.list, path)
 
+		set_editing_field("labels")
 		inline_field_edit.start({
 			anchor_win = sidebar_win,
 			row = region.row,
@@ -374,7 +388,9 @@ local function labels(ctx, done)
 			on_cancel = function()
 				done(nil, nil)
 			end,
-			on_done = function() end,
+			on_done = function()
+				set_editing_field(nil)
+			end,
 		})
 	end)
 end
@@ -421,6 +437,7 @@ local function milestone(ctx, done)
 		end
 	end)
 
+	set_editing_field("milestone")
 	inline_field_edit.start({
 		anchor_win = sidebar_win,
 		row = region.row,
@@ -461,7 +478,9 @@ local function milestone(ctx, done)
 		on_cancel = function()
 			done(nil, nil)
 		end,
-		on_done = function() end,
+		on_done = function()
+			set_editing_field(nil)
+		end,
 	})
 end
 

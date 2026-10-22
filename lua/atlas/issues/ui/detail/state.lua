@@ -22,6 +22,7 @@ local request_scope = require("atlas.core.requests")
 ---@field dates IssueDates|"loading"|string|nil
 ---@field requests AtlasRequestScope
 ---@field spinner_timer uv.uv_timer_t|nil
+---@field editing_field string|nil Sidebar field id currently under inline edit (e.g. "assignee"), for the label's "actively editing" color.
 local M = {
 	win = nil,
 	buf = nil,
@@ -44,6 +45,7 @@ local M = {
 	dates = nil,
 	requests = request_scope.new(),
 	spinner_timer = nil,
+	editing_field = nil,
 }
 
 function M.reset()
@@ -69,6 +71,7 @@ function M.reset()
 	M.requests.cancel()
 	M.requests = request_scope.new()
 	M.spinner_timer = nil
+	M.editing_field = nil
 end
 
 return M

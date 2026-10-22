@@ -482,6 +482,8 @@ function M.edit_date(field, label)
 	local keymaps = require("atlas.issues.ui.detail.keymaps")
 
 	keymaps.remove(buf)
+	state.editing_field = field
+	render_if_open()
 	inline_field_edit.start({
 		anchor_win = sidebar_win,
 		row = region.row,
@@ -520,6 +522,7 @@ function M.edit_date(field, label)
 			notify.info(label .. " unchanged", { timeout = 1200 })
 		end,
 		on_done = function()
+			state.editing_field = nil
 			if buf and vim.api.nvim_buf_is_valid(buf) then
 				keymaps.register(buf)
 			end
