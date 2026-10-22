@@ -85,6 +85,11 @@ local groups = {
 	AtlasKeyHint = { fg = "#e0af68" },
 	AtlasProgressFill = { fg = "#9ece6a" },
 	AtlasProgressEmpty = { fg = "#3b4261" },
+	-- Status colours (DESIGN-merge-request-view.md §8: readiness strip nodes,
+	-- reviewer states, change bars). Green/yellow alias the existing tokens.
+	AtlasGreen = { link = "AtlasProgressFill" },
+	AtlasYellow = { link = "AtlasKeyHint" },
+	AtlasRed = { fg = "#f7768e" },
 
 	-- Milestone detail-view description tab's goal block background
 	-- (DESIGN-milestone-view.md §8/§6's "Goal block": subtle background,

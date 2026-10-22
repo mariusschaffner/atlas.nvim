@@ -2,10 +2,11 @@ local M = {}
 
 local utils = require("atlas.ui.shared.utils")
 local state = require("atlas.pulls.ui.detail.state")
-local header = require("atlas.pulls.ui.components.header")
-local field_box = require("atlas.ui.components.field_box")
+local detail_header = require("atlas.ui.components.detail_header")
+local strip = require("atlas.ui.components.strip")
+local detail_data = require("atlas.pulls.ui.detail.data")
 local detail_tabs = require("atlas.pulls.ui.components.tabs")
-local icons = require("atlas.ui.shared.icons")
+local resolver = require("atlas.core.keymaps")
 local spinner = require("atlas.ui.components.spinner")
 local presentation = require("atlas.pulls.ui.presentation")
 local detail_ui = require("atlas.ui.detail")
@@ -29,184 +30,129 @@ local function set_lines(buf, lines)
 	vim.api.nvim_set_option_value("modifiable", false, { buf = buf })
 end
 
--- Reviewers / merge checks (folded into the header fields, one box per field)
-
 ---@param action_id string
----@return boolean
-local function supports_action(action_id)
-	local capability = state.provider and state.provider.capabilities.actions
-	for _, action in ipairs(capability and capability.items or {}) do
-		if action.id == action_id then
-			return true
-		end
-	end
-	return false
-end
-
-local DECISION_ICONS = {
-	approved = { icon = icons.pulls_status("successful"), hl = "AtlasTextPositive" },
-	changes_requested = { icon = icons.pulls_status("failed"), hl = "AtlasLogError" },
-	reviewed = { icon = icons.pulls("review"), hl = "AtlasTextMuted" },
-	pending = { icon = icons.pulls_status("inprogress"), hl = "AtlasTextMuted" },
-}
-
-local MERGE_CHECK_STATE = {
-	successful = { icon = icons.pulls_status("successful"), hl = "AtlasTextPositive" },
-	failed = { icon = icons.pulls_status("failed"), hl = "AtlasLogError" },
-	inprogress = { icon = icons.pulls_status("inprogress"), hl = "AtlasTextMuted" },
-	warning = { icon = icons.pulls_status("inprogress"), hl = "AtlasTextWarning" },
-	muted = { icon = icons.pulls_status("inprogress"), hl = "AtlasTextMuted" },
-}
-
-local MERGE_CHECK_PRIORITY = {
-	failed = 1,
-	warning = 2,
-	inprogress = 3,
-	successful = 4,
-	muted = 5,
-}
-
----@return PullsDetailHeaderField|nil
-local function reviewers_field()
-	if state.reviewers == nil then
-		return nil
-	end
-	local editable = supports_action("edit_reviewers") and presentation.is_open_or_draft(state.current_pr)
-	local label = utils.field_hint_label("pulls.edit_reviewers", "Reviewers", editable)
-	if state.reviewers == "loading" then
-		return {
-			id = "reviewers",
-			label = label,
-			value = spinner.with_text("Loading..."),
-			hl = "AtlasTextMuted",
-			editable = editable,
-		}
-	end
-	if type(state.reviewers) == "string" then
-		return {
-			id = "reviewers",
-			label = label,
-			value = state.reviewers,
-			hl = "AtlasLogError",
-			editable = editable,
-		}
-	end
-	if #state.reviewers == 0 then
-		return {
-			id = "reviewers",
-			label = label,
-			value = "no reviewers yet",
-			hl = "AtlasTextMuted",
-			editable = editable,
-		}
-	end
-
-	local parts, spans, cursor = {}, {}, 0
-	for i, reviewer in ipairs(state.reviewers) do
-		local style = DECISION_ICONS[reviewer.decision or "pending"] or DECISION_ICONS.pending
-		local token = string.format("%s %s", style.icon, presentation.user_handle(reviewer))
-		table.insert(parts, token)
-		table.insert(spans, { start_col = cursor, end_col = cursor + #style.icon, hl_group = style.hl })
-		cursor = cursor + #token + (i < #state.reviewers and 2 or 0)
-	end
-	return { id = "reviewers", label = label, value = table.concat(parts, ", "), hl = spans, editable = editable }
-end
-
---- Merge checks + the delete-source-branch toggle, grouped into one
---- "Merge Readiness" box with one row per item, rather than separate
---- one-line text fields. The toggle's own keymap hint lives on the box
---- title (there's no separate "row hint" concept), since the checks
---- themselves aren't independently actionable.
----@param delete_source_branch_field PullsDetailHeaderField|nil
----@return PullsDetailHeaderField|nil
-local function merge_readiness_field(delete_source_branch_field)
-	local rows = {}
-
-	if state.merge_checks == "loading" then
-		table.insert(rows, { text = spinner.with_text("Loading..."), hl = "AtlasTextMuted" })
-	elseif type(state.merge_checks) == "string" then
-		table.insert(rows, { text = state.merge_checks, hl = "AtlasLogError" })
-	elseif type(state.merge_checks) == "table" and #state.merge_checks > 0 then
-		local checks = vim.list_slice(state.merge_checks --[[@as PullsMergeCheck[] ]])
-		table.sort(checks, function(a, b)
-			return (MERGE_CHECK_PRIORITY[a.state] or math.huge) < (MERGE_CHECK_PRIORITY[b.state] or math.huge)
-		end)
-		for _, check in ipairs(checks) do
-			local pair = MERGE_CHECK_STATE[check.state] or MERGE_CHECK_STATE.muted
-			table.insert(rows, {
-				text = string.format("%s %s", pair.icon, check.label),
-				hl = { { start_col = 0, end_col = #pair.icon, hl_group = pair.hl } },
-			})
-		end
-	end
-
-	if delete_source_branch_field then
-		local checked = delete_source_branch_field.enabled == true
-		local mark = checked and "◉" or "○"
-		table.insert(rows, {
-			text = string.format("%s %s", mark, delete_source_branch_field.label),
-			hl = checked and "AtlasTextPositive" or "AtlasTextMuted",
-		})
-	end
-
-	if #rows == 0 then
-		return nil
-	end
-
-	local editable = delete_source_branch_field ~= nil and delete_source_branch_field.editable == true
-	return {
-		label = utils.field_hint_label("pulls.toggle_remove_source_branch", "Merge Readiness", editable),
-		rows = rows,
-		editable = editable,
-	}
+---@return string|nil
+local function key_hint(action_id)
+	local keys = resolver.resolve(action_id)
+	return keys and keys[1] or nil
 end
 
 ---@param pr PullRequest
----@param tab_items PullsDetailTab[]
+---@return string
+local function breadcrumb(pr)
+	local path = tostring(pr.repo_full_name or "")
+	local parts = vim.split(path, "/", { plain = true, trimempty = true })
+	local project = parts[#parts] or path
+	table.remove(parts)
+	local namespace = table.concat(parts, "/")
+	local left = namespace ~= "" and (namespace .. " / " .. project) or project
+	return string.format("%s › merge requests › !%s", left, tostring(pr.id or ""))
+end
+
+---@param pr PullRequest
+---@return string
+local function meta_right(pr)
+	local author = presentation.user_handle(pr.author)
+	local rel = utils.relative_time(pr.updated_on)
+	local updated = rel ~= "-" and (rel .. " ago") or "-"
+	return string.format("opened by %s · updated %s", author, updated)
+end
+
+local GATE_GLYPHS = { passed = "✓", pending = "◷", failed = "✗" }
+local GATE_HL = { passed = "AtlasGreen", pending = "AtlasYellow", failed = "AtlasRed" }
+local MERGE_NODE = {
+	ready = { glyph = "⇣", hl = "AtlasGreen", label_hl = "AtlasGreen" },
+	blocked = { glyph = "⇣", hl = "AtlasTextMuted", label_hl = "AtlasTextMuted" },
+	merged = { glyph = "●", hl = "AtlasPurple", label_hl = "AtlasPurple" },
+	closed = { glyph = "✗", hl = "AtlasTextMuted", label_hl = "AtlasTextMuted" },
+}
+
+--- "gM merge"-style hint chunks: the key in the key-hint colour, the word dim.
+---@param action_id string
+---@param word string
+---@return AtlasStripChunk[]
+local function key_chunks(action_id, word)
+	local key = key_hint(action_id)
+	if key == nil then
+		return { { word, "AtlasTextMuted" } }
+	end
+	return { { key, "AtlasKeyHint" }, { " " .. word, "AtlasTextMuted" } }
+end
+
+--- The readiness strip (DESIGN-merge-request-view.md §4): one node per merge
+--- gate plus the merge node, labels under them, and key/reason hints.
 ---@param width integer
 ---@return string[] lines
----@return table[] highlights
----@return table<string, AtlasFieldBoxRegion> regions
-local function render_header(pr, tab_items, width)
-	local lines, spans = {}, {}
-	local details = state.current_details
-	local provider = state.provider
-	local provider_detail = provider and provider.capabilities.ui and provider.capabilities.ui.detail
-	local provider_fields = provider_detail
-			and provider_detail.header_fields
-			and provider_detail.header_fields(pr, details, state.details_loading)
-		or {}
+---@return AtlasUIHighlight[] highlights
+local function render_strip(width)
+	if state.merge_checks == "loading" or state.reviewers == "loading" then
+		local text = spinner.with_text("Loading merge status...")
+		return { text }, { { line = 0, start_col = 0, end_col = #text, hl_group = "AtlasTextMuted" } }
+	end
+	local gates = detail_data.readiness()
+	if gates == nil then
+		local text = type(state.merge_checks) == "string" and state.merge_checks or "Merge status unavailable"
+		return { text }, { { line = 0, start_col = 0, end_col = #text, hl_group = "AtlasTextMuted" } }
+	end
 
-	-- Fields, four columns: Assignee/Reviewers on the left, Labels next,
-	-- Source/Target branch after that, and a "Merge Readiness" box (checks
-	-- + the delete-source-branch toggle as rows) on the far right. Title
-	-- spans all columns as the first row, its border color conveying PR
-	-- status.
-	local left_fields = {}
-	utils.insert_if(left_fields, provider_fields.assignee)
-	utils.insert_if(left_fields, reviewers_field())
-
-	local middle_fields = {}
-	utils.insert_if(middle_fields, provider_fields.labels)
-
-	local core = state.provider and state.provider.capabilities.core
-	local can_edit_target = core and core.update_target_branch ~= nil
-
-	local branch_fields = {}
-	table.insert(branch_fields, header.source_branch_field(pr.source.branch, state.diffstat))
-	table.insert(branch_fields, header.target_branch_field(pr.destination.branch, can_edit_target))
-
-	local readiness_fields = {}
-	utils.insert_if(readiness_fields, merge_readiness_field(provider_fields.delete_source_branch))
-
-	local field_lines, field_spans, field_regions =
-		field_box.render_columns({ left_fields, middle_fields, branch_fields, readiness_fields }, {
-			width = width,
-			top_field = header.title_field(pr, supports_action("edit_title") and presentation.is_open_or_draft(pr)),
+	local nodes = {}
+	for i, gate in ipairs(gates.gates) do
+		local blocking = gates.blocking == i
+		local hint
+		if gate.key == "pipeline" and key_hint("pulls.open_pipeline") then
+			hint = key_chunks("pulls.open_pipeline", "pipeline")
+			if blocking and gate.reason then
+				table.insert(hint, { " · " .. gate.reason, "AtlasTextMuted" })
+			end
+		elseif blocking and gate.reason then
+			hint = { { gate.reason, "AtlasTextMuted" } }
+		end
+		table.insert(nodes, {
+			glyph = GATE_GLYPHS[gate.state],
+			hl = GATE_HL[gate.state],
+			segment_hl = gate.state == "passed" and "AtlasGreen" or "AtlasBorder",
+			label = { { gate.label, blocking and GATE_HL[gate.state] or nil } },
+			hint = hint,
 		})
-	utils.append_block(lines, spans, { lines = field_lines, highlights = field_spans })
+	end
 
-	return lines, spans, field_regions or {}
+	local merge = gates.merge
+	local style = MERGE_NODE[merge.state] or MERGE_NODE.blocked
+	local merge_hint
+	if merge.state == "ready" then
+		merge_hint = key_chunks("pulls.merge", "merge")
+	elseif merge.state == "blocked" then
+		merge_hint = key_chunks("pulls.merge", "blocked")
+		if merge.reason then
+			table.insert(merge_hint, 1, { merge.reason .. " · ", "AtlasTextMuted" })
+		end
+	end
+	table.insert(nodes, {
+		glyph = style.glyph,
+		hl = style.hl,
+		label = { { merge.label, style.label_hl } },
+		hint = merge_hint,
+	})
+
+	return strip.render_nodes(nodes, width)
+end
+
+---@param pr PullRequest
+---@param outer_width integer
+---@return string[] lines
+---@return AtlasUIHighlight[] highlights
+---@return table<string, AtlasFieldBoxRegion> regions
+local function render_header(pr, outer_width)
+	local pill = presentation.pr_state_pill(pr.state)
+	local strip_lines, strip_spans = render_strip(detail_header.inner_width(outer_width))
+	return detail_header.render({
+		breadcrumb = breadcrumb(pr),
+		meta_right = meta_right(pr),
+		state_label = pill.text,
+		state_hl = pill.hl,
+		title = pr.title or "",
+		iid_text = "!" .. tostring(pr.id or ""),
+	}, outer_width, { lines = strip_lines, highlights = strip_spans })
 end
 
 --- Whether the description field (the "overview" tab's content) can be
@@ -312,8 +258,7 @@ function M.render(tab_items, get_tab_module)
 	if has_header then
 		local header_lines, header_spans, header_regions = {}, {}, {}
 		if pr ~= nil then
-			header_lines, header_spans, header_regions =
-				render_header(pr, tab_items, vim.api.nvim_win_get_width(header_win))
+			header_lines, header_spans, header_regions = render_header(pr, vim.api.nvim_win_get_width(header_win))
 		end
 		set_lines(header_buf, header_lines)
 		utils.apply_spans_clamped(header_buf, header_ns, header_spans)
@@ -324,7 +269,8 @@ function M.render(tab_items, get_tab_module)
 	detail_ui.set_content_title(M.title_chunks(tab_items, state.current_tab))
 
 	-- Leading "─ " mirrors the top title's own border-dash prefix
-	-- (tabs.title_chunks), so the hint aligns with the title above it.
+	-- (tabs.title_chunks), so the hint aligns with the title above it. No
+	-- "[i] - Edit" hint on the Description tab (DESIGN-merge-request-view.md §2).
 	local footer_chunks
 	if inline_edit.is_active(buf) then
 		local hl = "AtlasFieldBoxBorderEditing"
@@ -333,13 +279,6 @@ function M.render(tab_items, get_tab_module)
 			{ utils.field_hint_label("ui.submit", "Save", true), hl },
 			{ " ── ", hl },
 			{ utils.field_hint_label("ui.field_edit.close", "Cancel", true), hl },
-			{ " ", hl },
-		}
-	elseif description_editable() then
-		local hl = content_border_hl()
-		footer_chunks = {
-			{ "─ ", hl },
-			{ utils.field_hint_label("ui.edit_description", "Edit", true), hl },
 			{ " ", hl },
 		}
 	elseif conversation_addable() then

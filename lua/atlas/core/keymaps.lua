@@ -113,6 +113,9 @@ local M = {}
 ---@field edit_assignees? AtlasKeymapValue
 ---@field edit_labels? AtlasKeymapValue
 ---@field toggle_remove_source_branch? AtlasKeymapValue
+---@field merge? AtlasKeymapValue Merges the MR from its detail view, or explains what's blocking it.
+---@field open_pipeline? AtlasKeymapValue Opens the MR's latest pipeline from its detail view.
+---@field toggle_file_viewed? AtlasKeymapValue Toggles a file's viewed mark in the MR detail view's Changes tab.
 ---@field edit_target_branch? AtlasKeymapValue Edits an existing MR's target branch (real detail view) -- same id/key as the create view's own Target branch field, since it's the same field either way.
 ---@field create_field_source_branch? AtlasKeymapValue Edits the "Source branch" field on the unified create view (merge_request type only). No real-detail-view equivalent -- GitLab has no way to change an existing MR's source branch, ever.
 ---@field create_field_draft? AtlasKeymapValue Toggles the "Draft" field on the unified create view (merge_request type only).
@@ -207,6 +210,9 @@ local M = {}
 ---| "pulls.edit_assignees"
 ---| "pulls.edit_labels"
 ---| "pulls.toggle_remove_source_branch"
+---| "pulls.merge"
+---| "pulls.open_pipeline"
+---| "pulls.toggle_file_viewed"
 ---| "pulls.edit_target_branch"
 ---| "pulls.create_field_source_branch"
 ---| "pulls.create_field_draft"
@@ -451,10 +457,13 @@ function M.validate()
 		-- own row-list buffer, a different buffer entirely. All four sharing
 		-- "i" is safe.
 		{ "ui.edit_description", "issues.add_comment", "ui.comments.add", "ui.inspect" },
-		-- next_page (the dashboard's own row-list buffer) and go_to_pull (issue
-		-- detail buffer) are different buffers, never active at once, so
-		-- sharing "gp" is safe.
-		{ "ui.next_page", "issues.go_to_pull" },
+		-- next_page (the dashboard's own row-list buffer), go_to_pull (issue
+		-- detail buffer) and open_pipeline (MR detail buffer) are different
+		-- buffers, never active at once, so sharing "gp" is safe.
+		{ "ui.next_page", "issues.go_to_pull", "pulls.open_pipeline" },
+		-- change_milestone (issue detail buffer) and merge (MR detail buffer)
+		-- are separate panels that are never open at once, so sharing "gM" is safe.
+		{ "issues.change_milestone", "pulls.merge" },
 		-- previous_page (dashboard buffer), review.diff.toggle_detail_panel
 		-- (the standalone diff viewer) and create_pull_for_issue (issue detail
 		-- buffer) are three separate buffers, never active at once, so

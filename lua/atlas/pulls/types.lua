@@ -200,6 +200,20 @@
 ---@field label string
 ---@field details string[]|nil
 
+--- Raw merge state behind the checks, for the detail view's readiness strip.
+---@class PullsMergeStatus
+---@field draft boolean
+---@field detailed_merge_status string|nil
+---@field blocking_discussions_resolved boolean|nil
+---@field has_conflicts boolean
+---@field pipeline_status string|nil
+---@field approved boolean|nil
+---@field resolvable_threads integer|nil
+---@field resolved_threads integer|nil
+
+---@class PullsMergeCheckList: PullsMergeCheck[]
+---@field status PullsMergeStatus|nil
+
 --------------------------------------------------------------------------------
 -- Diffstat
 --------------------------------------------------------------------------------

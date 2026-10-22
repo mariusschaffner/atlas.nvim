@@ -81,6 +81,24 @@ function M.pr_state_label(pr_state)
 	return pr_state and tostring(pr_state) or ""
 end
 
+--- The detail view header's state pill: label ("Open"/"Draft"/"Merged"/
+--- "Closed") and its tinted highlight (DESIGN-merge-request-view.md §3).
+---@param pr_state string|nil
+---@return { text: string, hl: string }
+function M.pr_state_pill(pr_state)
+	local lower = tostring(pr_state or ""):lower()
+	if lower == "merged" then
+		return { text = "Merged", hl = "AtlasPRMergedPillChip" }
+	end
+	if lower == "declined" or lower == "closed" then
+		return { text = "Closed", hl = "AtlasPRDeclinedPillChip" }
+	end
+	if lower == "draft" then
+		return { text = "Draft", hl = "AtlasPRDraftPillChip" }
+	end
+	return { text = "Open", hl = "AtlasPROpenPillChip" }
+end
+
 --- Same as pr_state_hl but foreground-only, no chip background fill — used
 --- for the title field's border color rather than as a standalone pill.
 --- Merged is red here (same as a closed issue), not the blue used for the

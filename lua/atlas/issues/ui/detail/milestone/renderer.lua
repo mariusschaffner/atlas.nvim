@@ -1,6 +1,6 @@
 -- The milestone detail view (DESIGN-milestone-view.md): a boxed header
 -- (meta line in the top border + state pill/title, reusing
--- `issues.ui.detail.components.header`) with a 3-line timeline strip inside it,
+-- `atlas.ui.components.detail_header`) with a 3-line timeline strip inside it,
 -- a tab bar + per-tab main pane content, and a sidebar (reusing
 -- `atlas.ui.components.sidebar`/`sidebar_field`) with PROGRESS/WORK ITEMS/
 -- MERGE REQUESTS/IN PROGRESS fields. Mirrors the issue detail view's renderer
@@ -10,12 +10,13 @@ local M = {}
 local utils = require("atlas.ui.shared.utils")
 local ui_utils = require("atlas.ui.utils")
 local spinner = require("atlas.ui.components.spinner")
-local header = require("atlas.issues.ui.detail.components.header")
+local header = require("atlas.ui.components.detail_header")
 local sidebar = require("atlas.ui.components.sidebar")
 local tabs = require("atlas.ui.components.tabs")
 local progress_bar = require("atlas.ui.components.progress_bar")
 local markdown_sections = require("atlas.issues.ui.detail.milestone.markdown_sections")
 local timeline = require("atlas.issues.ui.detail.milestone.timeline")
+local strip = require("atlas.ui.components.strip")
 local wf_state = require("atlas.issues.providers.gitlab.wf_state")
 local table_tree = require("atlas.ui.components.table_tree")
 local dashboard_providers = require("atlas.issues.ui.dashboard.providers")
@@ -139,62 +140,6 @@ local function header_data(milestone, today_iso)
 	}
 end
 
----@param width integer
----@return string[] cells
-local function build_cells(width)
-	local cells = {}
-	for i = 1, width do
-		cells[i] = " "
-	end
-	return cells
-end
-
----@param cells string[]
----@param start_col integer 0-indexed
----@param text string
-local function set_text(cells, start_col, text)
-	for i = 1, #text do
-		local idx = start_col + i
-		if cells[idx] then
-			cells[idx] = text:sub(i, i)
-		end
-	end
-end
-
----@param cells string[]
----@param col integer 0-indexed
----@param glyph string
-local function set_glyph(cells, col, glyph)
-	if cells[col + 1] then
-		cells[col + 1] = glyph
-	end
-end
-
---- Concatenates `cells` into the rendered line, plus a `byte_range(from_col,
---- to_col)` helper mapping 0-indexed column ranges to byte offsets -- needed
---- because the timeline strip's glyphs (│ ━ ─ ┃) are multi-byte UTF-8, so a
---- column index and a byte offset aren't the same number.
----@param cells string[]
----@return string line
----@return fun(from_col: integer, to_col: integer): integer, integer byte_range
-local function finalize_cells(cells)
-	local parts, offsets = {}, {}
-	local byte_pos = 0
-	for i, cell in ipairs(cells) do
-		offsets[i] = byte_pos
-		table.insert(parts, cell)
-		byte_pos = byte_pos + #cell
-	end
-	offsets[#cells + 1] = byte_pos
-	local line = table.concat(parts)
-	local function byte_range(from_col, to_col)
-		from_col = math.max(0, math.min(#cells, from_col))
-		to_col = math.max(0, math.min(#cells, to_col))
-		return offsets[from_col + 1], offsets[to_col + 1]
-	end
-	return line, byte_range
-end
-
 --- The timeline strip (DESIGN-milestone-view.md §4): date ticks, a fill/
 --- today-marker bar, and a label line, built on `timeline.lua`'s pure day
 --- math. Returns 1 line (the "+ set dates" hint) when there isn't enough
@@ -266,7 +211,7 @@ local function render_timeline_unpadded(milestone, width, today_iso)
 			end
 		end
 
-		local cells = build_cells(width)
+		local cells = strip.cells(width)
 		local hint_ranges = {}
 		-- Byte-independent column ranges of the start/due date text itself
 		-- (not the "gs"/"gd" hint), so an inline edit opens right over the
@@ -274,29 +219,29 @@ local function render_timeline_unpadded(milestone, width, today_iso)
 		local date_col_ranges = {}
 
 		for idx, tick in ipairs(ticks) do
-			set_glyph(cells, tick.col, "│")
+			strip.set_glyph(cells, tick.col, "│")
 			if tick.text then
 				local text_start = tick.right_aligned and (tick.col - #tick.text + 1) or tick.col
 
 				if idx == 1 and gs_hint then
 					-- Start date: hint follows the date, growing rightward.
-					set_text(cells, text_start, tick.text)
+					strip.set_text(cells, text_start, tick.text)
 					date_col_ranges.start_date = { col = text_start, len = #tick.text }
 					local hint_col = text_start + #tick.text + 1
-					set_text(cells, hint_col, gs_hint)
+					strip.set_text(cells, hint_col, gs_hint)
 					table.insert(hint_ranges, { start_col = hint_col, end_col = hint_col + #gs_hint })
 				elseif idx == #ticks and gd_hint then
 					-- Due date: hint precedes the date so the date itself stays
 					-- flush against the strip's closing border.
 					local hint_col = text_start - 1 - #gd_hint
 					if hint_col >= 0 then
-						set_text(cells, hint_col, gd_hint)
+						strip.set_text(cells, hint_col, gd_hint)
 						table.insert(hint_ranges, { start_col = hint_col, end_col = hint_col + #gd_hint })
 					end
-					set_text(cells, text_start, tick.text)
+					strip.set_text(cells, text_start, tick.text)
 					date_col_ranges.due_date = { col = text_start, len = #tick.text }
 				else
-					set_text(cells, text_start, tick.text)
+					strip.set_text(cells, text_start, tick.text)
 				end
 
 				if idx == 1 and date_col_ranges.start_date == nil then
@@ -307,7 +252,7 @@ local function render_timeline_unpadded(milestone, width, today_iso)
 			end
 		end
 
-		local line, byte_range = finalize_cells(cells)
+		local line, byte_range = strip.finalize(cells)
 		table.insert(lines, line)
 		local s0, s1 = byte_range(0, width)
 		table.insert(spans, { line = 0, start_col = s0, end_col = s1, hl_group = "AtlasTextMuted" })
@@ -326,7 +271,7 @@ local function render_timeline_unpadded(milestone, width, today_iso)
 
 	-- Line 2: bar.
 	do
-		local cells = build_cells(width)
+		local cells = strip.cells(width)
 		local fill_upto, bar_hl, show_marker
 
 		if bar.state == "closed" then
@@ -345,10 +290,10 @@ local function render_timeline_unpadded(milestone, width, today_iso)
 			cells[i + 1] = (i < fill_upto) and "━" or "─"
 		end
 		if show_marker and marker_col then
-			set_glyph(cells, marker_col, "┃")
+			strip.set_glyph(cells, marker_col, "┃")
 		end
 
-		local line, byte_range = finalize_cells(cells)
+		local line, byte_range = strip.finalize(cells)
 		table.insert(lines, line)
 		local line_no = #lines - 1
 
@@ -395,10 +340,10 @@ local function render_timeline_unpadded(milestone, width, today_iso)
 			label_col = math.max(0, math.min(width - ui_utils.text_width(label_text), marker_col - half))
 		end
 
-		local cells = build_cells(width)
-		set_text(cells, label_col, label_text)
+		local cells = strip.cells(width)
+		strip.set_text(cells, label_col, label_text)
 
-		local line, byte_range = finalize_cells(cells)
+		local line, byte_range = strip.finalize(cells)
 		table.insert(lines, line)
 		local line_no = #lines - 1
 

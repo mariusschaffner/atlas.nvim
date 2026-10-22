@@ -15,6 +15,13 @@ local groups = {
 	AtlasPRDeclinedChip = { fg = "#0b1320", bg = "#fca5a5", bold = true },
 	AtlasPRDraftChip = { fg = "#111827", bg = "#fcd34d", bold = true },
 
+	-- Detail-view state pills (DESIGN-merge-request-view.md §3): same tinted
+	-- style as the issue view's pill; merged purple, closed red, draft grey.
+	AtlasPROpenPillChip = { fg = "#1e1e2e", bg = "#a6e3a1", bold = true },
+	AtlasPRDraftPillChip = { fg = "#1e1e2e", bg = "#6c7086", bold = true },
+	AtlasPRMergedPillChip = { fg = "#1e1e2e", bg = "#bb9af7", bold = true },
+	AtlasPRDeclinedPillChip = { fg = "#1e1e2e", bg = "#f7768e", bold = true },
+
 	AtlasPipelineLinkSuccess = { fg = "#a6da95" },
 	AtlasPipelineLinkFailed = { fg = "#f38ba8" },
 	AtlasPipelineLinkInProgress = { fg = "#f9e2af" },

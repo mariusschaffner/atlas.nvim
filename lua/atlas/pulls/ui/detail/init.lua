@@ -229,6 +229,7 @@ local function clear_pr()
 	state.pipelines = nil
 	state.reviewers = nil
 	state.merge_checks = nil
+	state.merge_status = nil
 	state.pr_loading = false
 	state.details_loading = false
 	state.line_map = {}
@@ -329,7 +330,8 @@ function M.open(input, opts)
 		notify.error("Pull request provider unavailable")
 		return
 	end
-	state.win, state.buf, state.header_win, state.header_buf = detail_ui.open("pulls", cleanup, render)
+	state.win, state.buf, state.header_win, state.header_buf =
+		detail_ui.open("pulls", cleanup, render, { sidebar = true, boxed_header = true })
 	set_provider(provider)
 	state.on_update = opts.on_update
 

@@ -1,8 +1,9 @@
--- The issue/milestone detail views' header (DESIGN-detail-view.md §3): a
--- rounded box whose top border carries the meta line (breadcrumb left,
--- author/updated right), holding a title line (tinted state pill + bold title
--- + dim #iid), a chip row (label chips, milestone, checklist progress), and
--- optionally a caller-provided block below (the milestone view's timeline).
+-- The detail views' header (DESIGN-detail-view.md §3, shared by the issue,
+-- milestone and merge request views): a rounded box whose top border carries
+-- the meta line (breadcrumb left, author/updated right), holding a title line
+-- (tinted state pill + bold title + dim #iid/!iid), an optional chip row
+-- (label chips, milestone, checklist progress), and optionally a
+-- caller-provided block below (the milestone timeline, the MR readiness strip).
 local M = {}
 
 local utils = require("atlas.ui.shared.utils")
@@ -144,13 +145,13 @@ local function render_body(data, width)
 	return lines, spans, text_width(title_prefix)
 end
 
---- Highlights the trailing "#iid"/"%id" of a breadcrumb like the key hints,
+--- Highlights the trailing "#iid"/"!iid"/"%id" of a breadcrumb like the key hints,
 --- the rest of it dim.
 ---@param spans AtlasUIHighlight[]
 ---@param col integer Byte column where the breadcrumb starts on line 0.
 ---@param breadcrumb string
 local function breadcrumb_spans(spans, col, breadcrumb)
-	local id = breadcrumb:match("[#%%]%d+$") or ""
+	local id = breadcrumb:match("[#!%%]%d+$") or ""
 	local head = #breadcrumb - #id
 	table.insert(spans, { line = 0, start_col = col, end_col = col + head, hl_group = "AtlasTextMuted" })
 	if id ~= "" then

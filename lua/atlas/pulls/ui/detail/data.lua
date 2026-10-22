@@ -1,6 +1,8 @@
 local M = {}
 
 local state = require("atlas.pulls.ui.detail.state")
+local readiness = require("atlas.pulls.ui.detail.readiness")
+local presentation = require("atlas.pulls.ui.presentation")
 
 --- Kicks off the 4 parallel, independently-loading pieces of a PR detail
 --- view's secondary data (diffstat, pipelines, reviewers, merge checks).
@@ -66,9 +68,92 @@ function M.load_pr(pr, force_refresh, same_ref, tab_refresh)
 				return
 			end
 			state.merge_checks = err and err or (checks or {})
+			state.merge_status = checks and checks.status or nil
 			tab_refresh()
 		end)
 	end
+end
+
+--- The readiness strip's gates for the current PR (DESIGN-merge-request-view.md
+--- §4), or nil while the merge status/reviewers are still loading (or failed).
+---@return AtlasReadiness|nil
+function M.readiness()
+	local pr = state.current_pr
+	local status = state.merge_status
+	if pr == nil or status == nil or type(state.reviewers) == "string" or state.reviewers == "loading" then
+		return nil
+	end
+	local reviewers = {}
+	for _, reviewer in ipairs(type(state.reviewers) == "table" and state.reviewers or {}) do
+		-- Approvers who aren't requested reviewers still count for the review gate.
+		if reviewer.role ~= "participant" or reviewer.decision == "approved" then
+			table.insert(reviewers, { name = presentation.user_handle(reviewer), decision = reviewer.decision })
+		end
+	end
+	---@cast pr GitLabPullRequest
+	return readiness.derive({
+		state = pr.state,
+		draft = status.draft,
+		target_branch = pr.destination and pr.destination.branch or nil,
+		detailed_merge_status = status.detailed_merge_status or pr.detailed_merge_status,
+		pipeline_status = status.pipeline_status,
+		has_conflicts = status.has_conflicts,
+		blocking_discussions_resolved = status.blocking_discussions_resolved,
+		resolvable_threads = status.resolvable_threads,
+		resolved_threads = status.resolved_threads,
+		approved = status.approved,
+		reviewers = reviewers,
+	})
+end
+
+--- Opens one of the PR's pipelines in the pipeline detail view (the
+--- pipelines domain's own view, same one its dashboard opens).
+---@param pipeline PullsPipeline
+function M.open_pipeline(pipeline)
+	local pr = state.current_pr
+	if pr == nil then
+		return
+	end
+	local provider = require("atlas.providers").load(pr.provider or "gitlab", "pipelines")
+	if provider == nil then
+		require("atlas.core.notify").error("Pipelines provider unavailable")
+		return
+	end
+	local path = tostring(pr.repo_full_name or "")
+	---@type Pipeline
+	local target = {
+		id = tostring(pipeline.id or ""),
+		key = string.format("%s!%s", path, tostring(pipeline.id or "")),
+		project_path = path,
+		status = pipeline.provider_state or "",
+		state = pipeline.state,
+		ref = pr.source and pr.source.branch or "",
+		sha = pr.source and pr.source.commit_hash or "",
+		merge_request_iid = tonumber(pr.id),
+		web_url = pipeline.url,
+		duration = pipeline.duration,
+		stages = {},
+	}
+	for _, stage in ipairs(pipeline.stages or {}) do
+		table.insert(target.stages, { name = stage.name or "Stage", state = stage.state, jobs = {} })
+	end
+	require("atlas.pipelines.ui.detail").open(target, { provider = provider })
+end
+
+--- The PR's most recent pipeline, or nil (none, or not loaded yet).
+---@return PullsPipeline|nil
+function M.latest_pipeline()
+	local pipelines = state.pipelines
+	if type(pipelines) ~= "table" then
+		return nil
+	end
+	local latest
+	for _, pipeline in ipairs(pipelines) do
+		if latest == nil or (tonumber(pipeline.id) or 0) > (tonumber(latest.id) or 0) then
+			latest = pipeline
+		end
+	end
+	return latest
 end
 
 return M
