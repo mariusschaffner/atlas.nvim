@@ -6,7 +6,7 @@ local M = {
 
 local _cached_version = nil
 
----@alias AtlasUIHighlight { line: integer, start_col: integer, end_col: integer, hl_group: string }|{ line: integer, line_hl_group: string }
+---@alias AtlasUIHighlight { line: integer, start_col: integer, end_col: integer, hl_group: string, priority: integer|nil }|{ line: integer, line_hl_group: string }
 
 -- Window
 
@@ -132,6 +132,7 @@ function M.apply_spans(buf, namespace, spans)
 				end_row = span.line,
 				end_col = span.end_col,
 				hl_group = span.hl_group,
+				priority = span.priority,
 			})
 		end
 	end

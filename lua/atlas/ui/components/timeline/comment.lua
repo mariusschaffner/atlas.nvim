@@ -56,52 +56,83 @@ local DEFAULT_WIDTH_RATIO = 0.8
 ---@field reply_author string|nil Name whose avatar leads the reply composer.
 ---@field block AtlasTimelineCommentBlockStyle|nil Tinted background + accent bar behind the thread.
 
----@class AtlasTimelineCommentBlockStyle
----@field bar string|nil Left accent glyph drawn in column 0 (needs `padding_x >= 1`), e.g. "▎".
----@field bar_hl string|nil
----@field bg string[] Line background per nesting level (last entry reused for deeper levels).
-
---- Tints every row of the thread (full window width, via `line_hl_group`,
---- so other highlights layer on top) and swaps column 0's padding space for
---- the accent bar.
----@param lines string[]
----@param spans AtlasUIHighlight[]
----@param row_depth table<integer, integer>
----@param style AtlasTimelineCommentBlockStyle
----@param pad integer
-local function apply_block_style(lines, spans, row_depth, style, pad)
-	local bar = style.bar
-	local shift = bar and pad >= 1 and (#bar - 1) or 0
-	local block_spans = {}
-	for row, line in ipairs(lines) do
-		local depth = row_depth[row] or 0
-		local bg = style.bg[math.min(depth + 1, #style.bg)]
-		if bg then
-			table.insert(block_spans, { line = row - 1, line_hl_group = bg })
-		end
-		if shift > 0 and line:sub(1, 1) == " " then
-			lines[row] = bar .. line:sub(2)
-			for _, span in ipairs(spans) do
-				if span.line == row - 1 and span.start_col ~= nil then
-					span.start_col = span.start_col + (span.start_col > 0 and shift or 0)
-					span.end_col = span.end_col + shift
-				end
-			end
-			table.insert(block_spans, { line = row - 1, start_col = 0, end_col = #bar, hl_group = style.bar_hl or "AtlasCommentBar" })
-		end
-	end
-	-- Prepended so the tint sits underneath every other highlight.
-	for i = #block_spans, 1, -1 do
-		table.insert(spans, 1, block_spans[i])
-	end
-end
-
 ---@param pad integer
 ---@param depth integer
 ---@return integer chip_col, integer text_col, integer guide_col
 local function columns(pad, depth)
 	local chip_col = pad + depth * DEPTH_STEP
 	return chip_col, chip_col + TEXT_OFFSET, chip_col - 2
+end
+
+---@class AtlasTimelineCommentBlockStyle
+---@field bar string|nil Accent glyph drawn right before the text column, e.g. "▎".
+---@field bar_hl string|nil
+---@field bg string[] Background per nesting level (last entry reused for deeper levels).
+
+--- Priority below the default extmark priority, so every other highlight on
+--- the row (avatar chips, badges, mentions) draws on top of the tint.
+local BLOCK_PRIORITY = 100
+
+--- Tints each comment's rows from its text column (the name / body column)
+--- to the right edge, leaving the avatar chip and tree guides outside, and
+--- draws the accent bar in the column right before the text. Replies get
+--- their own (lighter) tint starting at their own text column. Composer rows
+--- are left alone -- they carry their own frame.
+---@param lines string[]
+---@param spans AtlasUIHighlight[]
+---@param row_depth table<integer, integer> -1 marks composer rows.
+---@param style AtlasTimelineCommentBlockStyle
+---@param pad integer
+---@param width integer
+local function apply_block_style(lines, spans, row_depth, style, pad, width)
+	local bar = style.bar or " "
+	local block_spans = {}
+	for row, line in ipairs(lines) do
+		local depth = row_depth[row]
+		if depth ~= nil and depth >= 0 then
+			local _, text_col = columns(pad, depth)
+			local bar_col = text_col - 1
+			-- Every glyph left of the text column is one display cell wide, so
+			-- the character index equals the display column here.
+			local offset = vim.fn.byteidx(line, bar_col)
+			if offset >= 0 and line:sub(offset + 1, offset + 1) == " " then
+				local shift = #bar - 1
+				line = line:sub(1, offset) .. bar .. line:sub(offset + 2)
+				for _, span in ipairs(spans) do
+					if span.line == row - 1 and span.start_col ~= nil then
+						if span.start_col > offset then
+							span.start_col = span.start_col + shift
+						end
+						if span.end_col > offset then
+							span.end_col = span.end_col + shift
+						end
+					end
+				end
+				local display = vim.fn.strdisplaywidth(line)
+				if display < width then
+					line = line .. string.rep(" ", width - display)
+				end
+				lines[row] = line
+				local bg = style.bg[math.min(depth + 1, #style.bg)]
+				table.insert(block_spans, {
+					line = row - 1,
+					start_col = offset,
+					end_col = #line,
+					hl_group = bg,
+					priority = BLOCK_PRIORITY,
+				})
+				if style.bar then
+					table.insert(block_spans, {
+						line = row - 1,
+						start_col = offset,
+						end_col = offset + #bar,
+						hl_group = style.bar_hl or "AtlasCommentBar",
+					})
+				end
+			end
+		end
+	end
+	vim.list_extend(spans, block_spans)
 end
 
 ---@param node AtlasTimelineCommentNode
@@ -143,7 +174,7 @@ function M.render(node, width, opts)
 	local function append_composer(block_lines, block_spans, region, current, root, depth)
 		local base = line_builder.splice(lines, spans, block_lines, block_spans)
 		for i = 1, #block_lines do
-			row_depth[base + i] = depth
+			row_depth[base + i] = -1
 			line_map[base + i] = {
 				kind = "comment",
 				row_kind = "composer",
@@ -299,7 +330,7 @@ function M.render(node, width, opts)
 
 	render_node(node, node, 0, nil)
 	if opts.block then
-		apply_block_style(lines, spans, row_depth, opts.block, pad)
+		apply_block_style(lines, spans, row_depth, opts.block, pad, width)
 	end
 	return lines, spans, line_map, regions
 end
