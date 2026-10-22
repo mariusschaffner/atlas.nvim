@@ -61,6 +61,7 @@ describe("core.keymaps", function()
 			local pulls_conflicts = keymaps.validate().pulls
 			assert.are.same({
 				"pulls.checkout",
+				"pulls.edit_reviewers",
 				"pulls.review.request_changes",
 				"ui.comments.react",
 			}, pulls_conflicts["gr"])
