@@ -1,14 +1,13 @@
--- The MR detail view's Commits tab: commits grouped by day (author avatar
--- chips + date), one row each with a graph node and a Conventional Commits
--- type chip coloured by type, the scope, the subject, then time, author and
--- short hash in fixed columns, a graph line joining the nodes. The cursor
+-- The MR detail view's Commits tab: commits grouped by day under a dim date
+-- divider; per commit a row with a graph node, a Conventional Commits type
+-- chip coloured by type, the scope, then time, author and short hash in fixed
+-- columns, and below it the subject on the graph line joining the nodes. The cursor
 -- row fills its node and shows "⏎ diff · y sha"; a per-type tally goes in
 -- the content box's bottom border (`M.footer_chunks`).
 local M = {}
 
 local utils = require("atlas.ui.shared.utils")
 local spinner = require("atlas.ui.components.spinner")
-local avatar = require("atlas.ui.components.avatar")
 local keyhints = require("atlas.ui.components.keyhints")
 local help = require("atlas.ui.popups.help")
 local resolver = require("atlas.core.keymaps")
@@ -24,6 +23,7 @@ local MAX_SCOPE_W = 10
 local MAX_AUTHOR_W = 18
 local HASH_W = 8
 local GRAPH_LINE = "│"
+local DIVIDER_LEAD = 7
 local TIME_W = 5
 
 local hint_ns = vim.api.nvim_create_namespace("atlas.pulls.detail.commits.cursor")
@@ -230,13 +230,16 @@ local function render_commits(width)
 	local gap = string.rep(" ", COL_GAP)
 	local left_w = PADDING_X + 1 + COL_GAP + (chip_w > 0 and chip_w + COL_GAP or 0) + (scope_w > 0 and scope_w + COL_GAP or 0)
 	local right_w = COL_GAP + TIME_W + COL_GAP + author_w + COL_GAP + HASH_W + 1
-	local subject_w = math.max(8, width - left_w - right_w)
-	state.layout = { node_col = PADDING_X, hint_end_col = left_w + subject_w }
+	local filler_w = math.max(1, width - left_w - right_w)
+	state.layout = { node_col = PADDING_X, hint_end_col = left_w + filler_w }
+	-- The subject row starts where the type chip's text does.
+	local subject_indent = pad .. GRAPH_LINE .. gap .. " "
+	local subject_w = math.max(8, width - 1 - vim.api.nvim_strwidth(subject_indent))
 
 	table.insert(ctx.lines, "")
 	local index = 1
 	while index <= #entries do
-		-- One group per local day: avatar chips of that day's authors + date.
+		-- One group per local day, under a dim "─── 21.10.2026 ───…" divider.
 		local day = utils.local_day_key(entries[index].date)
 		local last = index
 		while last + 1 <= #entries and utils.local_day_key(entries[last + 1].date) == day do
@@ -245,28 +248,15 @@ local function render_commits(width)
 		if index > 1 then
 			table.insert(ctx.lines, "")
 		end
-		local header, seen = { { pad } }, {}
-		for i = index, last do
-			local author = display_author(entries[i])
-			if not seen[author] then
-				seen[author] = true
-				local chip, chip_hl = avatar.chip(author)
-				table.insert(header, { chip, chip_hl })
-				table.insert(header, { " " })
-			end
-		end
 		local epoch = utils.iso_epoch(entries[index].date)
-		table.insert(header, { epoch and os.date("%d.%m.%Y", epoch) or day, "AtlasTextBright" })
-		push_row(ctx, header)
+		local date = " " .. (epoch and os.date("%d.%m.%Y", epoch) or day) .. " "
+		local lead = string.rep("─", DIVIDER_LEAD)
+		local rest = string.rep("─", math.max(1, width - 1 - PADDING_X - DIVIDER_LEAD - vim.api.nvim_strwidth(date)))
+		push_row(ctx, { { pad }, { lead, "AtlasBorder" }, { date, "AtlasTextMuted" }, { rest, "AtlasBorder" } })
 
 		for i = index, last do
 			local commit, info = entries[i], parsed[i]
 			local style = style_for(info.type)
-			if i > index then
-				-- Breathing room between commits, the graph line running
-				-- through it from node to node.
-				push_row(ctx, { { pad }, { GRAPH_LINE, "AtlasBorder" } })
-			end
 			local parts = {
 				{ pad },
 				{ info.merge and "◇" or "○", style.node },
@@ -287,7 +277,7 @@ local function render_commits(width)
 			end
 			local author = display_author(commit)
 			vim.list_extend(parts, {
-				{ fit(info.subject, subject_w), info.merge and "AtlasTextMuted" or "AtlasTextBright" },
+				{ string.rep(" ", filler_w) },
 				{ gap },
 				{ rjust(utils.local_time(commit.date), TIME_W), "AtlasTextMuted" },
 				{ gap },
@@ -296,6 +286,17 @@ local function render_commits(width)
 				{ tostring(commit.short_hash or commit.hash or ""):sub(1, HASH_W), "AtlasAccent" },
 			})
 			push_row(ctx, parts, { kind = "commit", commit = commit, merge = info.merge, node_hl = style.node })
+			-- The subject on the graph line, joining this node to the next.
+			local subject = info.subject
+			if vim.api.nvim_strwidth(subject) > subject_w then
+				subject = utils.truncate(subject, subject_w)
+			end
+			push_row(ctx, {
+				{ pad },
+				{ GRAPH_LINE, "AtlasBorder" },
+				{ gap .. " " },
+				{ subject, info.merge and "AtlasTextMuted" or "AtlasTextBright" },
+			})
 		end
 		index = last + 1
 	end
