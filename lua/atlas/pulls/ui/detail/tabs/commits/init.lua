@@ -1,8 +1,9 @@
 -- The MR detail view's Commits tab: commits grouped by day (author avatar
 -- chips + date), one row each with a graph node and a Conventional Commits
 -- type chip coloured by type, the scope, the subject, then time, author and
--- short hash in fixed columns. The cursor row fills its node and shows
--- "⏎ diff · y sha"; a per-type tally sits at the bottom right.
+-- short hash in fixed columns, a graph line joining the nodes. The cursor
+-- row fills its node and shows "⏎ diff · y sha"; a per-type tally goes in
+-- the content box's bottom border (`M.footer_chunks`).
 local M = {}
 
 local utils = require("atlas.ui.shared.utils")
@@ -22,6 +23,7 @@ local COL_GAP = 2
 local MAX_SCOPE_W = 10
 local MAX_AUTHOR_W = 18
 local HASH_W = 8
+local GRAPH_LINE = "│"
 local TIME_W = 5
 
 local hint_ns = vim.api.nvim_create_namespace("atlas.pulls.detail.commits.cursor")
@@ -211,12 +213,10 @@ local function render_commits(width)
 	end
 
 	-- Column widths from the data: type chip (" testing "), scope, author.
-	local parsed, messages = {}, {}
+	local parsed = {}
 	local chip_w, scope_w, author_w = 0, 0, 0
 	for i, commit in ipairs(entries) do
 		parsed[i] = model.parse(commit.message)
-		-- Oldest first, so tally ties break by which type showed up first.
-		messages[#entries - i + 1] = commit.message
 		if parsed[i].type then
 			chip_w = math.max(chip_w, vim.api.nvim_strwidth(parsed[i].type) + 2)
 		end
@@ -262,6 +262,11 @@ local function render_commits(width)
 		for i = index, last do
 			local commit, info = entries[i], parsed[i]
 			local style = style_for(info.type)
+			if i > index then
+				-- Breathing room between commits, the graph line running
+				-- through it from node to node.
+				push_row(ctx, { { pad }, { GRAPH_LINE, "AtlasBorder" } })
+			end
 			local parts = {
 				{ pad },
 				{ info.merge and "◇" or "○", style.node },
@@ -295,30 +300,35 @@ local function render_commits(width)
 		index = last + 1
 	end
 
-	-- Per-type tally, right-aligned on the pane's last row when it fits.
-	local tally = model.tally(messages)
-	if #tally > 0 then
-		local parts = {}
-		local text_w = 0
-		for i, entry in ipairs(tally) do
-			if i > 1 then
-				table.insert(parts, { " · ", "AtlasTextMuted" })
-				text_w = text_w + 3
-			end
-			local text = string.format("%d %s", entry.count, entry.type)
-			table.insert(parts, { text, style_for(entry.type).node })
-			text_w = text_w + vim.api.nvim_strwidth(text)
-		end
-		local height = utils.window.valid(detail.win) and vim.api.nvim_win_get_height(detail.win) or 0
-		table.insert(ctx.lines, "")
-		while #ctx.lines < height - 1 do
-			table.insert(ctx.lines, "")
-		end
-		table.insert(parts, 1, { string.rep(" ", math.max(0, width - 1 - text_w)) })
-		push_row(ctx, parts)
-	end
-
 	return ctx.lines, ctx.spans, ctx.line_map
+end
+
+--- Per-type tally ("3 feat · 3 fix · 2 testing · 1 merge") for the content
+--- box's bottom border, or nil while there's nothing to count.
+---@param border_hl string Highlight of the surrounding border dashes.
+---@return { [1]: string, [2]: string }[]|nil
+function M.footer_chunks(border_hl)
+	if type(state.commits) ~= "table" then
+		return nil
+	end
+	local messages = {}
+	for i, commit in ipairs(state.commits) do
+		-- Oldest first, so tally ties break by which type showed up first.
+		messages[#state.commits - i + 1] = commit.message
+	end
+	local tally = model.tally(messages)
+	if #tally == 0 then
+		return nil
+	end
+	local chunks = { { " ", border_hl } }
+	for i, entry in ipairs(tally) do
+		if i > 1 then
+			table.insert(chunks, { " · ", "AtlasTextMuted" })
+		end
+		table.insert(chunks, { string.format("%d %s", entry.count, entry.type), style_for(entry.type).node })
+	end
+	table.insert(chunks, { " ─", border_hl })
+	return chunks
 end
 
 --- Fills the cursor row's node and shows its key hints, right-aligned at the

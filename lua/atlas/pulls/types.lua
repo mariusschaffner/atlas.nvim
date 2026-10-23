@@ -359,6 +359,7 @@
 ---@field activate (fun(buf: integer, refresh: fun()))|nil
 ---@field deactivate (fun(buf: integer))|nil
 ---@field is_loading (fun(): boolean)|nil
+---@field footer_chunks (fun(border_hl: string): { [1]: string, [2]: string }[]|nil)|nil Right-aligned bottom-border summary while the tab is active.
 ---@field is_selectable_line (fun(lnum: integer, entry: table): boolean)|nil
 ---@field on_enter (fun(pr: PullRequest, entry: table): boolean|nil)|nil
 

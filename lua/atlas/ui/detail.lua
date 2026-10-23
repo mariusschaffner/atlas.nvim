@@ -617,13 +617,14 @@ end
 --- `{text, hl_group}[]` chunks (see `nvim_open_win`'s `footer`). Pass
 --- `nil`/`{}` to clear it.
 ---@param chunks { [1]: string, [2]: string }[]|nil
-function M.set_content_footer(chunks)
+---@param pos "left"|"right"|nil Default "left".
+function M.set_content_footer(chunks, pos)
 	if state.layout ~= "split" or not utils.window.valid(state.win) then
 		return
 	end
 	pcall(vim.api.nvim_win_set_config, state.win, {
 		footer = (chunks == nil or #chunks == 0) and "" or chunks,
-		footer_pos = "left",
+		footer_pos = pos or "left",
 	})
 end
 

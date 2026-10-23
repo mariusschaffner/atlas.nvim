@@ -343,7 +343,13 @@ function M.render(tab_items, get_tab_module)
 			{ " ", hl },
 		}
 	end
-	detail_ui.set_content_footer(footer_chunks)
+	local footer_pos = "left"
+	if footer_chunks == nil and tab_mod and tab_mod.footer_chunks then
+		-- A tab's own summary (e.g. Commits' per-type tally), bottom right.
+		footer_chunks = tab_mod.footer_chunks(content_border_hl())
+		footer_pos = "right"
+	end
+	detail_ui.set_content_footer(footer_chunks, footer_pos)
 
 	if inline_edit.is_active(buf) then
 		-- Editing owns the border color (AtlasFieldBoxBorderEditing) until it
