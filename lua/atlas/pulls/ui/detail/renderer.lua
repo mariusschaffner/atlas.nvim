@@ -257,21 +257,9 @@ function M.title_chunks(tab_items, active_tab)
 	if #tab_items <= 1 then
 		return {}
 	end
-	-- "Changes 7" once the diffstat is in, plus "2 of 7 viewed" on the
-	-- right while the Changes tab is active.
-	local changes = require("atlas.pulls.ui.detail.tabs.changes")
-	local conversation = require("atlas.pulls.ui.detail.tabs.conversation")
-	local viewed_count, total = changes.viewed_counts()
-	local labeled = {}
-	for _, tab in ipairs(tab_items) do
-		local label = tab.label
-		if tab.key == "changes" and viewed_count ~= nil then
-			label = label .. " " .. tostring(total)
-		elseif tab.key == "conversation" and type(conversation.state.items) == "table" then
-			label = label .. " " .. tostring(#conversation.state.items)
-		end
-		table.insert(labeled, { key = tab.key, label = label, icon = tab.icon })
-	end
+	-- Plain tab labels (no counts), plus "2 of 7 viewed" on the right while
+	-- the Changes tab is active.
+	local viewed_count, total = require("atlas.pulls.ui.detail.tabs.changes").viewed_counts()
 	local right
 	if active_tab == "changes" and viewed_count ~= nil and total > 0 and utils.window.valid(state.win) then
 		right = {
@@ -279,7 +267,7 @@ function M.title_chunks(tab_items, active_tab)
 			width = vim.api.nvim_win_get_width(state.win),
 		}
 	end
-	return detail_tabs.title_chunks(labeled, active_tab, content_border_hl(), right)
+	return detail_tabs.title_chunks(tab_items, active_tab, content_border_hl(), right)
 end
 
 ---@param tab_items PullsDetailTab[]

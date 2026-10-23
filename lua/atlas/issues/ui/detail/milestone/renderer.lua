@@ -489,21 +489,6 @@ local function render_sidebar(milestone, work_items, width)
 	return sidebar.render(entries, width)
 end
 
----@return { key: string, label: string }[]
-local function labeled_tabs()
-	local items = {}
-	for _, tab in ipairs(TABS) do
-		local label = tab.label
-		if tab.key == "work_items" and type(state.work_items) == "table" then
-			label = label .. " " .. #state.work_items
-		elseif tab.key == "merge_requests" and type(state.merge_requests) == "table" then
-			label = label .. " " .. #state.merge_requests
-		end
-		table.insert(items, { key = tab.key, label = label })
-	end
-	return items
-end
-
 ---@param width integer
 ---@return string[] lines
 ---@return AtlasUIHighlight[] highlights
@@ -686,7 +671,7 @@ end
 ---@param active_tab string
 ---@return { [1]: string, [2]: string }[]
 function M.title_chunks(active_tab)
-	return tabs.title_chunks(labeled_tabs(), active_tab, {
+	return tabs.title_chunks(TABS, active_tab, {
 		active_hl = "AtlasDetailTabActive",
 		inactive_hl = "AtlasTextMuted",
 		gap = " - ",

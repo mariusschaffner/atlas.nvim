@@ -505,27 +505,12 @@ end
 
 ---@param tab_items IssuesDetailTabDefinition[]
 ---@param active_tab string
----@return { key: string, label: string, icon: AtlasIconStyle|nil }[]
-local function labeled_tabs(tab_items)
-	local out = {}
-	for _, tab in ipairs(tab_items) do
-		local label = tab.label
-		if tab.key == "conversation" and type(conversation_state.items) == "table" then
-			label = label .. " " .. tostring(#conversation_state.items)
-		end
-		table.insert(out, { key = tab.key, label = label, icon = tab.icon })
-	end
-	return out
-end
-
----@param tab_items IssuesDetailTabDefinition[]
----@param active_tab string
 ---@return { [1]: string, [2]: string }[]
 function M.title_chunks(tab_items, active_tab)
 	if #tab_items <= 1 then
 		return {}
 	end
-	return tabs.title_chunks(labeled_tabs(tab_items), active_tab, {
+	return tabs.title_chunks(tab_items, active_tab, {
 		active_hl = "AtlasDetailTabActive",
 		inactive_hl = "AtlasTextMuted",
 		gap = " - ",
