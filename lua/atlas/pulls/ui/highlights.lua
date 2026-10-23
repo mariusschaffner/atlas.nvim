@@ -22,6 +22,17 @@ local groups = {
 	AtlasPRMergedPillChip = { fg = "#1e1e2e", bg = "#bb9af7", bold = true },
 	AtlasPRDeclinedPillChip = { fg = "#1e1e2e", bg = "#f7768e", bold = true },
 
+	-- Commits tab: Conventional Commits type chips (tinted background,
+	-- type-coloured text), one per type family.
+	AtlasCommitChipFeat = { fg = "#9ece6a", bg = "#2c3a2e", bold = true },
+	AtlasCommitChipFix = { fg = "#ff9e64", bg = "#3d2c26", bold = true },
+	AtlasCommitChipTesting = { fg = "#e0af68", bg = "#3b3326", bold = true },
+	AtlasCommitChipMerge = { fg = "#bb9af7", bg = "#342d4a", bold = true },
+	AtlasCommitChipDocs = { fg = "#7aa2f7", bg = "#263048", bold = true },
+	AtlasCommitChipRefactor = { fg = "#7dcfff", bg = "#21363f", bold = true },
+	AtlasCommitChipRevert = { fg = "#f7768e", bg = "#3d2530", bold = true },
+	AtlasCommitChipOther = { fg = "#a9b1d6", bg = "#2a2e42", bold = true },
+
 	AtlasPipelineLinkSuccess = { fg = "#a6da95" },
 	AtlasPipelineLinkFailed = { fg = "#f38ba8" },
 	AtlasPipelineLinkInProgress = { fg = "#f9e2af" },
