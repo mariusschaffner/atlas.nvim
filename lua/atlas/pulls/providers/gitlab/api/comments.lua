@@ -15,6 +15,7 @@ query($path:ID!,$iid:String!,$after:String){
           id
           body
           system
+          resolvable
           created_at:createdAt
           position{__typename}
           author{id name username}

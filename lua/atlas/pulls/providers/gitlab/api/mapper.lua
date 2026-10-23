@@ -311,6 +311,12 @@ function M.to_comment(note, discussion_first_id, discussion_id, resolved)
 	end
 	local state = resolved and "RESOLVED" or (outdated and "OUTDATED" or nil)
 	local is_thread_root = note.id == discussion_first_id
+	-- Thread roots only: GitLab's own flag -- plain comments (individual
+	-- notes) can't be resolved, discussions can. nil when not sent.
+	local resolvable = nil
+	if is_thread_root and type(json.nilify(note.resolvable)) == "boolean" then
+		resolvable = note.resolvable
+	end
 
 	return {
 		id = note.id,
@@ -324,6 +330,7 @@ function M.to_comment(note, discussion_first_id, discussion_id, resolved)
 		file = file,
 		inline = inline,
 		is_task = nil,
+		resolvable = resolvable,
 		state = state,
 		outdated = outdated,
 		reactions = reaction_counts(note.award_emoji),

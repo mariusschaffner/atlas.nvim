@@ -102,6 +102,23 @@ describe("GitLab comment resolution metadata", function()
 		assert.is_nil(comment.resolved_by)
 	end)
 
+	it("keeps GitLab's resolvable flag on thread roots only", function()
+		local plain = resolved_note()
+		plain.resolvable = false
+		assert.is_false(mapper.to_comment(plain, 101, "discussion-1", false).resolvable)
+
+		local thread = resolved_note()
+		thread.resolvable = true
+		assert.is_true(mapper.to_comment(thread, 101, "discussion-1", false).resolvable)
+
+		local reply = resolved_note()
+		reply.id = 102
+		reply.resolvable = true
+		assert.is_nil(mapper.to_comment(reply, 101, "discussion-1", false).resolvable)
+
+		assert.is_nil(mapper.to_comment(resolved_note(), 101, "discussion-1", false).resolvable)
+	end)
+
 	it("keeps the original multiline location of outdated comments", function()
 		local note = resolved_note()
 		note.original_position = {

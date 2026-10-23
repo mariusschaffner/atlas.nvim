@@ -190,34 +190,41 @@ end
 ---@param dms string
 ---@return AtlasReadinessGate|nil
 local function threads_gate(input, dms)
+	-- GitLab's verdict decides whether threads block; the counts only fill
+	-- in the label. Open threads GitLab doesn't block on (it says the
+	-- discussions are mergeable) leave the gate out, like any gate that
+	-- doesn't apply.
+	local blocking = input.blocking_discussions_resolved == false or dms == "discussions_not_resolved"
 	local resolvable = tonumber(input.resolvable_threads)
 	local resolved = tonumber(input.resolved_threads)
-	if resolvable ~= nil and resolved ~= nil then
-		if resolvable <= 0 then
-			return nil
-		end
-		local open = math.max(0, resolvable - resolved)
-		if open == 0 then
-			return { key = "threads", state = "passed", label = "Threads resolved", short = "threads" }
-		end
+	local open = (resolvable and resolved) and math.max(0, resolvable - resolved) or nil
+	if blocking then
 		return {
 			key = "threads",
 			state = "failed",
-			label = string.format("%d unresolved thread%s", open, open == 1 and "" or "s"),
+			label = (open and open > 0) and string.format("%d unresolved thread%s", open, open == 1 and "" or "s")
+				or "Unresolved threads",
 			short = "threads",
 			reason = "resolve threads",
 		}
 	end
-	if input.blocking_discussions_resolved == false or dms == "discussions_not_resolved" then
-		return {
-			key = "threads",
-			state = "failed",
-			label = "Unresolved threads",
-			short = "threads",
-			reason = "resolve threads",
-		}
+	if open == nil or resolvable <= 0 then
+		return nil
 	end
-	return nil
+	if open == 0 then
+		return { key = "threads", state = "passed", label = "Threads resolved", short = "threads" }
+	end
+	if input.blocking_discussions_resolved == true then
+		return nil
+	end
+	-- No verdict from GitLab at all: go by the counts.
+	return {
+		key = "threads",
+		state = "failed",
+		label = string.format("%d unresolved thread%s", open, open == 1 and "" or "s"),
+		short = "threads",
+		reason = "resolve threads",
+	}
 end
 
 ---@param input AtlasReadinessInput

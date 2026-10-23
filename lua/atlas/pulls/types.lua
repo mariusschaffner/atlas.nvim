@@ -275,6 +275,7 @@
 ---@field is_task boolean|nil                            -- true = render as task (checkbox)
 ---@field task_label string|nil                          -- display name override; defaults to "Task"
 ---@field state "PENDING"|"RESOLVED"|"DELETED"|"OUTDATED"|nil -- primary state; nil = active/open
+---@field resolvable boolean|nil                      -- thread root: can be resolved (false for plain comments); nil = unknown
 ---@field outdated boolean|nil                           -- may coexist with RESOLVED
 ---@field reactions table<string, integer>|nil
 ---@field url string|nil

@@ -133,6 +133,29 @@ describe("pulls.ui.detail.readiness.derive", function()
 		assert.are.equal("Threads resolved", done.gates[4].label)
 	end)
 
+	it("doesn't block on open threads GitLab says are mergeable", function()
+		local r = readiness.derive(base({
+			detailed_merge_status = "mergeable",
+			blocking_discussions_resolved = true,
+			resolvable_threads = 2,
+			resolved_threads = 1,
+			reviewers = { { name = "r", decision = "approved" } },
+		}))
+		assert.are.same({ "pipeline:passed", "conflicts:passed", "review:passed" }, keys(r.gates))
+		assert.is_true(r.mergeable)
+	end)
+
+	it("goes by the counts when GitLab gives no thread verdict", function()
+		local r = readiness.derive(base({
+			detailed_merge_status = NONE,
+			blocking_discussions_resolved = NONE,
+			resolvable_threads = 1,
+			resolved_threads = 0,
+		}))
+		assert.are.equal("threads:failed", keys(r.gates)[4])
+		assert.are.equal("1 unresolved thread", r.gates[4].label)
+	end)
+
 	it("falls back to the blocking-discussions flag without counts", function()
 		local r = readiness.derive(base({ blocking_discussions_resolved = false }))
 		assert.are.equal("threads:failed", keys(r.gates)[4])

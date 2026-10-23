@@ -51,8 +51,14 @@ local function to_comment(comment)
 		created = comment.created_on,
 		parent_id = comment.parent_id ~= nil and tostring(comment.parent_id) or nil,
 		deleted = comment.state == "DELETED",
-		-- Every GitLab MR thread is resolvable.
-		resolvable = is_root and capability ~= nil and capability.set_thread_resolved ~= nil or nil,
+		-- Only real threads: a plain comment (e.g. the one posted with an
+		-- approval) isn't resolvable. Providers that don't say fall back to
+		-- "diff threads are, general comments aren't".
+		resolvable = is_root
+				and capability ~= nil
+				and capability.set_thread_resolved ~= nil
+				and (comment.resolvable == true or (comment.resolvable == nil and (comment.inline or comment.file) ~= nil))
+			or nil,
 		resolved = is_root and comment.state == "RESOLVED" or nil,
 		resolved_by = to_user(comment.resolved_by),
 		context = is_root and context_of(comment) or nil,
