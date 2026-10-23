@@ -317,8 +317,7 @@ function M.render(tab_items, get_tab_module)
 	detail_ui.set_content_title(M.title_chunks(tab_items, state.current_tab))
 
 	-- Leading "─ " mirrors the top title's own border-dash prefix
-	-- (tabs.title_chunks), so the hint aligns with the title above it. No
-	-- "[i] - Edit" hint on the Description tab (DESIGN-merge-request-view.md §2).
+	-- (tabs.title_chunks), so the hint aligns with the title above it.
 	local footer_chunks
 	if inline_edit.is_active(buf) then
 		local hl = "AtlasFieldBoxBorderEditing"
@@ -327,6 +326,13 @@ function M.render(tab_items, get_tab_module)
 			{ utils.field_hint_label("ui.submit", "Save", true), hl },
 			{ " ── ", hl },
 			{ utils.field_hint_label("ui.field_edit.close", "Cancel", true), hl },
+			{ " ", hl },
+		}
+	elseif description_editable() then
+		local hl = content_border_hl()
+		footer_chunks = {
+			{ "─ ", hl },
+			{ utils.field_hint_label("ui.edit_description", "Edit", true), hl },
 			{ " ", hl },
 		}
 	elseif conversation_addable() then
