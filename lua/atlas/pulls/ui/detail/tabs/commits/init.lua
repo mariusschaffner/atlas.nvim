@@ -2,15 +2,13 @@
 -- divider; per commit a row with a graph node, a Conventional Commits type
 -- chip coloured by type, the scope, then time, author and short hash in fixed
 -- columns, and below it the subject on the graph line joining the nodes. The cursor
--- row fills its node and shows "⏎ diff · y sha"; a per-type tally goes in
+-- row fills its node and shows "⏎ diff"; a per-type tally goes in
 -- the content box's bottom border (`M.footer_chunks`).
 local M = {}
 
 local utils = require("atlas.ui.shared.utils")
 local spinner = require("atlas.ui.components.spinner")
 local keyhints = require("atlas.ui.components.keyhints")
-local help = require("atlas.ui.popups.help")
-local resolver = require("atlas.core.keymaps")
 local presentation = require("atlas.pulls.ui.presentation")
 local notify = require("atlas.core.notify")
 local request_scope = require("atlas.core.requests")
@@ -19,7 +17,6 @@ local model = require("atlas.pulls.ui.detail.tabs.commits.model")
 
 local PADDING_X = 1
 local COL_GAP = 2
-local MAX_SCOPE_W = 10
 local MAX_AUTHOR_W = 18
 local HASH_W = 8
 local GRAPH_LINE = "│"
@@ -221,7 +218,7 @@ local function render_commits(width)
 			chip_w = math.max(chip_w, vim.api.nvim_strwidth(parsed[i].type) + 2)
 		end
 		if parsed[i].scope then
-			scope_w = math.max(scope_w, math.min(MAX_SCOPE_W, vim.api.nvim_strwidth(parsed[i].scope)))
+			scope_w = math.max(scope_w, vim.api.nvim_strwidth(parsed[i].scope))
 		end
 		author_w = math.max(author_w, math.min(MAX_AUTHOR_W, vim.api.nvim_strwidth(display_author(commit))))
 	end
@@ -354,8 +351,7 @@ local function update_cursor()
 	})
 	local chunks = keyhints.chunks({
 		{ action_id = "ui.select", label = "diff" },
-		{ action_id = "ui.copy_id", label = "sha" },
-	}, { separator = " · ", label_hl = "AtlasTextMutedItalic", key_hl = "AtlasTextMutedItalic" })
+	}, { label_hl = "AtlasKeyHint" })
 	local hint_w = 0
 	for _, chunk in ipairs(chunks) do
 		hint_w = hint_w + vim.api.nvim_strwidth(chunk[1])
@@ -413,38 +409,12 @@ function M.is_loading()
 	return state.commits == "loading"
 end
 
----@return table[]
-local function keymap_items()
-	local items = {}
-	utils.insert_if(
-		items,
-		resolver.item("ui.copy_id", {
-			desc = "Copy commit SHA",
-			hint = false,
-			opts = { nowait = true, silent = true },
-			callback = function()
-				local win = detail.win
-				local entry = utils.window.valid(win) and (detail.line_map or {})[vim.api.nvim_win_get_cursor(win)[1]]
-				if not entry or entry.kind ~= "commit" then
-					return
-				end
-				local sha = tostring(entry.commit.hash or entry.commit.short_hash or "")
-				vim.fn.setreg("+", sha)
-				vim.fn.setreg('"', sha)
-				notify.success("Copied " .. sha:sub(1, HASH_W), { timeout = 1200 })
-			end,
-		})
-	)
-	return items
-end
-
 ---@param buf integer
 ---@param _refresh fun()|nil
 function M.activate(buf, _refresh)
 	if not utils.buffer.valid(buf) then
 		return
 	end
-	help.register("Detail", keymap_items(), { index = 212, buffer = buf })
 	local group = vim.api.nvim_create_augroup("AtlasPullsCommitsCursor" .. tostring(buf), { clear = true })
 	vim.api.nvim_create_autocmd("CursorMoved", { group = group, buffer = buf, callback = update_cursor })
 end
@@ -454,9 +424,6 @@ function M.deactivate(buf)
 	pcall(vim.api.nvim_del_augroup_by_name, "AtlasPullsCommitsCursor" .. tostring(buf))
 	if utils.buffer.valid(buf) then
 		vim.api.nvim_buf_clear_namespace(buf, hint_ns, 0, -1)
-		local items = {}
-		utils.insert_if(items, resolver.remove_item("ui.copy_id"))
-		help.remove("Detail", items, { buffer = buf })
 	end
 	M.reset()
 	notify.clear()
