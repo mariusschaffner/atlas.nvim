@@ -372,50 +372,72 @@ local function dates_entry(width)
 	}
 end
 
+---@param width integer
 ---@return IssuesSidebarEntry
-local function development_entry()
+local function development_entry(width)
 	local branches = state.linked_branches
 	local mrs = state.linked_merge_requests
 	local lines, spans = {}, {}
 
+	--- Adds a value line; with `hint`, that key hint sits right-aligned on the
+	--- same line (text truncated to make room), so each group's key is next to
+	--- the row it acts on rather than up on the shared label line.
 	---@param text string
 	---@param hl string
-	local function add(text, hl)
+	---@param hint string|nil
+	local function add(text, hl, hint)
+		if hint == nil then
+			table.insert(spans, { line = #lines, start_col = 0, end_col = #text, hl_group = hl })
+			table.insert(lines, text)
+			return
+		end
+		local hint_w = ui_utils.text_width(hint)
+		if ui_utils.text_width(text) > width - hint_w - 1 then
+			text = utils.truncate(text, width - hint_w - 1)
+		end
+		local gap = math.max(1, width - ui_utils.text_width(text) - hint_w)
+		local line = text .. string.rep(" ", gap) .. hint
 		table.insert(spans, { line = #lines, start_col = 0, end_col = #text, hl_group = hl })
-		table.insert(lines, text)
+		table.insert(spans, { line = #lines, start_col = #line - #hint, end_col = #line, hl_group = "AtlasKeyHint" })
+		table.insert(lines, line)
 	end
 
 	if branches == "loading" or mrs == "loading" then
 		add(spinner.with_text("Loading..."), "AtlasTextMuted")
 	else
+		local branch_hint = key_hint("issues.create_branch")
 		if type(branches) == "table" and #branches > 0 then
-			for _, b in ipairs(branches) do
-				add(tostring(b.name), highlights.dynamic_for(tostring(b.name)) or "AtlasTextMuted")
+			for i, b in ipairs(branches) do
+				add(
+					tostring(b.name),
+					highlights.dynamic_for(tostring(b.name)) or "AtlasTextMuted",
+					i == 1 and branch_hint or nil
+				)
 			end
 		elseif type(branches) == "string" then
-			add(branches, "AtlasLogError")
+			add(branches, "AtlasLogError", branch_hint)
 		else
-			add("+ link branch", "AtlasTextMutedItalic")
+			add("+ link branch", "AtlasTextMutedItalic", branch_hint)
 		end
 
 		lines[#lines + 1] = ""
 
+		local mr_hint = key_hint("issues.go_to_pull")
 		if type(mrs) == "table" and #mrs > 0 then
-			for _, mr in ipairs(mrs) do
+			for i, mr in ipairs(mrs) do
 				local hl = mr.state == "merged" and "AtlasTextPositive"
 					or (mr.state == "closed" and "AtlasLogError" or "AtlasTextMuted")
-				add(string.format("!%d %s", mr.id, tostring(mr.title or "")), hl)
+				add(string.format("!%d %s", mr.id, tostring(mr.title or "")), hl, i == 1 and mr_hint or nil)
 			end
 		elseif type(mrs) == "string" then
-			add(mrs, "AtlasLogError")
+			add(mrs, "AtlasLogError", mr_hint)
 		else
-			add("+ link merge request", "AtlasTextMutedItalic")
+			add("+ link merge request", "AtlasTextMutedItalic", mr_hint)
 		end
 	end
 
 	return {
 		label = "Development",
-		key_hint = key_hints({ "issues.create_branch", "issues.go_to_pull" }),
 		value_lines = lines,
 		value_highlights = spans,
 	}
@@ -437,7 +459,7 @@ local function render_sidebar(gl, outer_width)
 		milestone_entry(gl, width),
 		dates_entry(width),
 		{ divider = true },
-		development_entry(),
+		development_entry(width),
 	}
 	local lines, spans, regions = sidebar.render(entries, width)
 
