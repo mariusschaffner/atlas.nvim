@@ -138,11 +138,16 @@ local function job_counts(pipeline)
 	return done, total
 end
 
+-- Below this header width the title line keeps only the timer/job count, so
+-- the title itself stays readable.
+local TITLE_HINTS_MIN_WIDTH = 110
+
 --- Right side of the title line: "3:05 elapsed · 4/7 jobs   R retry failed   gX cancel".
 ---@param pipeline PipelineGraph
 ---@param pill AtlasPipelinePill
+---@param with_hints boolean
 ---@return { [1]: string, [2]: string|nil }[]
-local function title_right(pipeline, pill)
+local function title_right(pipeline, pill, with_hints)
 	local chunks = {}
 	local value, suffix = status.elapsed(pipeline, now())
 	local info = {}
@@ -157,6 +162,9 @@ local function title_right(pipeline, pill)
 	if #info > 0 then
 		table.insert(chunks, { (value and " " or "") .. table.concat(info, " · "), "AtlasTextMuted" })
 	end
+	if not with_hints then
+		return chunks
+	end
 	local hints = keyhints.chunks({
 		{ action_id = "pipelines.retry_failed", label = "retry failed" },
 		{ action_id = "pipelines.cancel_pipeline", label = "cancel" },
@@ -169,17 +177,25 @@ local function title_right(pipeline, pill)
 end
 
 --- The graph's hint line (§3): "h/l stage  j/k job  ⏎ show output  r retry job ...".
+--- Trailing hints are dropped when the line doesn't fit `width`.
+---@param width integer
 ---@return string text
 ---@return AtlasUIHighlight[] spans
-local function graph_hints()
-	return keyhints.render({
+local function graph_hints(width)
+	local segments = {
 		{ keys = { key_pair("pipelines.previous_stage", "pipelines.next_stage") }, label = "stage" },
 		{ keys = { key_pair("ui.next_item", "ui.previous_item") }, label = "job" },
 		{ action_id = "ui.select", label = "show output" },
 		{ action_id = "pipelines.retry_job", label = "retry job" },
 		{ action_id = "pipelines.play_job", label = "play manual" },
 		{ action_id = "pipelines.cancel_job", label = "cancel job" },
-	}, { separator = "   " })
+	}
+	local text, spans = keyhints.render(segments, { separator = "   " })
+	while #segments > 1 and vim.api.nvim_strwidth(text) > width do
+		table.remove(segments)
+		text, spans = keyhints.render(segments, { separator = "   " })
+	end
+	return text, spans
 end
 
 --- Graph + hint line as the header box's `extra` block.
@@ -213,7 +229,7 @@ local function graph_block(pipeline, width)
 	local lines, spans = {}, {}
 	utils.append_block(lines, spans, { lines = result.lines, highlights = result.highlights })
 	table.insert(lines, "")
-	local hint_text, hint_spans = graph_hints()
+	local hint_text, hint_spans = graph_hints(width)
 	utils.append_block(lines, spans, { lines = { hint_text }, highlights = hint_spans })
 	return { lines = lines, highlights = spans, regions = { graph = { row = 0, col = 0, width = width, height = #result.lines } } },
 		result.selected_row
@@ -264,7 +280,7 @@ function M.render_header()
 		state_hl = pill.hl,
 		title = (mr and mr.title) or pipeline.commit_title or ("Pipeline #" .. tostring(pipeline.id)),
 		iid_text = "#" .. tostring(pipeline.id),
-		title_right = title_right(pipeline, pill),
+		title_right = title_right(pipeline, pill, outer >= TITLE_HINTS_MIN_WIDTH),
 	}
 
 	local extra, selected_row = nil, nil
