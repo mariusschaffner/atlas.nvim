@@ -37,6 +37,9 @@ local MIN_BREADCRUMB = 20
 ---@field progress_bar_spans table[]|nil Spans {start_col, end_col, hl_group} relative to `progress_bar`.
 ---@field progress_text string|nil e.g. "4/6 criteria".
 ---@field meta_strip string|nil Dim one-line summary under the chip row (narrow-terminal sidebar fallback).
+---@field state_icon string|nil Pill glyph; defaults to "●".
+---@field meta_right_chunks { [1]: string, [2]: string|nil }[]|nil Coloured meta text (replaces `meta_right`); chunks without a group are dim.
+---@field title_right { [1]: string, [2]: string|nil }[]|nil Right-aligned on the title line (timers, key hints); the title is shortened to make room.
 
 ---@class IssuesDetailHeaderBlock
 ---@field lines string[] Rendered at `M.inner_width`, unpadded.
@@ -60,17 +63,23 @@ end
 local function render_body(data, width)
 	local lines, spans = {}, {}
 
-	local pill = string.format(" %s %s ", "●", data.state_label or "")
+	local pill = string.format(" %s %s ", data.state_icon or "●", data.state_label or "")
 	local title_prefix = pill .. " "
 	local iid_text = data.iid_text or ""
 	local iid_suffix = iid_text ~= "" and (" " .. iid_text) or ""
 	local title_text = data.title or ""
-	local title_room = width - text_width(title_prefix) - text_width(iid_suffix)
+	local right_text, right_width = "", 0
+	for _, chunk in ipairs(data.title_right or {}) do
+		right_text = right_text .. chunk[1]
+	end
+	if right_text ~= "" then
+		right_width = text_width(right_text) + 2
+	end
+	local title_room = width - text_width(title_prefix) - text_width(iid_suffix) - right_width
 	if title_room > 0 and text_width(title_text) > title_room then
 		title_text = utils.truncate(title_text, title_room)
 	end
 	local title_line = title_prefix .. title_text .. iid_suffix
-	table.insert(lines, title_line)
 	table.insert(spans, { line = 0, start_col = 0, end_col = #pill, hl_group = data.state_hl })
 	table.insert(spans, {
 		line = 0,
@@ -81,6 +90,16 @@ local function render_body(data, width)
 	if iid_text ~= "" then
 		table.insert(spans, { line = 0, start_col = #title_line - #iid_text, end_col = #title_line, hl_group = "AtlasTextMuted" })
 	end
+	if right_text ~= "" then
+		title_line = title_line .. string.rep(" ", math.max(2, width - text_width(title_line) - text_width(right_text)))
+		for _, chunk in ipairs(data.title_right) do
+			if chunk[2] then
+				table.insert(spans, { line = 0, start_col = #title_line, end_col = #title_line + #chunk[1], hl_group = chunk[2] })
+			end
+			title_line = title_line .. chunk[1]
+		end
+	end
+	table.insert(lines, title_line)
 
 	-- Chip row: label chips, then milestone + progress appended to the last
 	-- chip line (or a fresh one if there are no labels).
@@ -169,6 +188,13 @@ end
 local function render_top_border(data, outer_width)
 	local meta_left = data.breadcrumb or ""
 	local meta_right = data.meta_right or ""
+	local meta_chunks = data.meta_right_chunks
+	if meta_chunks then
+		meta_right = ""
+		for _, chunk in ipairs(meta_chunks) do
+			meta_right = meta_right .. chunk[1]
+		end
+	end
 	local head = " ╭─ "
 	local tail = " ─╮"
 	-- Room for both texts after the corners, the 2 spaces around the fill,
@@ -201,12 +227,24 @@ local function render_top_border(data, outer_width)
 		end_col = #left_part + #fill_str,
 		hl_group = "AtlasBorder",
 	})
+	local meta_start = #line - #tail - #meta_right
 	table.insert(spans, {
 		line = 0,
-		start_col = #line - #tail - #meta_right,
+		start_col = meta_start,
 		end_col = #line - #tail,
 		hl_group = "AtlasTextMuted",
 	})
+	if meta_chunks then
+		-- Colour the chunks over the dim base, up to wherever truncation cut the text.
+		local col = meta_start
+		for _, chunk in ipairs(meta_chunks) do
+			local stop = math.min(col + #chunk[1], #line - #tail)
+			if chunk[2] and stop > col then
+				table.insert(spans, { line = 0, start_col = col, end_col = stop, hl_group = chunk[2] })
+			end
+			col = col + #chunk[1]
+		end
+	end
 	table.insert(spans, { line = 0, start_col = #line - #tail, end_col = #line, hl_group = "AtlasBorder" })
 	return line, spans
 end

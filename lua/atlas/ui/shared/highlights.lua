@@ -95,6 +95,13 @@ local groups = {
 	-- (DESIGN-milestone-view.md §8/§6's "Goal block": subtle background,
 	-- yellow icon, bright text).
 	AtlasBgHighlight = { bg = "#1f2335" },
+	-- `bg_dark`: recessed panels such as the pipeline view's job log
+	-- (DESIGN-pipeline-view.md §7), with its warning/error line tints.
+	AtlasBgDark = { bg = "#16161e" },
+	AtlasLogWarnLine = { bg = "#2a2525" },
+	AtlasLogErrorLine = { bg = "#2c2029" },
+	-- Small live-state badge ("● following"): cyan on a cyan tint.
+	AtlasBadgeFollow = { fg = "#7dcfff", bg = "#1d3240" },
 
 	-- Timeline (day-grouped activity feed: issue Activity tab, reusable by the
 	-- milestone view / review threads).

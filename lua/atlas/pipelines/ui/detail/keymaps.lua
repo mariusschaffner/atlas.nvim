@@ -1,111 +1,133 @@
+-- Keys of the pipeline detail view (DESIGN-pipeline-view.md §5). The shared
+-- detail host keeps focus in the log float, so the graph and the log are two
+-- key "modes" on the log buffer: graph mode maps stage/job navigation and the
+-- job actions; log mode leaves j/k/h/l etc. to Neovim (scrolling) and maps
+-- the key back to the graph. Pipeline-level keys work in both.
 local M = {}
 
 local help = require("atlas.ui.popups.help")
 local resolver = require("atlas.core.keymaps")
 local utils = require("atlas.ui.shared.utils")
 
+local GENERAL = "General"
+local GRAPH = "Pipeline graph"
+local LOG = "Job log"
+
+local function detail()
+	return require("atlas.pipelines.ui.detail")
+end
+
+---@param action_id string
+---@param desc string
+---@param callback fun()
+---@return table|nil
+local function item(action_id, desc, callback)
+	return resolver.item(action_id, {
+		desc = desc,
+		hint = false,
+		opts = { nowait = true, silent = true },
+		callback = function()
+			if not help.is_open() then
+				callback()
+			end
+		end,
+	})
+end
+
+local GENERAL_ACTIONS = {
+	{
+		"ui.help",
+		"Toggle help",
+		function(buf)
+			help.toggle({ buffer = buf })
+		end,
+	},
+	{ "ui.close", "Close pipeline", "close" },
+}
+
+local GRAPH_ACTIONS = {
+	{ "pipelines.previous_stage", "Previous stage", "previous_stage" },
+	{ "pipelines.next_stage", "Next stage", "next_stage" },
+	{ "ui.next_item", "Next job", "next_job" },
+	{ "ui.previous_item", "Previous job", "previous_job" },
+	{ "ui.select", "Show output (focus the log)", "focus_log" },
+}
+
+local LOG_ACTIONS = {
+	{ "pipelines.focus_graph", "Back to the graph", "focus_graph" },
+}
+
+---@param actions table[]
+---@param buf integer
+---@return table[]
+local function items_for(actions, buf)
+	local items = {}
+	for _, action in ipairs(actions) do
+		local target = action[3]
+		local callback = type(target) == "function" and function()
+			target(buf)
+		end or function()
+			detail()[target]()
+		end
+		if action[1] == "ui.help" then
+			-- Help toggles itself even while open.
+			utils.insert_if(
+				items,
+				resolver.item(action[1], {
+					desc = action[2],
+					hint = false,
+					opts = { nowait = true, silent = true },
+					callback = callback,
+				})
+			)
+		else
+			utils.insert_if(items, item(action[1], action[2], callback))
+		end
+	end
+	return items
+end
+
+---@param actions table[]
+---@return table[]
+local function removals(actions)
+	local items = {}
+	for _, action in ipairs(actions) do
+		utils.insert_if(items, resolver.remove_item(action[1]))
+	end
+	return items
+end
+
+--- Maps the keys of `mode` ("graph"|"log") and unmaps the other mode's.
+---@param buf integer
+---@param mode "graph"|"log"
+function M.set_mode(buf, mode)
+	if not vim.api.nvim_buf_is_valid(buf) then
+		return
+	end
+	help.remove(GRAPH, removals(GRAPH_ACTIONS), { buffer = buf })
+	help.remove(LOG, removals(LOG_ACTIONS), { buffer = buf })
+	if mode == "graph" then
+		help.register(GRAPH, items_for(GRAPH_ACTIONS, buf), { index = 310, buffer = buf })
+	else
+		help.register(LOG, items_for(LOG_ACTIONS, buf), { index = 310, buffer = buf })
+	end
+end
+
 ---@param buf integer
 function M.register(buf)
-	local items = {}
-
-	utils.insert_if(
-		items,
-		resolver.item("ui.help", {
-			desc = "Toggle help",
-			hint = false,
-			opts = { nowait = true, silent = true },
-			callback = function()
-				help.toggle({ buffer = buf })
-			end,
-		})
-	)
-
-	utils.insert_if(
-		items,
-		resolver.item("ui.close", {
-			desc = "Close detail panel",
-			hint = false,
-			opts = { nowait = true, silent = true },
-			callback = function()
-				if not help.is_open() then
-					require("atlas.pipelines.ui.detail").close()
-				end
-			end,
-		})
-	)
-
-	-- Same key as the dashboard's page switcher, repurposed here to cycle
-	-- (forward only, wrapping) the stage selected in the graph/bottom part --
-	-- different buffer, so no clash (see core/keymaps.lua's ALLOWED_CONFLICTS
-	-- for the same pattern). Hidden from the general hint list -- shown
-	-- instead on the active stage box's own title (see graph.lua).
-	utils.insert_if(
-		items,
-		resolver.item("ui.next_page", {
-			desc = "Next stage",
-			hint = false,
-			opts = { nowait = true, silent = true },
-			callback = function()
-				require("atlas.pipelines.ui.detail").next_stage()
-			end,
-		})
-	)
-
-	-- Same keys as the issue/pulls detail views' own top-level tab switcher,
-	-- repurposed here to cycle the active stage's job tabs.
-	utils.insert_if(
-		items,
-		resolver.item("ui.next_panel_tab", {
-			desc = "Next job",
-			hint = false,
-			opts = { nowait = true },
-			callback = function()
-				require("atlas.pipelines.ui.detail").next_job()
-			end,
-		})
-	)
-
-	utils.insert_if(
-		items,
-		resolver.item("ui.previous_panel_tab", {
-			desc = "Previous job",
-			hint = false,
-			opts = { nowait = true },
-			callback = function()
-				require("atlas.pipelines.ui.detail").previous_job()
-			end,
-		})
-	)
-
-	-- Same action id as the PR-tab pipeline/job boxes' fold toggle (different
-	-- buffer, no clash) -- repurposed here to collapse/expand a GitLab CI
-	-- section in the job log under/above the cursor.
-	utils.insert_if(
-		items,
-		resolver.item("ui.toggle_fold", {
-			desc = "Toggle log section",
-			hint = false,
-			opts = { nowait = true, silent = true },
-			callback = function()
-				require("atlas.pipelines.ui.detail").toggle_fold()
-			end,
-		})
-	)
-
 	M.remove(buf)
-	help.register("General", items, { index = 300, buffer = buf })
+	help.register(GENERAL, items_for(GENERAL_ACTIONS, buf), { index = 300, buffer = buf })
+	M.set_mode(buf, "graph")
 end
 
 ---@param buf integer
 function M.remove(buf)
-	local general = {}
-	utils.insert_if(general, resolver.remove_item("ui.help"))
-	utils.insert_if(general, resolver.remove_item("ui.close"))
-	utils.insert_if(general, resolver.remove_item("ui.next_page"))
-	utils.insert_if(general, resolver.remove_item("ui.next_panel_tab"))
-	utils.insert_if(general, resolver.remove_item("ui.previous_panel_tab"))
-	utils.insert_if(general, resolver.remove_item("ui.toggle_fold"))
-	help.remove("General", general, { buffer = buf })
+	if not vim.api.nvim_buf_is_valid(buf) then
+		return
+	end
+	help.remove(GENERAL, removals(GENERAL_ACTIONS), { buffer = buf })
+	help.remove(GRAPH, removals(GRAPH_ACTIONS), { buffer = buf })
+	help.remove(LOG, removals(LOG_ACTIONS), { buffer = buf })
 end
 
 return M

@@ -1,4 +1,13 @@
-local request_scope = require("atlas.core.requests")
+-- UI state of the pipeline detail view. The pipeline data itself (and its
+-- polling) lives in the store (`atlas.pipelines.pipeline_state`).
+
+---@class PipelinesDetailLogState
+---@field job_id string|nil Job whose trace the log buffer shows.
+---@field rows AtlasPipelineLogRow[] Rows currently in the buffer.
+---@field folds table<integer, boolean> Section header rows that already got a fold.
+---@field follow boolean Keep the cursor on the last line as the trace grows.
+---@field moving boolean A programmatic cursor move is in progress (not the user scrolling).
+---@field positioned boolean The initial cursor position (end / first error) was applied.
 
 ---@class PipelinesDetailState
 ---@field win integer|nil
@@ -6,31 +15,21 @@ local request_scope = require("atlas.core.requests")
 ---@field header_win integer|nil
 ---@field header_buf integer|nil
 ---@field provider PipelinesProvider|nil
----@field current_pipeline Pipeline|nil
----@field details_loading boolean
----@field requests AtlasRequestScope
----@field active_stage integer 1-based index into current_pipeline.stages -- the stage highlighted in the graph and shown in the bottom part.
----@field active_job_by_stage table<integer, integer> 1-based active job tab index, keyed by stage index; remembers the last job picked per stage.
----@field log_by_job_id table<string, { status: "loading"|"loaded"|"error", text: string|nil }>
----@field log_requests AtlasRequestScope Separate from `requests` (pipeline details) so switching jobs doesn't cancel an in-flight details fetch and vice versa.
----@field collapsed_sections table<string, boolean> Keyed by `"<job id>\0<section path>"` (see renderer.lua's `append_log_tree`); presence+true means collapsed, absent/false means expanded -- same convention as `atlas.issues.state`'s `collapsed_issue_keys`.
----@field section_headers table<integer, string> 1-indexed content-buffer line -> fold key, rebuilt on every render; lets the toggle-fold keymap find the section under/above the cursor.
-local M = {
-	win = nil,
-	buf = nil,
-	header_win = nil,
-	header_buf = nil,
-	provider = nil,
-	current_pipeline = nil,
-	details_loading = false,
-	requests = request_scope.new(),
-	active_stage = 1,
-	active_job_by_stage = {},
-	log_by_job_id = {},
-	log_requests = request_scope.new(),
-	collapsed_sections = {},
-	section_headers = {},
-}
+---@field pipeline_ref Pipeline|nil What the view was opened with (shown until the store has loaded).
+---@field merge_request { iid: integer|nil, title: string|nil }|nil
+---@field store AtlasPipelineStore|nil
+---@field unsubscribe fun()|nil
+---@field focus "graph"|"log" Which part gets the keys.
+---@field fullscreen boolean Graph hidden, log fills the view.
+---@field viewport_first integer|nil First visible stage (horizontal scroll).
+---@field return_to fun()|nil Reopens where the view was opened from, on close.
+---@field log PipelinesDetailLogState
+local M = {}
+
+---@return PipelinesDetailLogState
+local function new_log()
+	return { job_id = nil, rows = {}, folds = {}, follow = true, moving = false, positioned = false }
+end
 
 function M.reset()
 	M.win = nil
@@ -38,23 +37,22 @@ function M.reset()
 	M.header_win = nil
 	M.header_buf = nil
 	M.provider = nil
-	M.current_pipeline = nil
-	M.details_loading = false
-	M.requests.cancel()
-	M.requests = request_scope.new()
-	M.active_stage = 1
-	M.active_job_by_stage = {}
-	M.log_by_job_id = {}
-	M.log_requests.cancel()
-	M.log_requests = request_scope.new()
-	M.collapsed_sections = {}
-	M.section_headers = {}
+	M.pipeline_ref = nil
+	M.merge_request = nil
+	M.store = nil
+	M.unsubscribe = nil
+	M.focus = "graph"
+	M.fullscreen = false
+	M.viewport_first = nil
+	M.return_to = nil
+	M.log = new_log()
 end
 
----@param stage_index integer
----@return integer 1-based
-function M.active_job_index(stage_index)
-	return M.active_job_by_stage[stage_index] or 1
+--- Forgets the log buffer's bookkeeping (another job or pipeline is shown next).
+function M.reset_log()
+	M.log = new_log()
 end
+
+M.reset()
 
 return M

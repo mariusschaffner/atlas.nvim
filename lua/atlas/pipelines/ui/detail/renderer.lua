@@ -1,25 +1,26 @@
+-- Rendering of the pipeline detail view (DESIGN-pipeline-view.md §1-§4): the
+-- shared boxed header (meta line, pill + title + timer/keys) holding the stage
+-- graph and its key hints, and the job log in the content float whose native
+-- title is the log header. Reads the store; never fetches.
 local M = {}
 
 local utils = require("atlas.ui.shared.utils")
-local bordered_box = require("atlas.ui.components.bordered_box")
-local ui_utils = require("atlas.ui.utils")
-local spinner = require("atlas.ui.components.spinner")
-local state = require("atlas.pipelines.ui.detail.state")
 local detail_ui = require("atlas.ui.detail")
+local detail_header = require("atlas.ui.components.detail_header")
+local keyhints = require("atlas.ui.components.keyhints")
+local spinner = require("atlas.ui.components.spinner")
+local resolver = require("atlas.core.keymaps")
+local status = require("atlas.pipelines.status")
 local graph = require("atlas.pipelines.ui.detail.components.graph")
-local tabs = require("atlas.ui.components.tabs")
--- Log line splitting/classification is generic text handling with no PR
--- coupling, despite living under the pulls tree (it backs that domain's own
--- inline job-log viewer) -- reused as-is rather than duplicated or relocated.
-local pipeline_logs = require("atlas.pulls.ui.pipelines.logs")
+local log_view = require("atlas.pipelines.ui.detail.log_view")
+local state = require("atlas.pipelines.ui.detail.state")
 
-local ns = vim.api.nvim_create_namespace("atlas.pipelines.detail")
 local header_ns = vim.api.nvim_create_namespace("atlas.pipelines.detail.header")
 
 ---@param buf integer|nil
 ---@param lines string[]
 local function set_lines(buf, lines)
-	if buf == nil or not vim.api.nvim_buf_is_valid(buf) then
+	if not utils.buffer.valid(buf) then
 		return
 	end
 	vim.api.nvim_set_option_value("modifiable", true, { buf = buf })
@@ -27,322 +28,324 @@ local function set_lines(buf, lines)
 	vim.api.nvim_set_option_value("modifiable", false, { buf = buf })
 end
 
----@param pipeline Pipeline
----@return string title
----@return table[] highlights Spans relative to `title`.
-local function box_title(pipeline)
-	local hl = graph.state_hl(pipeline.state)
-	local id_text = string.format("#%s", tostring(pipeline.id or ""))
-	local duration_text = utils.human_duration(pipeline.duration)
-	local title = duration_text == "" and id_text or (id_text .. " - " .. duration_text)
-	return title, { { start_col = 0, end_col = #title, hl_group = hl } }
+---@return integer
+local function now()
+	return state.store and state.store:now() or os.time()
 end
 
---- Renders the sticky header's single box (the "top part"): the stage/job
---- graph, with the active stage's border highlighted blue. The bottom part
---- (content window below) shows that stage's job logs -- see render_job_log.
----@param pipeline Pipeline
----@param width integer Header window width the box should fill.
----@return string[] lines
----@return table[] highlights
-local function render_header_box(pipeline, width)
-	local box_width = math.max(4, width)
-	local interior_width = box_width - 2
-
-	local content_lines, content_highlights = {}, {}
-
-	if state.details_loading and #(pipeline.stages or {}) == 0 then
-		utils.push(content_lines, content_highlights, spinner.with_text("Loading pipeline..."), "AtlasTextMuted")
-	else
-		local graph_lines, graph_spans = graph.render(pipeline, interior_width, state.active_stage)
-		utils.append_block(content_lines, content_highlights, { lines = graph_lines, highlights = graph_spans })
+--- What the header shows: the loaded snapshot, else what the view was opened with.
+---@return PipelineGraph|nil
+local function current_pipeline()
+	if state.store and state.store.pipeline then
+		return state.store.pipeline
 	end
-
-	local title, title_highlights = box_title(pipeline)
-	return bordered_box.render({
-		width = box_width,
-		box_width = box_width,
-		title = title,
-		title_highlights = title_highlights,
-		border_hl = graph.state_hl(pipeline.state),
-		content_lines = content_lines,
-		content_highlights = content_highlights,
-	})
+	local ref = state.pipeline_ref
+	if ref == nil then
+		return nil
+	end
+	return {
+		id = ref.id,
+		project_path = ref.project_path,
+		status = (ref.status or ""):lower(),
+		ref = ref.ref or "",
+		sha = ref.sha or "",
+		short_sha = ref.short_sha,
+		user = ref.user,
+		created_at = ref.created_at,
+		started_at = ref.started_at,
+		finished_at = ref.finished_at,
+		duration = ref.duration,
+		merge_request = state.merge_request,
+		stages = {},
+	}
 end
 
----@param pstate PipelineState|string|nil
----@return boolean
-local function is_running(pstate)
-	return tostring(pstate or ""):upper() == "INPROGRESS"
+---@param action_id string
+---@return string|nil
+local function display_key(action_id)
+	local keys = resolver.resolve(action_id)
+	return keys and keyhints.format_key(keys[1]) or nil
 end
 
---- Builds the job-log box's native title: the job tabs (as before), plus --
---- while `streaming` -- a right-aligned "<spinner> Live" indicator flush
---- against the top-right corner, filled in with border dashes so it reads as
---- part of the border rather than floating text (mirrors
---- `bordered_box.lua`'s own `title`/`title_right` split, adapted to a native
---- floating-window title's single string instead of hand-drawn buffer text).
----@param tab_items { key: string, label: string }[]
----@param active_job_id string
----@param border_hl string
----@param streaming boolean
----@param width integer Content window width -- matches the span the native title is drawn across.
----@return { [1]: string, [2]: string }[]
-local function job_log_title(tab_items, active_job_id, border_hl, streaming, width)
-	local chunks = tabs.title_chunks(tab_items, active_job_id, {
-		active_hl = "AtlasDetailTabActive",
-		inactive_hl = "AtlasTextMuted",
-		gap = " - ",
-		border_hl = border_hl,
-	})
-	if not streaming then
-		return chunks
+--- "h/l"-style combined key for a pair of actions (nil if either is unmapped).
+---@param a string
+---@param b string
+---@return string|nil
+local function key_pair(a, b)
+	local ka, kb = display_key(a), display_key(b)
+	if ka == nil or kb == nil then
+		return nil
 	end
+	return ka .. "/" .. kb
+end
 
-	local left_width = 0
-	for _, chunk in ipairs(chunks) do
-		left_width = left_width + ui_utils.text_width(chunk[1])
+---@param path string
+---@param id string
+---@return string
+local function breadcrumb(path, id)
+	local parts = vim.split(path or "", "/", { plain = true, trimempty = true })
+	local project = parts[#parts] or path or ""
+	table.remove(parts)
+	local namespace = table.concat(parts, " / ")
+	local left = namespace ~= "" and (namespace .. " / " .. project) or project
+	return string.format("%s › pipelines › #%s", left, tostring(id or ""))
+end
+
+---@param pipeline PipelineGraph
+---@return { [1]: string, [2]: string|nil }[]
+local function meta_chunks(pipeline)
+	local chunks = {}
+	local function add(text, hl)
+		if #chunks > 0 then
+			table.insert(chunks, { " · " })
+		end
+		table.insert(chunks, { text, hl })
 	end
-
-	local right_part = string.format(" %s Live ", spinner.frame())
-	local right_width = ui_utils.text_width(right_part) + 1 -- trailing dash before the corner
-
-	local fill = math.max(0, width - left_width - right_width)
-	if fill > 0 then
-		table.insert(chunks, { string.rep("─", fill), border_hl })
+	if (pipeline.ref or "") ~= "" then
+		add("⎇ " .. pipeline.ref, "AtlasCyan")
 	end
-	table.insert(chunks, { right_part, "AtlasTextWarning" })
-	table.insert(chunks, { "─", border_hl })
+	if pipeline.short_sha then
+		add(pipeline.short_sha)
+	end
+	local mr = pipeline.merge_request
+	if mr and mr.iid then
+		add("!" .. tostring(mr.iid), "AtlasAccent")
+	end
+	if pipeline.user then
+		add(pipeline.user.username or pipeline.user.name)
+	end
+	local rel = utils.relative_time(pipeline.started_at or pipeline.created_at)
+	if rel ~= "-" then
+		add(rel == "now" and "started just now" or ("started " .. rel .. " ago"))
+	end
 	return chunks
 end
 
---- Appends a parsed log tree to `lines`/`highlights`, rendering GitLab CI
---- sections as collapsible headers (fold icon + name + duration) using
---- `state.collapsed_sections`, and recording each header's buffer line in
---- `state.section_headers` so the toggle-fold keymap can find it from the
---- cursor. `path_prefix` is the section-key path down to this point (joined
---- with the job id it belongs to forms the fold key).
----@param entries AtlasLogEntry[]
----@param job_id string
----@param path_prefix string
----@param depth integer
----@param lines string[]
----@param highlights table[]
-local function append_log_tree(entries, job_id, path_prefix, depth, lines, highlights)
-	local indent = string.rep("  ", depth)
-	for _, entry in ipairs(entries) do
-		if entry.kind == "group" then
-			local path = path_prefix .. "/" .. entry.key
-			local key = job_id .. "\0" .. path
-			local collapsed = state.collapsed_sections[key] == true
-			local duration_text = entry.duration and (" (" .. pipeline_logs.format_duration(entry.duration) .. ")") or ""
-			local text = indent .. (collapsed and "▸ " or "▾ ") .. entry.name .. duration_text
-			table.insert(lines, text)
-			-- Background first, narrower foreground span after -- same
-			-- layering order `bordered_box.lua` uses to combine the two.
-			table.insert(highlights, { line = #lines - 1, line_hl_group = "CursorLine" })
-			table.insert(highlights, { line = #lines - 1, start_col = 0, end_col = #text, hl_group = "AtlasColumnHeader" })
-			state.section_headers[#lines] = key
-			if not collapsed then
-				append_log_tree(entry.entries, job_id, path, depth + 1, lines, highlights)
-			end
-		else
-			local text = indent .. entry.text
-			table.insert(lines, text)
-			local hl = pipeline_logs.classify_log_line(entry.text)
-			if hl then
-				table.insert(highlights, { line = #lines - 1, start_col = #indent, end_col = #text, hl_group = hl })
+---@param pipeline PipelineGraph
+---@return integer done
+---@return integer total
+local function job_counts(pipeline)
+	local done, total = 0, 0
+	for _, stage in ipairs(pipeline.stages or {}) do
+		for _, job in ipairs(stage.jobs or {}) do
+			total = total + 1
+			local s = status.normalize(job.status)
+			if s == "success" or s == "failed" or s == "canceled" or s == "skipped" then
+				done = done + 1
 			end
 		end
 	end
+	return done, total
 end
 
---- Renders the bottom part: the active stage's jobs as tabs (shown in the
---- content window's own native title, like the issue/pulls detail views'
---- top-level tabs), and the active job's log as the window's plain buffer
---- content -- so it gets a real, scrollable, line-numbered buffer instead of
---- hand-drawn gutter text.
----@param pipeline Pipeline
----@param ensure_job_log fun(pipeline: Pipeline, job: PipelineJob)
----@return string[] lines
----@return table[] highlights
----@return { [1]: string, [2]: string }[] title_chunks
----@return string border_hl
----@return boolean show_line_numbers
-local function render_job_log(pipeline, ensure_job_log)
-	local stages = pipeline.stages or {}
-	if #stages == 0 then
-		return { "", "  No stages available." }, {}, {}, "AtlasBorder", false
+--- Right side of the title line: "3:05 elapsed · 4/7 jobs   R retry failed   gX cancel".
+---@param pipeline PipelineGraph
+---@param pill AtlasPipelinePill
+---@return { [1]: string, [2]: string|nil }[]
+local function title_right(pipeline, pill)
+	local chunks = {}
+	local value, suffix = status.elapsed(pipeline, now())
+	local info = {}
+	if value then
+		table.insert(chunks, { value, pill.color })
+		table.insert(info, suffix:sub(2))
 	end
-
-	local stage_index = math.max(1, math.min(#stages, state.active_stage))
-	state.active_stage = stage_index
-	local stage = stages[stage_index]
-
-	local jobs = stage.jobs or {}
-	if #jobs == 0 then
-		local lines, highlights = {}, {}
-		if state.details_loading then
-			utils.push(lines, highlights, spinner.with_text("Loading jobs..."), "AtlasTextMuted")
-		else
-			lines = { "", "  No jobs in this stage." }
-		end
-		return lines, highlights, {}, "AtlasTextMuted", false
+	local done, total = job_counts(pipeline)
+	if total > 0 then
+		table.insert(info, string.format("%d/%d jobs", done, total))
 	end
-
-	local job_index = math.max(1, math.min(#jobs, state.active_job_index(stage_index)))
-	state.active_job_by_stage[stage_index] = job_index
-	local job = jobs[job_index]
-
-	-- Always titled, even with a single job -- unlike the issue/pulls detail
-	-- views' own tab bar (which hides entirely for one tab), a lone job's
-	-- name is still worth showing so the box says what log is in it.
-	local tab_items = {}
-	for _, j in ipairs(jobs) do
-		table.insert(tab_items, { key = tostring(j.id), label = tostring(j.name or "job") })
+	if #info > 0 then
+		table.insert(chunks, { (value and " " or "") .. table.concat(info, " · "), "AtlasTextMuted" })
 	end
-	local title_chunks = job_log_title(
-		tab_items,
-		tostring(job.id),
-		graph.state_hl(job.state),
-		is_running(job.state),
-		vim.api.nvim_win_get_width(state.win)
-	)
-
-	ensure_job_log(pipeline, job)
-	local log_entry = state.log_by_job_id[tostring(job.id)]
-
-	-- Rebuilt below if the log renders successfully -- cleared unconditionally
-	-- first so a stale mapping from a previous job/render never lingers.
-	state.section_headers = {}
-
-	local lines, highlights = {}, {}
-	local show_line_numbers = false
-	if log_entry == nil or log_entry.status == "loading" then
-		utils.push(lines, highlights, spinner.with_text("Loading log..."), "AtlasTextMuted")
-	elseif log_entry.status == "error" then
-		utils.push(lines, highlights, tostring(log_entry.text or "Failed to load job log"), "AtlasLogError")
-	else
-		local entries = pipeline_logs.parse(log_entry.text)
-		if #entries == 0 then
-			utils.push(lines, highlights, "(empty log)", "AtlasTextMuted")
-		else
-			show_line_numbers = true
-			append_log_tree(entries, tostring(job.id), "", 0, lines, highlights)
-		end
+	local hints = keyhints.chunks({
+		{ action_id = "pipelines.retry_failed", label = "retry failed" },
+		{ action_id = "pipelines.cancel_pipeline", label = "cancel" },
+	}, { separator = "   " })
+	if #hints > 0 then
+		table.insert(chunks, { "   " })
+		vim.list_extend(chunks, hints)
 	end
-
-	return lines, highlights, title_chunks, graph.state_hl(job.state), show_line_numbers
+	return chunks
 end
 
--- Last-applied sticky header render, so switching job tabs (which re-renders
--- the whole panel, header included, even though the header only depicts the
--- active *stage*, not the active job) doesn't needlessly re-set the header
--- buffer/extmarks/window height when nothing in it actually changed.
----@type { buf: integer|nil, signature: string|nil }
-local last_header = { buf = nil, signature = nil }
-
----@param lines string[]
----@param spans table[]
----@return string
-local function header_signature(lines, spans)
-	return table.concat(lines, "\n") .. "\0" .. vim.inspect(spans)
+--- The graph's hint line (§3): "h/l stage  j/k job  ⏎ show output  r retry job ...".
+---@return string text
+---@return AtlasUIHighlight[] spans
+local function graph_hints()
+	return keyhints.render({
+		{ keys = { key_pair("pipelines.previous_stage", "pipelines.next_stage") }, label = "stage" },
+		{ keys = { key_pair("ui.next_item", "ui.previous_item") }, label = "job" },
+		{ action_id = "ui.select", label = "show output" },
+		{ action_id = "pipelines.retry_job", label = "retry job" },
+		{ action_id = "pipelines.play_job", label = "play manual" },
+		{ action_id = "pipelines.cancel_job", label = "cancel job" },
+	}, { separator = "   " })
 end
 
----@param ensure_job_log fun(pipeline: Pipeline, job: PipelineJob)
-function M.render(ensure_job_log)
-	local buf = state.buf
-	local win = state.win
-	if buf == nil or win == nil then
-		return
+--- Graph + hint line as the header box's `extra` block.
+---@param pipeline PipelineGraph
+---@param width integer
+---@return IssuesDetailHeaderBlock
+---@return integer|nil selected_row 0-based row of the selected pill inside the block.
+local function graph_block(pipeline, width)
+	local store = state.store
+	if store == nil or (store.pipeline == nil and store.error == nil) then
+		local text = spinner.with_text("Loading pipeline...")
+		return { lines = { text }, highlights = { { line = 0, start_col = 0, end_col = #text, hl_group = "AtlasTextMuted" } } },
+			nil
 	end
-	if not vim.api.nvim_buf_is_valid(buf) or not vim.api.nvim_win_is_valid(win) then
-		return
+	if store.pipeline == nil then
+		local text = "Failed to load pipeline: " .. tostring(store.error)
+		return { lines = { text }, highlights = { { line = 0, start_col = 0, end_col = #text, hl_group = "AtlasRed" } } },
+			nil
 	end
 
-	local pipeline = state.current_pipeline
-	local header_win = state.header_win
-	local header_buf = state.header_buf
-	local has_header = utils.window.valid(header_win) and utils.buffer.valid(header_buf)
-
-	if has_header then
-		local header_lines, header_spans = {}, {}
-		if pipeline ~= nil then
-			header_lines, header_spans = render_header_box(pipeline, vim.api.nvim_win_get_width(header_win))
-		end
-
-		local signature = header_signature(header_lines, header_spans)
-		if last_header.buf ~= header_buf or last_header.signature ~= signature then
-			last_header.buf = header_buf
-			last_header.signature = signature
-			set_lines(header_buf, header_lines)
-			utils.apply_spans(header_buf, header_ns, header_spans)
-			detail_ui.resize_header(#header_lines)
-		end
-	end
+	local result = graph.render(pipeline, {
+		width = width,
+		now = now(),
+		selected_job_id = store.selected_job_id,
+		focused = state.focus == "graph",
+		play_key = display_key("pipelines.play_job"),
+		prev_first = state.viewport_first,
+	})
+	state.viewport_first = result.viewport.first
 
 	local lines, spans = {}, {}
-	local title_chunks, border_hl, show_line_numbers = {}, "AtlasBorder", false
+	utils.append_block(lines, spans, { lines = result.lines, highlights = result.highlights })
+	table.insert(lines, "")
+	local hint_text, hint_spans = graph_hints()
+	utils.append_block(lines, spans, { lines = { hint_text }, highlights = hint_spans })
+	return { lines = lines, highlights = spans, regions = { graph = { row = 0, col = 0, width = width, height = #result.lines } } },
+		result.selected_row
+end
 
-	if pipeline == nil then
-		lines = { "", "  Nothing selected..." }
-	else
-		lines, spans, title_chunks, border_hl, show_line_numbers = render_job_log(pipeline, ensure_job_log)
+--- Scrolls the header window so the selected pill stays visible when the
+--- graph is taller than the (capped) header.
+---@param row integer 0-based header line.
+local function reveal_header_row(row)
+	local win = state.header_win
+	if not utils.window.valid(win) then
+		return
 	end
-
-	detail_ui.set_content_title(title_chunks)
-	detail_ui.set_content_border(border_hl)
-	vim.api.nvim_set_option_value("number", show_line_numbers, { win = win, scope = "local" })
-
-	-- Content is fully replaced on every render (streaming polls included),
-	-- which would otherwise reset scroll position -- most noticeably when
-	-- toggling a fold shifts the line count out from under the cursor.
-	local view
-	pcall(vim.api.nvim_win_call, win, function()
-		view = vim.fn.winsaveview()
+	local height = vim.api.nvim_win_get_height(win)
+	local line_count = vim.api.nvim_buf_line_count(state.header_buf)
+	if line_count <= height then
+		return
+	end
+	vim.api.nvim_win_call(win, function()
+		local view = vim.fn.winsaveview()
+		local top = view.topline - 1
+		if row - 1 < top then
+			top = math.max(0, row - 1)
+		elseif row + 1 >= top + height then
+			top = math.min(line_count - height, row + 2 - height)
+		end
+		vim.fn.winrestview({ topline = top + 1, lnum = top + 1 })
 	end)
+end
+
+function M.render_header()
+	local buf, win = state.header_buf, state.header_win
+	if not utils.buffer.valid(buf) or not utils.window.valid(win) then
+		return
+	end
+	local pipeline = current_pipeline()
+	if pipeline == nil then
+		return
+	end
+	local outer = vim.api.nvim_win_get_width(win)
+	local pill = status.pipeline_pill(pipeline.status)
+	local mr = pipeline.merge_request
+	local data = {
+		breadcrumb = breadcrumb(pipeline.project_path, pipeline.id),
+		meta_right_chunks = meta_chunks(pipeline),
+		state_icon = pill.icon,
+		state_label = pill.label,
+		state_hl = pill.hl,
+		title = (mr and mr.title) or pipeline.commit_title or ("Pipeline #" .. tostring(pipeline.id)),
+		iid_text = "#" .. tostring(pipeline.id),
+		title_right = title_right(pipeline, pill),
+	}
+
+	local extra, selected_row = nil, nil
+	if not state.fullscreen then
+		extra, selected_row = graph_block(pipeline, detail_header.inner_width(outer))
+	end
+	local lines, spans, regions = detail_header.render(data, outer, extra)
 	set_lines(buf, lines)
-	utils.apply_spans(buf, ns, spans)
-	if view then
-		pcall(vim.api.nvim_win_call, win, function()
-			vim.fn.winrestview(view)
-		end)
+	utils.apply_spans(buf, header_ns, spans)
+	detail_ui.resize_header(#lines)
+	if selected_row and regions.graph then
+		reveal_header_row(regions.graph.row + selected_row)
 	end
 end
 
---- Re-applies just the job-log box's native title (job tabs + the "Live"
---- streaming indicator's spinner frame), skipping the header and log buffer
---- entirely. Called on every streaming-animation tick (see
---- `pipelines/ui/detail/init.lua`) so the indicator visibly animates without
---- paying for (or risking flicker from) a full re-render every tick.
-function M.update_streaming_indicator()
+--- Log header (§4) as the content float's title: "◐ molecule-default ─── ● following  F follow · / search ...".
+---@return { [1]: string, [2]: string }[]
+local function log_title()
 	local win = state.win
-	local pipeline = state.current_pipeline
-	if win == nil or not vim.api.nvim_win_is_valid(win) or pipeline == nil then
+	local store = state.store
+	local job = store and store:selected_job()
+	local border_hl = state.focus == "log" and "AtlasCyan" or "AtlasBorder"
+	if job == nil or not utils.window.valid(win) then
+		return {}
+	end
+	local badge = status.job_badge(job, now())
+	local left = {
+		{ "─ ", border_hl },
+		{ badge.icon .. " ", badge.icon_hl },
+		{ job.name, "AtlasTextBright" },
+		{ " ", border_hl },
+	}
+	local right = { { " ", border_hl } }
+	if state.log.follow and job.status == "running" then
+		table.insert(right, { " ● following ", "AtlasBadgeFollow" })
+		table.insert(right, { "  ", border_hl })
+	end
+	local segments = {
+		{ action_id = "pipelines.follow", label = "follow" },
+		{ keys = { "/" }, label = "search" },
+		{ action_id = "ui.toggle_fold", label = "fold" },
+		{ action_id = "pipelines.fullscreen", label = "fullscreen" },
+	}
+	if state.focus == "log" then
+		table.insert(segments, { action_id = "pipelines.focus_graph", label = "graph" })
+	end
+	for _, chunk in ipairs(keyhints.chunks(segments, { separator = " · " })) do
+		table.insert(right, { chunk[1], chunk[2] == "Normal" and "AtlasKeyHintLabel" or chunk[2] })
+	end
+	table.insert(right, { " ─", border_hl })
+
+	local function width(chunks)
+		local w = 0
+		for _, chunk in ipairs(chunks) do
+			w = w + vim.api.nvim_strwidth(chunk[1])
+		end
+		return w
+	end
+	local total = vim.api.nvim_win_get_width(win)
+	local fill = total - width(left) - width(right)
+	if fill < 1 then
+		return left
+	end
+	local out = left
+	table.insert(out, { string.rep("─", fill), border_hl })
+	vim.list_extend(out, right)
+	return out
+end
+
+function M.render_log()
+	if not utils.window.valid(state.win) or not utils.buffer.valid(state.buf) then
 		return
 	end
+	detail_ui.set_content_border(state.focus == "log" and "AtlasCyan" or "AtlasBorder")
+	detail_ui.set_content_title(log_title())
+	log_view.render()
+end
 
-	local stages = pipeline.stages or {}
-	local stage_index = math.max(1, math.min(#stages, state.active_stage))
-	local stage = stages[stage_index]
-	local jobs = stage and stage.jobs or {}
-	if #jobs == 0 then
-		return
-	end
-
-	local job_index = math.max(1, math.min(#jobs, state.active_job_index(stage_index)))
-	local job = jobs[job_index]
-	if not is_running(job.state) then
-		return
-	end
-
-	local tab_items = {}
-	for _, j in ipairs(jobs) do
-		table.insert(tab_items, { key = tostring(j.id), label = tostring(j.name or "job") })
-	end
-	local title_chunks =
-		job_log_title(tab_items, tostring(job.id), graph.state_hl(job.state), true, vim.api.nvim_win_get_width(win))
-	detail_ui.set_content_title(title_chunks)
+function M.render()
+	M.render_header()
+	M.render_log()
 end
 
 return M

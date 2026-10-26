@@ -1,288 +1,219 @@
--- Renders a pipeline's stages/jobs as a left-to-right graph of nested
--- bordered boxes (one box per stage, containing one stacked box per job),
--- connected by a dashed line -- e.g.:
+-- The pipeline graph (DESIGN-pipeline-view.md §3), drawn on the shared strip
+-- cell canvas. One column per stage with its header row, a 3-row pill per job,
+-- and stage-to-stage connectors in the gaps:
 --
---   ┌─ build ────────┐     ┌─ test ─────────┐
---   │┌───────────────┐│─────│┌───────────────┐│
---   ││ compile       ││     ││ unit          ││
---   │└───────────────┘│     │└───────────────┘│
---   └──────────────────┘     └──────────────────┘
+--   Validate ✓ 53s                  Build ✓ 1:02
+--   ╭──────────────────────────╮    ╭──────────────────────────╮
+--   │ ✓ yamllint           12s │───┬──│ ✓ build-agent-pac…  1:02 │
+--   ╰──────────────────────────╯   │  ╰──────────────────────────╯
+--   ╭──────────────────────────╮   │
+--   │ ✓ ansible-lint       41s │───┘
+--   ╰──────────────────────────╯
 --
--- Falls back to stacking stage boxes vertically when they don't fit
--- side-by-side in the available width.
+-- Pure: returns lines + highlight spans; geometry lives in `graph_layout`.
 local M = {}
 
-local bordered_box = require("atlas.ui.components.bordered_box")
-local ui_utils = require("atlas.ui.utils")
-local utils = require("atlas.ui.shared.utils")
-local resolver = require("atlas.core.keymaps")
+local strip = require("atlas.ui.components.strip")
+local layout = require("atlas.pipelines.ui.detail.graph_layout")
+local status = require("atlas.pipelines.status")
 
-local CONNECTOR_WIDTH = 5
-local CONNECTOR_ROW = 1 -- 0-indexed row (within a stage box's own output lines) the dashed connector aligns with.
-local MIN_JOB_CONTENT_WIDTH = 8
-local MAX_JOB_CONTENT_WIDTH = 24
-
-local STATE_HL = {
-	SUCCESSFUL = "AtlasTextPositive",
-	FAILED = "AtlasLogError",
-	INPROGRESS = "AtlasTextWarning",
-	STOPPED = "AtlasTextMuted",
-	UNKNOWN = "AtlasTextMuted",
+local BORDERS = {
+	solid = { tl = "╭", tr = "╮", bl = "╰", br = "╯", h = "─", v = "│" },
+	dashed = { tl = "╭", tr = "╮", bl = "╰", br = "╯", h = "╌", v = "╎" },
+	selected = { tl = "┏", tr = "┓", bl = "┗", br = "┛", h = "━", v = "┃" },
 }
 
----@param state PipelineState|nil
----@return string
-function M.state_hl(state)
-	return STATE_HL[tostring(state or "UNKNOWN"):upper()] or STATE_HL.UNKNOWN
-end
+---@class AtlasPipelineGraphOpts
+---@field width integer
+---@field now integer Epoch seconds (running durations).
+---@field selected_job_id string|nil
+---@field focused boolean The graph (not the log) has the keys: selected pill in cyan.
+---@field play_key string|nil Display key for "p play" on manual jobs.
+---@field prev_first integer|nil Previous viewport start, for stable scrolling.
 
----@param pstate PipelineState|string|nil
----@return boolean
-local function is_running(pstate)
-	return tostring(pstate or ""):upper() == "INPROGRESS"
-end
+---@class AtlasPipelineGraphResult
+---@field lines string[]
+---@field highlights AtlasUIHighlight[]
+---@field viewport AtlasPipelineViewport
+---@field selected_row integer|nil 0-based middle row of the selected pill.
 
---- A running job's box shows "Live" instead of a duration (which wouldn't be
---- final yet anyway); once it finishes, its title switches over to the
---- duration -- same idea as the job-log box's own "Live" indicator, just
---- static here rather than spinner-animated, so the graph doesn't need
---- redrawing on every animation tick.
----@param job PipelineJob
----@return string
-local function job_box_title(job)
-	if is_running(job.state) then
-		return "Live"
-	end
-	return utils.human_duration(job.duration)
-end
-
----@param stage PipelineStage
----@return integer
-local function stage_content_width(stage)
-	local width = MIN_JOB_CONTENT_WIDTH
-	for _, job in ipairs(stage.jobs or {}) do
-		width = math.max(width, vim.fn.strdisplaywidth(tostring(job.name or "")))
-		local title_text = job_box_title(job)
-		if title_text ~= "" then
-			-- bordered_box's top border needs interior_width >= title_w + 4
-			-- (see bordered_box.lua's build_top) for the title to fit unclipped
-			-- with a trailing "─" before the corner.
-			width = math.max(width, ui_utils.text_width(title_text) + 4)
+--- Index of the stage holding `job_id` (1 when not found).
+---@param stages PipelineGraphStage[]
+---@param job_id string|nil
+---@return integer stage_index
+---@return integer job_index
+function M.locate(stages, job_id)
+	for i, stage in ipairs(stages or {}) do
+		for j, job in ipairs(stage.jobs or {}) do
+			if job.id == job_id then
+				return i, j
+			end
 		end
 	end
-	return math.min(width, MAX_JOB_CONTENT_WIDTH)
+	return 1, 0
 end
 
----@param job PipelineJob
----@param content_width integer
----@return string[] lines
----@return table[] highlights
-local function render_job_box(job, content_width)
-	local box_width = content_width + 2
-	local title_text = job_box_title(job)
-	return bordered_box.render({
-		width = box_width,
-		box_width = box_width,
-		title = title_text ~= "" and title_text or nil,
-		title_highlights = is_running(job.state) and { { start_col = 0, end_col = #title_text, hl_group = "AtlasTextWarning" } } or nil,
-		border_hl = M.state_hl(job.state),
-		content_lines = { tostring(job.name or "") },
-	})
-end
-
----@param key string
----@return string
-local function clean_key(key)
-	return (key:gsub("[<>]", ""))
-end
-
---- The configured "cycle to next stage" key (see pipelines/ui/detail/keymaps.lua's
---- reuse of the dashboard's "ui.next_page" action), for the active stage's own
---- title hint. nil if the action has no key configured.
----@return string|nil
-local function next_stage_hint_key()
-	local keys = resolver.resolve("ui.next_page")
-	return keys and keys[1] and clean_key(keys[1]) or nil
-end
-
----@param stage PipelineStage
----@param is_active boolean Whether this is the stage selected in the bottom part -- shown with the same blue border used for editable/selected fields elsewhere, its title prefixed with the "cycle stage" key hint.
----@return string[] lines
----@return table[] highlights
----@return integer width
-local function render_stage_block(stage, is_active)
-	local content_width = stage_content_width(stage)
-
-	local content_lines, content_highlights = {}, {}
-	if #(stage.jobs or {}) == 0 then
-		content_lines = { "" }
+--- A canvas of rows, each with its own highlight ranges (in columns).
+---@param width integer
+---@param height integer
+local function canvas(width, height)
+	local rows, ranges = {}, {}
+	for r = 0, height - 1 do
+		rows[r] = strip.cells(width)
+		ranges[r] = {}
 	end
-	for _, job in ipairs(stage.jobs or {}) do
-		local job_lines, job_highlights = render_job_box(job, content_width)
-		utils.append_block(content_lines, content_highlights, { lines = job_lines, highlights = job_highlights })
-	end
-
-	local title = tostring(stage.name or "Stage")
-	if is_active then
-		local key = next_stage_hint_key()
-		if key then
-			title = string.format("[%s] - %s", key, title)
+	local c = {}
+	function c.text(row, col, text, hl)
+		if rows[row] == nil or text == "" then
+			return
+		end
+		strip.set_text(rows[row], col, text)
+		if hl then
+			table.insert(ranges[row], { from = col, to = col + strip.width(text), hl = hl })
 		end
 	end
-
-	local job_box_width = content_width + 2
-	local stage_box_width = job_box_width + 2
-	-- Widen the box if needed so a hint-prefixed (longer) title still fits on
-	-- the top border without overflowing it -- build_top doesn't truncate.
-	-- bordered_box's top border needs interior_width >= title_w + 4 (leading
-	-- "─" + " title " padding + a trailing "─" before the corner), i.e.
-	-- box_width >= title_w + 6 (see field_box.lua's `natural_width` for the
-	-- same +6 derivation).
-	local title_min_width = ui_utils.text_width(title) + 6
-	stage_box_width = math.max(stage_box_width, title_min_width)
-
-	local lines, highlights = bordered_box.render({
-		width = stage_box_width,
-		box_width = stage_box_width,
-		title = title,
-		border_hl = is_active and "AtlasFieldBoxBorderEditable" or "AtlasTextMuted",
-		content_lines = content_lines,
-		content_highlights = content_highlights,
-	})
-
-	return lines, highlights, stage_box_width
-end
-
----@param blocks { lines: string[], highlights: table[], width: integer }[]
----@return string[] lines
----@return table[] highlights
-local function join_horizontal(blocks)
-	local max_height = 0
-	for _, block in ipairs(blocks) do
-		max_height = math.max(max_height, #block.lines)
-	end
-
-	local lines = {}
-	for row = 1, max_height do
-		lines[row] = ""
-	end
-
-	local highlights = {}
-
-	for index, block in ipairs(blocks) do
-		-- Highlight columns are byte offsets (extmarks are byte-indexed), but
-		-- box-drawing glyphs are multi-byte -- a border row and a content row
-		-- of the same *display* width can have different *byte* lengths. So
-		-- each row's join offset must come from the actual accumulated byte
-		-- length of that row, not a single display-width count shared across
-		-- every row in the block.
-		local row_byte_offset = {}
-		for row = 1, max_height do
-			row_byte_offset[row] = #lines[row]
-			lines[row] = lines[row] .. (block.lines[row] or string.rep(" ", block.width))
+	function c.hl(row, from, to, hl)
+		if rows[row] and to > from then
+			table.insert(ranges[row], { from = from, to = to, hl = hl })
 		end
-		for _, span in ipairs(block.highlights) do
-			local offset = row_byte_offset[span.line + 1] or 0
-			table.insert(highlights, {
-				line = span.line,
-				start_col = offset + span.start_col,
-				end_col = offset + span.end_col,
-				hl_group = span.hl_group,
-			})
-		end
-
-		if index < #blocks then
-			local connector = string.rep("─", CONNECTOR_WIDTH)
-			local blank = string.rep(" ", CONNECTOR_WIDTH)
-			local connector_row_offset = 0
-			for row = 1, max_height do
-				if row - 1 == CONNECTOR_ROW then
-					connector_row_offset = #lines[row]
+	end
+	function c.finish()
+		local lines, spans = {}, {}
+		for r = 0, height - 1 do
+			local line, byte_range = strip.finalize(rows[r])
+			lines[#lines + 1] = (line:gsub("%s+$", ""))
+			for _, range in ipairs(ranges[r]) do
+				local s, e = byte_range(range.from, range.to)
+				e = math.min(e, #lines[#lines])
+				if e > s then
+					table.insert(spans, { line = r, start_col = s, end_col = e, hl_group = range.hl })
 				end
-				lines[row] = lines[row] .. ((row - 1 == CONNECTOR_ROW) and connector or blank)
-			end
-			if CONNECTOR_ROW + 1 <= max_height then
-				table.insert(highlights, {
-					line = CONNECTOR_ROW,
-					start_col = connector_row_offset,
-					end_col = connector_row_offset + #connector,
-					hl_group = "AtlasTextMuted",
-				})
 			end
 		end
+		return lines, spans
 	end
-
-	return lines, highlights
+	return c
 end
 
---- Horizontally centers a rendered block within `width` by prepending the
---- same left padding to every line (so the block's own internal alignment
---- is preserved -- only its position within the available width shifts).
----@param lines string[]
----@param highlights table[]
----@param width integer
----@return string[] lines
----@return table[] highlights
-local function center_block(lines, highlights, width)
-	local content_width = 0
-	for _, line in ipairs(lines) do
-		content_width = math.max(content_width, ui_utils.text_width(line))
+---@param c table canvas
+---@param x integer
+---@param stage PipelineGraphStage
+---@param now integer
+local function draw_stage_header(c, x, stage, now)
+	local summary = status.stage_summary(stage, now)
+	local chunks = { { stage.name, summary.name_hl } }
+	if summary.icon then
+		table.insert(chunks, { " " .. summary.icon, summary.icon_hl })
 	end
-	local pad = math.max(0, math.floor((width - content_width) / 2))
-	if pad == 0 then
-		return lines, highlights
+	if summary.right_text ~= "" then
+		table.insert(chunks, { " " .. summary.right_text, "AtlasTextMuted" })
 	end
-
-	local prefix = string.rep(" ", pad)
-	local centered_lines = {}
-	for i, line in ipairs(lines) do
-		centered_lines[i] = prefix .. line
+	local col = x
+	for _, chunk in ipairs(strip.truncate_chunks(chunks, layout.COL_W)) do
+		c.text(0, col, chunk[1], chunk[2])
+		col = col + strip.width(chunk[1])
 	end
-
-	local centered_highlights = {}
-	for _, span in ipairs(highlights) do
-		local shifted = vim.tbl_extend("force", {}, span)
-		if span.line_hl_group == nil then
-			shifted.start_col = span.start_col + pad
-			shifted.end_col = span.end_col + pad
-		end
-		table.insert(centered_highlights, shifted)
-	end
-
-	return centered_lines, centered_highlights
 end
 
----@param pipeline Pipeline
----@param width integer
----@param active_stage_index integer|nil 1-based; the stage currently selected in the bottom part.
----@return string[] lines
----@return table[] highlights
-function M.render(pipeline, width, active_stage_index)
+---@param c table canvas
+---@param x integer
+---@param row integer Top border row.
+---@param job PipelineGraphJob
+---@param opts AtlasPipelineGraphOpts
+local function draw_pill(c, x, row, job, opts)
+	local badge = status.job_badge(job, opts.now)
+	local selected = job.id == opts.selected_job_id
+	local style = selected and BORDERS.selected or BORDERS[badge.border]
+	local border_hl = badge.border_hl
+	if selected then
+		border_hl = opts.focused and "AtlasCyan" or "AtlasTextBright"
+	end
+	local inner = layout.COL_W - 2
+
+	c.text(row, x, style.tl .. string.rep(style.h, inner) .. style.tr, border_hl)
+	c.text(row + 2, x, style.bl .. string.rep(style.h, inner) .. style.br, border_hl)
+	c.text(row + 1, x, style.v, border_hl)
+	c.text(row + 1, x + layout.COL_W - 1, style.v, border_hl)
+	if selected then
+		c.hl(row + 1, x + 1, x + layout.COL_W - 1, "AtlasBgHighlight")
+	end
+
+	-- Right-hand text: duration / "blocked", or "<key> play" on manual jobs.
+	local right = {}
+	if badge.kind == "manual" and opts.play_key then
+		right = { { opts.play_key, "AtlasKeyHint" }, { " play", "AtlasTextMuted" } }
+	elseif badge.right_text ~= "" then
+		right = { { badge.right_text, selected and badge.kind == "running" and "AtlasCyan" or badge.right_hl } }
+	end
+	local right_w = strip.chunks_width(right)
+
+	-- "│ ✓ name…        12s │"
+	local col = x + 2
+	c.text(row + 1, col, badge.icon, badge.icon_hl)
+	col = col + 2
+	local name_room = inner - 4 - (right_w > 0 and right_w + 1 or 0)
+	local name_hl = badge.name_hl or (selected and "AtlasTextBright" or nil)
+	c.text(row + 1, col, strip.truncate(job.name, name_room), name_hl)
+	col = x + layout.COL_W - 2 - right_w
+	for _, chunk in ipairs(right) do
+		c.text(row + 1, col, chunk[1], chunk[2])
+		col = col + strip.width(chunk[1])
+	end
+end
+
+--- Renders the graph for the visible stages.
+---@param pipeline PipelineGraph
+---@param opts AtlasPipelineGraphOpts
+---@return AtlasPipelineGraphResult
+function M.render(pipeline, opts)
 	local stages = pipeline.stages or {}
 	if #stages == 0 then
-		return { "", "  No stages available." }, {}
+		local text = "No jobs in this pipeline yet."
+		return {
+			lines = { text },
+			highlights = { { line = 0, start_col = 0, end_col = #text, hl_group = "AtlasTextMuted" } },
+			viewport = layout.viewport(0, opts.width, 1, nil),
+		}
 	end
 
-	local blocks = {}
-	local total_width = 0
-	for index, stage in ipairs(stages) do
-		local lines, highlights, block_width = render_stage_block(stage, index == active_stage_index)
-		table.insert(blocks, { lines = lines, highlights = highlights, width = block_width })
-		total_width = total_width + block_width + (index < #stages and CONNECTOR_WIDTH or 0)
+	local selected_stage, selected_job = M.locate(stages, opts.selected_job_id)
+	local vp = layout.viewport(#stages, opts.width, selected_stage, opts.prev_first)
+	local max_jobs = 0
+	for i = vp.first, vp.last do
+		max_jobs = math.max(max_jobs, #(stages[i].jobs or {}))
 	end
+	local c = canvas(opts.width, layout.height(max_jobs))
 
-	local lines, highlights
-	if total_width <= width then
-		lines, highlights = join_horizontal(blocks)
-	else
-		lines, highlights = {}, {}
-		for _, block in ipairs(blocks) do
-			utils.append_block(lines, highlights, { lines = block.lines, highlights = block.highlights })
-			table.insert(lines, "")
+	for i = vp.first, vp.last do
+		local stage = stages[i]
+		local x = vp.offset + (i - vp.first) * (layout.COL_W + layout.GAP)
+		draw_stage_header(c, x, stage, opts.now)
+		for j, job in ipairs(stage.jobs or {}) do
+			draw_pill(c, x, layout.pill_row(j), job, opts)
+		end
+		if i < vp.last then
+			local gap_x = x + layout.COL_W
+			for row, text in pairs(layout.connector(#(stage.jobs or {}), #(stages[i + 1].jobs or {}))) do
+				c.text(row, gap_x, text, "AtlasBorder")
+			end
 		end
 	end
 
-	return center_block(lines, highlights, width)
+	if vp.hidden_left > 0 then
+		c.text(0, 0, string.format("‹ %d more", vp.hidden_left), "AtlasTextMuted")
+	end
+	if vp.hidden_right > 0 then
+		local text = string.format("%d more ›", vp.hidden_right)
+		c.text(0, opts.width - strip.width(text), text, "AtlasTextMuted")
+	end
+
+	local lines, spans = c.finish()
+	return {
+		lines = lines,
+		highlights = spans,
+		viewport = vp,
+		selected_row = selected_job > 0 and layout.mid_row(selected_job) or nil,
+	}
 end
 
 return M

@@ -309,6 +309,21 @@ M.options = {
 			toggle_task_item = "x",
 			expand_activity = "<CR>",
 		},
+		-- Pipeline detail view (DESIGN-pipeline-view.md §5). Moving within a
+		-- stage reuses ui.next_item/ui.previous_item, focusing the log reuses
+		-- ui.select and section folding ui.toggle_fold.
+		pipelines = {
+			previous_stage = "h",
+			next_stage = "l",
+			focus_graph = "<Esc>",
+			retry_failed = "R",
+			cancel_pipeline = "gX",
+			retry_job = "r",
+			play_job = "p",
+			cancel_job = "X",
+			follow = "F",
+			fullscreen = "gz",
+		},
 	},
 }
 

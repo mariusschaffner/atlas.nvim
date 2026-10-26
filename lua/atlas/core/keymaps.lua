@@ -144,11 +144,24 @@ local M = {}
 ---@field toggle_task_item? AtlasKeymapValue Toggles the `- [ ]`/`- [x]` task item under the cursor on the issue detail view's Description tab.
 ---@field expand_activity? AtlasKeymapValue Expands the collapsed activity run ("⋯ N more changes") or collapsed thread under the cursor on the issue Activity tab.
 
+---@class AtlasPipelinesKeymaps
+---@field previous_stage? AtlasKeymapValue Selects the previous stage's job in the pipeline graph (keeps the row).
+---@field next_stage? AtlasKeymapValue Selects the next stage's job in the pipeline graph (keeps the row).
+---@field focus_graph? AtlasKeymapValue Leaves the job log and gives the keys back to the graph.
+---@field retry_failed? AtlasKeymapValue Retries the pipeline's failed jobs.
+---@field cancel_pipeline? AtlasKeymapValue Cancels the whole pipeline (asks first).
+---@field retry_job? AtlasKeymapValue Retries the selected job.
+---@field play_job? AtlasKeymapValue Plays the selected manual job.
+---@field cancel_job? AtlasKeymapValue Cancels the selected job (asks first).
+---@field follow? AtlasKeymapValue Turns log follow mode back on and jumps to the end.
+---@field fullscreen? AtlasKeymapValue Hides/shows the graph above the log.
+
 ---@class AtlasKeymapsConfig
 ---@field ui? AtlasUIKeymaps
 ---@field picker? AtlasPickerKeymaps
 ---@field pulls? AtlasPullsKeymaps
 ---@field issues? AtlasIssuesKeymaps
+---@field pipelines? AtlasPipelinesKeymaps
 
 ---@alias AtlasKeymapActionId
 ---| "ui.next_item"
@@ -266,6 +279,16 @@ local M = {}
 ---| "issues.add_comment"
 ---| "issues.toggle_task_item"
 ---| "issues.expand_activity"
+---| "pipelines.previous_stage"
+---| "pipelines.next_stage"
+---| "pipelines.focus_graph"
+---| "pipelines.retry_failed"
+---| "pipelines.cancel_pipeline"
+---| "pipelines.retry_job"
+---| "pipelines.play_job"
+---| "pipelines.cancel_job"
+---| "pipelines.follow"
+---| "pipelines.fullscreen"
 
 ---@param value AtlasKeymapValue
 ---@return string[]|nil
@@ -408,7 +431,14 @@ function M.validate()
 		-- never active for the same tab/buffer at once.
 		-- ui.comments.toggle_resolved is the issue Activity tab's own binding,
 		-- never active alongside either of those.
-		{ "pulls.pipeline_cancel", "pulls.review.diff.toggle_resolved", "ui.comments.toggle_resolved" },
+		-- pipelines.cancel_pipeline is the pipeline detail view's own binding,
+		-- a buffer none of the others are active in.
+		{
+			"pulls.pipeline_cancel",
+			"pulls.review.diff.toggle_resolved",
+			"ui.comments.toggle_resolved",
+			"pipelines.cancel_pipeline",
+		},
 		-- ui.select (dashboard/picker rows) and issues.expand_activity (issue
 		-- Activity tab) never apply to the same buffer, so sharing "<CR>" is safe.
 		{ "ui.select", "issues.expand_activity" },
@@ -469,6 +499,13 @@ function M.validate()
 		-- buffer) are three separate buffers, never active at once, so
 		-- sharing "gP" is safe.
 		{ "ui.previous_page", "pulls.review.diff.toggle_detail_panel", "issues.create_pull_for_issue" },
+		-- The pipeline detail view's job keys (its log buffer) vs. the
+		-- dashboards' refresh / panel toggle and the inline field editor's
+		-- close: never bound in the same buffer.
+		{ "pipelines.retry_job", "ui.refresh" },
+		{ "pipelines.retry_failed", "ui.refresh_view" },
+		{ "pipelines.play_job", "ui.toggle_panel" },
+		{ "pipelines.focus_graph", "ui.field_edit.close" },
 	}
 
 	local function conflict_allowed(actions)
@@ -541,6 +578,7 @@ function M.validate()
 		ui = conflicts_for(actions_for({ "ui" })),
 		pulls = conflicts_for(actions_for({ "ui", "pulls" })),
 		issues = conflicts_for(actions_for({ "ui", "issues" })),
+		pipelines = conflicts_for(actions_for({ "ui", "pipelines" })),
 		notifications = conflicts_for({
 			"ui.notifications.mark_read",
 			"ui.notifications.mark_done",
