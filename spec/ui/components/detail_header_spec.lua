@@ -63,6 +63,28 @@ describe("atlas.ui.components.detail_header", function()
 		assert.truthy(lines[3]:find("R retry failed   gX cancel  │$"))
 	end)
 
+	it("draws bottom_chunks into the bottom border", function()
+		local data = base()
+		data.bottom_chunks = { { "h/l", "AtlasKeyHint" }, { " stage", "AtlasKeyHintLabel" } }
+		local lines, highlights = detail_header.render(data, 60)
+		local bottom = lines[#lines]
+		assert.truthy(bottom:find("^ ╰─ h/l stage ─+╯$"))
+		assert.equal(60, vim.api.nvim_strwidth(bottom))
+		local key
+		for _, span in ipairs(spans_on(highlights, #lines - 1)) do
+			if span.hl_group == "AtlasKeyHint" then
+				key = text_of(bottom, span)
+			end
+		end
+		assert.equal("h/l", key)
+		assert.equal(53, detail_header.bottom_width(60))
+	end)
+
+	it("keeps the plain bottom border without bottom_chunks", function()
+		local lines = detail_header.render(base(), 60)
+		assert.equal(" ╰" .. string.rep("─", 57) .. "╯", lines[#lines])
+	end)
+
 	it("colours meta_right_chunks over the dim meta text", function()
 		local data = base()
 		data.meta_right = nil

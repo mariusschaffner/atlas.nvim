@@ -40,6 +40,7 @@ local MIN_BREADCRUMB = 20
 ---@field state_icon string|nil Pill glyph; defaults to "●".
 ---@field meta_right_chunks { [1]: string, [2]: string|nil }[]|nil Coloured meta text (replaces `meta_right`); chunks without a group are dim.
 ---@field title_right { [1]: string, [2]: string|nil }[]|nil Right-aligned on the title line (timers, key hints); the title is shortened to make room.
+---@field bottom_chunks { [1]: string, [2]: string|nil }[]|nil Drawn into the bottom border, left-aligned (key hints); the caller keeps it within `M.bottom_width`.
 
 ---@class IssuesDetailHeaderBlock
 ---@field lines string[] Rendered at `M.inner_width`, unpadded.
@@ -51,6 +52,13 @@ local MIN_BREADCRUMB = 20
 ---@return integer
 function M.inner_width(outer_width)
 	return math.max(1, outer_width - BOX_LEFT_COLS - BOX_RIGHT_COLS)
+end
+
+--- Room for `bottom_chunks` in the bottom border (" ╰─ " ... " ─╯").
+---@param outer_width integer
+---@return integer
+function M.bottom_width(outer_width)
+	return math.max(0, outer_width - 7)
 end
 
 --- Title line, then (when there's anything to show) a blank and the chip row,
@@ -292,9 +300,28 @@ function M.render(data, outer_width, extra)
 		end
 	end
 
-	local bottom = " ╰" .. string.rep("─", math.max(1, outer_width - 3)) .. "╯"
-	table.insert(lines, bottom)
-	table.insert(spans, { line = #lines - 1, start_col = 0, end_col = #bottom, hl_group = "AtlasBorder" })
+	local bottom_row = #lines
+	if data.bottom_chunks and #data.bottom_chunks > 0 then
+		-- " ╰─ <chunks> ─────╯", like the top border's meta line.
+		local head = " ╰─ "
+		local text = ""
+		for _, chunk in ipairs(data.bottom_chunks) do
+			text = text .. chunk[1]
+		end
+		local fill = math.max(1, outer_width - text_width(head) - text_width(text) - 2)
+		local bottom = head .. text .. " " .. string.rep("─", fill) .. "╯"
+		table.insert(lines, bottom)
+		table.insert(spans, { line = bottom_row, start_col = 0, end_col = #bottom, hl_group = "AtlasBorder" })
+		local col = #head
+		for _, chunk in ipairs(data.bottom_chunks) do
+			table.insert(spans, { line = bottom_row, start_col = col, end_col = col + #chunk[1], hl_group = chunk[2] or "Normal" })
+			col = col + #chunk[1]
+		end
+	else
+		local bottom = " ╰" .. string.rep("─", math.max(1, outer_width - 3)) .. "╯"
+		table.insert(lines, bottom)
+		table.insert(spans, { line = bottom_row, start_col = 0, end_col = #bottom, hl_group = "AtlasBorder" })
+	end
 
 	local regions = {
 		title = {

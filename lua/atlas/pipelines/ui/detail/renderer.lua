@@ -176,29 +176,46 @@ local function title_right(pipeline, pill, with_hints)
 	return chunks
 end
 
---- The graph's hint line (§3): "h/l stage  j/k job  ⏎ show output  r retry job ...".
---- Trailing hints are dropped when the line doesn't fit `width`.
+--- The graph's key hints (§3), drawn into the header box's bottom border:
+--- "h/l stage   j/k job   ⏎ output   r retry   p manual   X cancel job".
+--- `retry` only shows for a failed job and `manual` only for a manual job
+--- that's waiting to be played. Trailing hints are dropped when they don't
+--- fit `width`.
 ---@param width integer
----@return string text
----@return AtlasUIHighlight[] spans
+---@return { [1]: string, [2]: string }[]
 local function graph_hints(width)
+	local job = state.store and state.store:selected_job()
 	local segments = {
 		{ keys = { key_pair("pipelines.previous_stage", "pipelines.next_stage") }, label = "stage" },
 		{ keys = { key_pair("ui.next_item", "ui.previous_item") }, label = "job" },
-		{ action_id = "ui.select", label = "show output" },
-		{ action_id = "pipelines.retry_job", label = "retry job" },
-		{ action_id = "pipelines.play_job", label = "play manual" },
-		{ action_id = "pipelines.cancel_job", label = "cancel job" },
+		{ action_id = "ui.select", label = "output" },
 	}
-	local text, spans = keyhints.render(segments, { separator = "   " })
-	while #segments > 1 and vim.api.nvim_strwidth(text) > width do
-		table.remove(segments)
-		text, spans = keyhints.render(segments, { separator = "   " })
+	if job and status.normalize(job.status) == "failed" then
+		table.insert(segments, { action_id = "pipelines.retry_job", label = "retry" })
 	end
-	return text, spans
+	if job and status.job_badge(job, now()).kind == "manual" then
+		table.insert(segments, { action_id = "pipelines.play_job", label = "manual" })
+	end
+	table.insert(segments, { action_id = "pipelines.cancel_job", label = "cancel job" })
+
+	local function render(segs)
+		local chunks = keyhints.chunks(segs, { separator = "   " })
+		local w = 0
+		for _, chunk in ipairs(chunks) do
+			w = w + vim.api.nvim_strwidth(chunk[1])
+		end
+		return chunks, w
+	end
+	local chunks, w = render(segments)
+	while #segments > 1 and w > width do
+		table.remove(segments)
+		chunks, w = render(segments)
+	end
+	return chunks
 end
 
---- Graph + hint line as the header box's `extra` block.
+--- The graph as the header box's `extra` block (its key hints go into the
+--- box's bottom border, see `graph_hints`).
 ---@param pipeline PipelineGraph
 ---@param width integer
 ---@return IssuesDetailHeaderBlock
@@ -226,13 +243,13 @@ local function graph_block(pipeline, width)
 	})
 	state.viewport_first = result.viewport.first
 
-	local lines, spans = {}, {}
-	utils.append_block(lines, spans, { lines = result.lines, highlights = result.highlights })
-	table.insert(lines, "")
-	local hint_text, hint_spans = graph_hints(width)
-	utils.append_block(lines, spans, { lines = { hint_text }, highlights = hint_spans })
-	return { lines = lines, highlights = spans, regions = { graph = { row = 0, col = 0, width = width, height = #result.lines } } },
-		result.selected_row
+	-- A blank row keeps the last pills off the box's bottom border (and its hints).
+	local lines = vim.list_extend(vim.list_extend({}, result.lines), { "" })
+	return {
+		lines = lines,
+		highlights = result.highlights,
+		regions = { graph = { row = 0, col = 0, width = width, height = #result.lines } },
+	}, result.selected_row
 end
 
 --- Scrolls the header window so the selected pill stays visible when the
@@ -286,6 +303,9 @@ function M.render_header()
 	local extra, selected_row = nil, nil
 	if not state.fullscreen then
 		extra, selected_row = graph_block(pipeline, detail_header.inner_width(outer))
+		if state.store and state.store.pipeline then
+			data.bottom_chunks = graph_hints(detail_header.bottom_width(outer))
+		end
 	end
 	local lines, spans, regions = detail_header.render(data, outer, extra)
 	set_lines(buf, lines)
