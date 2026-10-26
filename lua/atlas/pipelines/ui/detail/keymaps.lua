@@ -43,6 +43,9 @@ local GENERAL_ACTIONS = {
 		end,
 	},
 	{ "ui.close", "Close pipeline", "close" },
+	{ "pipelines.follow", "Follow the log", "follow" },
+	{ "pipelines.fullscreen", "Toggle fullscreen log", "toggle_fullscreen" },
+	{ "ui.toggle_fold", "Toggle log section", "toggle_fold" },
 }
 
 local GRAPH_ACTIONS = {

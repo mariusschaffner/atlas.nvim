@@ -334,13 +334,20 @@ local function log_title()
 	return out
 end
 
+function M.render_log_title()
+	if utils.window.valid(state.win) then
+		detail_ui.set_content_title(log_title())
+	end
+end
+
 function M.render_log()
 	if not utils.window.valid(state.win) or not utils.buffer.valid(state.buf) then
 		return
 	end
-	detail_ui.set_content_border(state.focus == "log" and "AtlasCyan" or "AtlasBorder")
-	detail_ui.set_content_title(log_title())
+	-- log_view sets the window's highlights itself (dark log background +
+	-- focus-coloured border), so only the title goes through the host.
 	log_view.render()
+	M.render_log_title()
 end
 
 function M.render()

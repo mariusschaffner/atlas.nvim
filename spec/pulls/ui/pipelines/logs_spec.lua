@@ -186,3 +186,51 @@ describe("atlas.pulls.ui.pipelines.logs.classify_log_line", function()
 		assert.is_nil(logs.classify_log_line("just some output"))
 	end)
 end)
+
+describe("atlas.pulls.ui.pipelines.logs keep_ansi", function()
+	it("keeps SGR sequences but still strips cursor/erase sequences", function()
+		assert.same({ "\27[31mred\27[0m done" }, logs.clean_lines("\27[0K\27[31mred\27[0m\27[2K done", { keep_ansi = true }))
+	end)
+
+	it("leaves the default path stripping everything", function()
+		assert.same({ "red done" }, logs.clean_lines("\27[0K\27[31mred\27[0m\27[2K done"))
+	end)
+
+	it("recognises section markers behind a kept reset sequence", function()
+		local entries = logs.parse(
+			"section_start:1:build\r\27[0K\27[36;1mBuild\27[0;m\nmake\n\27[0;msection_end:4:build\r\27[0K\n",
+			{ keep_ansi = true }
+		)
+		assert.equal(1, #entries)
+		assert.equal("group", entries[1].kind)
+		assert.equal(3, entries[1].duration)
+		assert.equal("\27[36;1mBuild\27[0;m", entries[1].name)
+		assert.same({ { kind = "line", text = "make" } }, entries[1].entries)
+	end)
+end)
+
+describe("atlas.pulls.ui.pipelines.logs.ansi_spans", function()
+	it("returns plain lines unchanged", function()
+		assert.same({ "plain", {} }, { logs.ansi_spans("plain") })
+	end)
+
+	it("maps foreground colours to highlight groups", function()
+		local text, spans = logs.ansi_spans("\27[32mok\27[0m and \27[91mfail\27[0m")
+		assert.equal("ok and fail", text)
+		assert.same({
+			{ start_col = 0, end_col = 2, hl_group = "AtlasGreen" },
+			{ start_col = 7, end_col = 11, hl_group = "AtlasRed" },
+		}, spans)
+	end)
+
+	it("treats bold without a colour as bright and ignores backgrounds and 256 colours", function()
+		local text, spans = logs.ansi_spans("\27[1mbold\27[22m \27[38;5;208;44mx\27[0m")
+		assert.equal("bold x", text)
+		assert.same({ { start_col = 0, end_col = 4, hl_group = "AtlasTextBright" } }, spans)
+	end)
+
+	it("merges adjacent runs of the same colour", function()
+		local _, spans = logs.ansi_spans("\27[33mab\27[33mcd\27[0m")
+		assert.same({ { start_col = 0, end_col = 4, hl_group = "AtlasYellow" } }, spans)
+	end)
+end)

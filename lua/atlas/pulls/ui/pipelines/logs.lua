@@ -116,19 +116,119 @@ local function log_message_hl(content)
 end
 
 ---@param text string
+---@param keep_sgr boolean|nil Keep SGR colour sequences (`ESC[...m`), see `M.ansi_spans`.
 ---@return string
-local function strip_escape_sequences(text)
+local function strip_escape_sequences(text, keep_sgr)
 	-- OSC hyperlink/title sequences terminated by BEL.
 	text = text:gsub("\27%][^\7\27]*\7", "")
 	-- OSC/DCS/PM/APC sequences terminated by ST ("\27\\").
 	text = text:gsub("\27[%]PX^_][^\27]*\27\\", "")
-	-- CSI sequences (cursor movement, SGR colors, erase-line, ...).
-	text = text:gsub("\27%[[0-?]*[ -/]*[@-~]", "")
-	-- Any other 2+-byte escape sequence not covered above.
-	text = text:gsub("\27[ -/]*[0-~]", "")
-	-- Remaining C0/DEL control bytes, excluding tab/LF/CR (9/10/13).
-	text = text:gsub("[%z\1-\8\11\12\14-\31\127]", "")
+	if not keep_sgr then
+		-- CSI sequences (cursor movement, SGR colors, erase-line, ...).
+		text = text:gsub("\27%[[0-?]*[ -/]*[@-~]", "")
+		-- Any other 2+-byte escape sequence not covered above.
+		text = text:gsub("\27[ -/]*[0-~]", "")
+		-- Remaining C0/DEL control bytes, excluding tab/LF/CR (9/10/13).
+		text = text:gsub("[%z\1-\8\11\12\14-\31\127]", "")
+		return text
+	end
+	-- Same, but SGR sequences survive (every CSI left after the first pass is one).
+	text = text:gsub("\27%[([0-?]*[ -/]*)([@-~])", function(params, final)
+		return final == "m" and params:match("^[%d;]*$") and ("\27[" .. params .. "m") or ""
+	end)
+	text = text:gsub("\27([ -/]*)([0-~])", function(intermediate, final)
+		if intermediate == "" and final == "[" then
+			return nil -- an SGR sequence's start: keep it
+		end
+		return ""
+	end)
+	text = text:gsub("[%z\1-\8\11\12\14-\26\28-\31\127]", "")
 	return text
+end
+
+-- SGR foreground colour -> highlight group (normal and bright variants).
+local ANSI_FG = {
+	[30] = "AtlasTextMuted",
+	[31] = "AtlasRed",
+	[32] = "AtlasGreen",
+	[33] = "AtlasYellow",
+	[34] = "AtlasAccent",
+	[35] = "AtlasPurple",
+	[36] = "AtlasCyan",
+	[37] = "AtlasTextBright",
+	[90] = "AtlasTextMuted",
+	[91] = "AtlasRed",
+	[92] = "AtlasGreen",
+	[93] = "AtlasYellow",
+	[94] = "AtlasAccent",
+	[95] = "AtlasPurple",
+	[96] = "AtlasCyan",
+	[97] = "AtlasTextBright",
+}
+
+--- Splits SGR colour sequences out of a line kept by `parse(raw, { keep_ansi
+--- = true })`: the plain text plus highlight spans (byte columns into the
+--- plain text) for its coloured runs. Bold without a colour shows bright;
+--- background colours and 256/true-colour foregrounds are ignored.
+---@param line string
+---@return string text
+---@return { start_col: integer, end_col: integer, hl_group: string }[] spans
+function M.ansi_spans(line)
+	if not line:find("\27", 1, true) then
+		return line, {}
+	end
+	local parts, spans = {}, {}
+	local len = 0
+	local fg, bold = nil, false
+	local function current_hl()
+		return fg or (bold and "AtlasTextBright" or nil)
+	end
+	local pos = 1
+	while pos <= #line do
+		local s, e, params = line:find("\27%[([%d;]*)m", pos)
+		local chunk = line:sub(pos, (s or (#line + 1)) - 1):gsub("\27", "")
+		if chunk ~= "" then
+			local hl = current_hl()
+			if hl then
+				local last = spans[#spans]
+				if last and last.hl_group == hl and last.end_col == len then
+					last.end_col = len + #chunk
+				else
+					table.insert(spans, { start_col = len, end_col = len + #chunk, hl_group = hl })
+				end
+			end
+			table.insert(parts, chunk)
+			len = len + #chunk
+		end
+		if not s then
+			break
+		end
+		local codes = {}
+		for code in ((params == "" and "0" or params) .. ";"):gmatch("([^;]*);") do
+			table.insert(codes, tonumber(code) or 0)
+		end
+		local i = 1
+		while i <= #codes do
+			local code = codes[i]
+			if code == 0 then
+				fg, bold = nil, false
+			elseif code == 1 then
+				bold = true
+			elseif code == 22 then
+				bold = false
+			elseif code == 39 then
+				fg = nil
+			elseif ANSI_FG[code] then
+				fg = ANSI_FG[code]
+			elseif code == 38 or code == 48 then
+				-- 38;5;n / 38;2;r;g;b (and the background forms): skip the arguments.
+				i = i + ((codes[i + 1] == 2) and 4 or 2)
+			end
+			i = i + 1
+		end
+		pos = e + 1
+	end
+	return table.concat(parts), spans
 end
 
 ---@param line string
@@ -145,15 +245,16 @@ end
 --- (mid-line progress redraws) and GitLab's `section_start`/`section_end`/
 --- stream-multiplex markers untouched -- see `M.parse` for those.
 ---@param raw string
+---@param opts { keep_ansi: boolean|nil }|nil `keep_ansi`: leave SGR colour sequences in (see `M.ansi_spans`).
 ---@return string[]
-function M.clean_lines(raw)
+function M.clean_lines(raw, opts)
 	local text = tostring(raw or "")
 	if text == "" then
 		return {}
 	end
 
 	text = text:gsub("^\239\187\191", ""):gsub("\r\n", "\n")
-	text = strip_escape_sequences(text)
+	text = strip_escape_sequences(text, opts and opts.keep_ansi)
 
 	local lines = vim.split(text, "\n", { plain = true })
 	if #lines > 1 and lines[#lines] == "" then
@@ -275,9 +376,11 @@ end
 --- rather than shown as raw control text. Unmatched/unbalanced `section_end`
 --- markers are ignored rather than corrupting the nesting stack.
 ---@param raw string
+---@param opts { keep_ansi: boolean|nil }|nil `keep_ansi`: lines and section titles keep their SGR colour sequences.
 ---@return AtlasLogEntry[]
-function M.parse(raw)
-	local lines = coalesce_streams(M.clean_lines(raw))
+function M.parse(raw, opts)
+	local keep_ansi = opts ~= nil and opts.keep_ansi == true
+	local lines = coalesce_streams(M.clean_lines(raw, opts))
 
 	---@type AtlasLogEntry[]
 	local entries = {}
@@ -293,8 +396,11 @@ function M.parse(raw)
 			local part = parts[index]
 			local parent = stack[#stack]
 			local current = parent and parent.group.entries or entries
+			-- Kept colour codes must not hide a section marker (e.g. a reset
+			-- sequence right before `section_end:`).
+			local bare = keep_ansi and part:gsub("\27%[[%d;]*m", "") or part
 
-			local start_epoch, start_key = match_section_start(part)
+			local start_epoch, start_key = match_section_start(bare)
 			if start_epoch then
 				local title = start_key
 				local next_part = parts[index + 1]
@@ -307,7 +413,7 @@ function M.parse(raw)
 				table.insert(current, group)
 				table.insert(stack, { group = group, key = start_key, epoch = start_epoch })
 			else
-				local end_epoch, end_key = match_section_end(part)
+				local end_epoch, end_key = match_section_end(bare)
 				if end_epoch then
 					for stack_index = #stack, 1, -1 do
 						local frame = stack[stack_index]
@@ -321,7 +427,7 @@ function M.parse(raw)
 							break
 						end
 					end
-				elseif index == #parts and part ~= "" and not looks_like_section_marker(part) then
+				elseif index == #parts and bare ~= "" and not looks_like_section_marker(bare) then
 					table.insert(current, { kind = "line", text = (prefix or "") .. part })
 				end
 			end

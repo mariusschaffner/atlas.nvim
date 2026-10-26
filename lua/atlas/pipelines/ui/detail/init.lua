@@ -60,6 +60,9 @@ local function cleanup()
 	if utils.buffer.valid(state.buf) then
 		keymaps().remove(state.buf)
 	end
+	-- Hand the host's content window back in its default look.
+	detail_ui.set_content_title(nil)
+	detail_ui.set_content_border(nil)
 	state.reset()
 end
 
@@ -139,6 +142,9 @@ function M.open(pipeline, opts)
 	state.return_to = opts.return_to
 	if utils.buffer.valid(state.buf) then
 		keymaps().register(state.buf)
+		log_view.attach(function()
+			renderer.render_log_title()
+		end)
 	end
 	M.select(pipeline, { merge_request = opts.merge_request })
 end
@@ -232,6 +238,24 @@ function M.focus_graph()
 		keymaps().set_mode(state.buf, "graph")
 	end
 	render()
+end
+
+--- F: follow mode back on, cursor to the end.
+function M.follow()
+	log_view.follow()
+	renderer.render_log_title()
+end
+
+--- za: open/close the log section under the cursor.
+function M.toggle_fold()
+	log_view.toggle_fold()
+end
+
+--- gz: hide/show the graph so the log fills the view.
+function M.toggle_fullscreen()
+	state.fullscreen = not state.fullscreen
+	renderer.render_header()
+	renderer.render_log_title()
 end
 
 return M
