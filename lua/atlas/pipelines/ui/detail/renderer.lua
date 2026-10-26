@@ -177,10 +177,10 @@ local function title_right(pipeline, pill, with_hints)
 end
 
 --- The graph's key hints (§3), drawn into the header box's bottom border:
---- "h/l stage   j/k job   ⏎ output   r retry   p manual   X cancel job".
---- `retry` only shows for a failed job and `manual` only for a manual job
---- that's waiting to be played. Trailing hints are dropped when they don't
---- fit `width`.
+--- "h/l stage   j/k job   ⏎ output   r retry   p manual   X cancel".
+--- `retry` only shows for a failed job, `manual` only for a manual job
+--- that's waiting to be played and `cancel` only for a running job.
+--- Trailing hints are dropped when they don't fit `width`.
 ---@param width integer
 ---@return { [1]: string, [2]: string }[]
 local function graph_hints(width)
@@ -196,7 +196,9 @@ local function graph_hints(width)
 	if job and status.job_badge(job, now()).kind == "manual" then
 		table.insert(segments, { action_id = "pipelines.play_job", label = "manual" })
 	end
-	table.insert(segments, { action_id = "pipelines.cancel_job", label = "cancel job" })
+	if job and status.normalize(job.status) == "running" then
+		table.insert(segments, { action_id = "pipelines.cancel_job", label = "cancel" })
+	end
 
 	local function render(segs)
 		local chunks = keyhints.chunks(segs, { separator = "   " })
