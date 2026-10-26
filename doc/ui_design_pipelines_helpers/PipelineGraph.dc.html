@@ -1,0 +1,155 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Pipeline detail – graph and live log</title>
+<script src="./vendor/react.js"></script>
+<script src="./vendor/react-dom.js"></script>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:ital,wght@0,400;0,600;0,700;1,400&amp;display=swap" rel="stylesheet">
+<style>
+body{margin:0}
+a{color:#7aa2f7}a:hover{color:#a9c1ff}
+.key{color:#e0af68}
+.col{width:236px;flex-shrink:0;display:flex;flex-direction:column;gap:8px}
+.sh{height:24px;display:flex;align-items:center;gap:8px;font-size:13px}
+.jobs{display:flex;flex-direction:column;gap:10px}
+.pill{height:32px;box-sizing:border-box;border:1px solid #3b4261;border-radius:16px;padding:0 14px;display:flex;align-items:center;gap:10px}
+.pill > .s{font-weight:700;width:2ch;text-align:center}
+.pill > .nm{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.pill > .d{font-size:12px;color:#7f87ad}
+.gap{width:56px;height:74px;flex-shrink:0;position:relative;margin-top:32px}
+.h{position:absolute;height:2px;width:28px;background:#3b4261}
+.v{position:absolute;width:2px;left:27px;background:#3b4261}
+.ln{display:flex;white-space:pre;font-size:13px;line-height:19px}
+.ln > .n{width:4ch;text-align:right;color:#3b4261;margin-right:14px;flex-shrink:0}
+.sec{color:#7aa2f7}
+.dim{color:#7f87ad}
+</style>
+</helmet>
+<div style="width: 1280px; height: 800px; box-sizing: border-box; background: #1a1b26; color: #c0caf5; font-family: 'JetBrains Mono', monospace; font-size: 14px; line-height: 20px; display: flex; flex-direction: column">
+
+  <div style="padding: 20px 28px 14px; display: flex; flex-direction: column; gap: 10px; border-bottom: 1px solid #2f3549">
+    <div style="display: flex; justify-content: space-between; color: #7f87ad; font-size: 13px">
+      <span>atlas / semesterarbeit  ›  pipelines  ›  #[id]</span>
+      <span><span style="color: #7dcfff">⎇ test</span> · [sha] · <span style="color: #7aa2f7">!36</span> · marius.schaffner · started 3m ago</span>
+    </div>
+    <div style="display: flex; align-items: center; gap: 14px"><span style="background: rgba(125, 207, 255, 0.16); color: rgb(125, 207, 255); padding: 2px 10px; border-radius: 4px; font-weight: 600">◐ Running</span>
+      <span style="font-size: 22px; line-height: 30px; font-weight: 700; color: rgb(230, 234, 255)">Merge test into master</span>
+      <span style="font-size: 22px; line-height: 30px; color: rgb(127, 135, 173)">#[id]</span>
+      <span style="margin-left: auto; display: flex; gap: 18px; font-size: 13px; color: rgb(127, 135, 173)">
+        <span><span style="color: rgb(125, 207, 255)">3:05</span> elapsed · 4/7 jobs</span>
+        <span><span class="key">R</span> retry failed</span>
+        <span><span class="key">X</span> cancel</span>
+      </span>
+    </div>
+  </div>
+
+  <div style="padding: 16px 28px 14px; display: flex; flex-direction: column; gap: 12px; border-bottom: 1px solid #2f3549">
+    <div style="display: flex">
+
+      <div class="col">
+        <div class="sh"><span style="color: #e6eaff; font-weight: 600">Validate</span><span style="color: #9ece6a">✓</span><span style="color: #7f87ad; font-size: 12px">53s</span></div>
+        <div class="jobs">
+          <div class="pill"><span class="s" style="color: #9ece6a">✓</span><span class="nm">yamllint</span><span class="d">12s</span></div>
+          <div class="pill"><span class="s" style="color: #9ece6a">✓</span><span class="nm">ansible-lint</span><span class="d">41s</span></div>
+        </div>
+      </div>
+
+      <div class="gap">
+        <span class="h" style="left: 0; top: 15px"></span>
+        <span class="h" style="left: 0; top: 57px"></span>
+        <span class="v" style="top: 15px; height: 44px"></span>
+        <span class="h" style="left: 28px; top: 15px"></span>
+      </div>
+
+      <div class="col">
+        <div class="sh"><span style="color: #e6eaff; font-weight: 600">Build</span><span style="color: #9ece6a">✓</span><span style="color: #7f87ad; font-size: 12px">1:02</span></div>
+        <div class="jobs">
+          <div class="pill"><span class="s" style="color: #9ece6a">✓</span><span class="nm">build-agent-package</span><span class="d">1:02</span></div>
+        </div>
+      </div>
+
+      <div class="gap">
+        <span class="h" style="left: 0; top: 15px"></span>
+        <span class="v" style="top: 15px; height: 44px"></span>
+        <span class="h" style="left: 28px; top: 15px"></span>
+        <span class="h" style="left: 28px; top: 57px"></span>
+      </div>
+
+      <div class="col">
+        <div class="sh"><span style="color: #7dcfff; font-weight: 600">Test</span><span style="color: #7dcfff">◐</span><span style="color: #7f87ad; font-size: 12px">running</span></div>
+        <div class="jobs">
+          <div class="pill"><span class="s" style="color: #9ece6a">✓</span><span class="nm">webhook-pytest</span><span class="d">38s</span></div>
+          <div class="pill" style="border: 2px solid #7dcfff; background: #222639"><span class="s" style="color: #7dcfff">◐</span><span class="nm" style="color: #e6eaff; font-weight: 600">molecule-default</span><span class="d" style="color: #7dcfff">2:14</span></div>
+        </div>
+      </div>
+
+      <div class="gap">
+        <span class="h" style="left: 0; top: 15px"></span>
+        <span class="h" style="left: 0; top: 57px"></span>
+        <span class="v" style="top: 15px; height: 44px"></span>
+        <span class="h" style="left: 28px; top: 15px"></span>
+        <span class="h" style="left: 28px; top: 57px"></span>
+      </div>
+
+      <div class="col">
+        <div class="sh"><span style="color: #e0af68; font-weight: 600">Deploy</span><span style="color: #7f87ad; font-size: 12px">manual</span></div>
+        <div class="jobs">
+          <div class="pill" style="border-style: dashed; border-color: #e0af68"><span class="s" style="color: #e0af68">▶</span><span class="nm">deploy-staging</span><span class="d"><span class="key">p</span> play</span></div>
+          <div class="pill" style="border-style: dashed; color: #7f87ad"><span class="s">⏸</span><span class="nm">deploy-prod</span><span class="d">blocked</span></div>
+        </div>
+      </div>
+    </div>
+
+    <div style="display: flex; gap: 18px; font-size: 12px; color: #7f87ad"><span><span class="key">h/l</span> stage</span>
+      <span><span class="key">j/k</span> job</span>
+      <span><span class="key">⏎</span> show output</span>
+      <span><span class="key">r</span> retry job</span>
+      <span><span class="key">p</span> play manual</span>
+      <span><span class="key">X</span> cancel job</span>
+      <span style="margin-left: auto"><br></span>
+    </div>
+  </div>
+
+  <div style="flex: 1; min-height: 0; display: flex; flex-direction: column">
+    <div style="display: flex; align-items: center; gap: 14px; padding: 10px 28px; border-bottom: 1px solid #2f3549"><span style="color: rgb(125, 207, 255); font-weight: 700">◐</span>
+      <span style="color: rgb(230, 234, 255); font-weight: 600">molecule-default</span>
+      <span style="margin-left: auto; font-size: 12px; background: rgba(125, 207, 255, 0.16); color: rgb(125, 207, 255); padding: 0px 8px; border-radius: 3px">● following</span>
+      <span style="font-size: 12px; color: rgb(127, 135, 173)"><span class="key">F</span> follow · <span class="key">/</span> search · <span class="key">za</span> fold · <span class="key">gz</span> fullscreen</span>
+    </div>
+    <div style="flex: 1; min-height: 0; padding: 10px 28px; display: flex; flex-direction: column; justify-content: flex-end; overflow: hidden; background: #16161e">
+      <div class="ln"><span class="n">1</span><span class="sec">▸ prepare executor</span><span class="dim">  · 3s</span></div>
+      <div class="ln"><span class="n">14</span><span class="sec">▸ get sources</span><span class="dim">  · 2s</span></div>
+      <div class="ln"><span class="n">22</span><span class="sec">▾ step_script</span></div>
+      <div class="ln"><span class="n">23</span><span style="color: #9ece6a">$ molecule test</span></div>
+      <div class="ln"><span class="n">25</span><span class="dim">INFO     Running default &gt; create</span></div>
+      <div class="ln"><span class="n">28</span><span style="color: #e0af68">changed: [instance]</span></div>
+      <div class="ln"><span class="n">29</span><span class="dim">INFO     Running default &gt; converge</span></div>
+      <div class="ln"><span class="n">31</span><span>TASK [webaccess : install agent package] *******************************</span></div>
+      <div class="ln"><span class="n">32</span><span style="color: #e0af68">changed: [instance]</span></div>
+      <div class="ln"><span class="n">33</span><span>TASK [webaccess : render agent.conf] ***********************************</span></div>
+      <div class="ln"><span class="n">34</span><span style="color: #e0af68">changed: [instance]</span></div>
+      <div class="ln" style="background: rgba(224,175,104,0.10)"><span class="n" style="color: #e0af68">35</span><span style="color: #e0af68">[WARNING]: [placeholder warning text]</span></div>
+      <div class="ln"><span class="n">36</span><span>TASK [webaccess : enable and start service] ****************************</span></div>
+      <div class="ln"><span class="n">37</span><span style="color: #9ece6a">ok: [instance]</span></div>
+      <div class="ln"><span class="n">38</span><span>TASK [webaccess : wait for health endpoint] ****************************</span></div>
+      <div class="ln"><span class="n">39</span><span class="dim">… </span><span style="display: inline-block; width: 8px; height: 15px; background: #7dcfff; vertical-align: text-bottom"></span></div>
+    </div>
+    
+  </div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":1280,"height":800}}'>
+class Component extends DCLogic {
+  renderVals() {
+    return {};
+  }
+}
+</script>
+</body>
+</html>
