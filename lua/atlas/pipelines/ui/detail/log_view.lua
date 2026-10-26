@@ -1,7 +1,7 @@
 -- The job log in the pipeline detail view's content float
--- (DESIGN-pipeline-view.md §4): GitLab sections as native folds (finished ones
--- closed, the running one open), ANSI colours and WARNING/ERROR tints as
--- extmarks, native line numbers and search. A growing trace only rewrites the
+-- (DESIGN-pipeline-view.md §4): GitLab sections as native folds (all open --
+-- the log is always shown fully expanded; `za` folds one on demand), ANSI
+-- colours and WARNING/ERROR tints as extmarks, native line numbers and search. A growing trace only rewrites the
 -- rows from the first changed one down, so earlier lines, folds and the
 -- cursor stay put. Follow mode keeps the cursor on the last line.
 local M = {}
@@ -15,16 +15,18 @@ local cursor_ns = vim.api.nvim_create_namespace("atlas.pipelines.detail.log.curs
 
 local FOLDTEXT = "v:lua.require'atlas.pipelines.ui.detail.log_view'.foldtext()"
 
+--- No background of its own: the log uses the editor's normal background
+--- (folded section lines included).
 ---@param border_hl string
 ---@return string
 local function winhighlight(border_hl)
 	return table.concat({
-		"Normal:AtlasBgDark",
-		"NormalFloat:AtlasBgDark",
+		"Normal:Normal",
+		"NormalFloat:Normal",
 		"FloatBorder:" .. border_hl,
 		"CursorLine:CursorLine",
 		"LineNr:AtlasProgressEmpty",
-		"Folded:AtlasBgDark",
+		"Folded:Normal",
 	}, ",")
 end
 
@@ -93,27 +95,23 @@ local function set_cursor(lnum)
 	pcall(vim.api.nvim_win_set_cursor, state.win, { math.max(1, lnum), 0 })
 end
 
---- Creates the folds of finished sections that don't have one yet. A fresh
---- log closes them all; a section that finishes while it's being watched is
---- closed unless the cursor is inside it.
+--- Creates the folds of finished sections that don't have one yet. The log is
+--- always shown fully expanded: every new fold is opened right away, so only
+--- `za` ever closes one.
 ---@param rows AtlasPipelineLogRow[]
----@param fresh boolean
-local function add_folds(rows, fresh)
-	local cursor = vim.api.nvim_win_get_cursor(state.win)[1]
+local function add_folds(rows)
 	in_win(function()
 		for _, fold in ipairs(log_model.folds(rows)) do
 			if fold.finished and not state.log.folds[fold.row] then
 				vim.cmd(string.format("silent! %d,%dfold", fold.row, fold.last))
+				vim.cmd(string.format("silent! %dfoldopen", fold.row))
 				state.log.folds[fold.row] = fold.last
-				if not fresh and cursor >= fold.row and cursor <= fold.last then
-					vim.cmd(string.format("silent! %dfoldopen", fold.row))
-				end
 			end
 		end
 	end)
 end
 
---- Rebuilds every fold, keeping each one's open/closed state.
+--- Rebuilds every fold, keeping the ones the user closed closed.
 ---@param rows AtlasPipelineLogRow[]
 local function rebuild_folds(rows)
 	local closed = {}
@@ -124,11 +122,11 @@ local function rebuild_folds(rows)
 		vim.cmd("silent! normal! zE")
 	end)
 	state.log.folds = {}
-	add_folds(rows, true)
+	add_folds(rows)
 	in_win(function()
 		for row in pairs(state.log.folds) do
-			if closed[row] == false then
-				vim.cmd(string.format("silent! %dfoldopen", row))
+			if closed[row] then
+				vim.cmd(string.format("silent! %dfoldclose", row))
 			end
 		end
 	end)
@@ -233,7 +231,7 @@ function M.render()
 		if touched and not fresh then
 			rebuild_folds(rows)
 		else
-			add_folds(rows, fresh)
+			add_folds(rows)
 		end
 	end
 	draw_cursor_block(job.status == "running", #rows)
