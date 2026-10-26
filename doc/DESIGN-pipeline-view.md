@@ -11,6 +11,8 @@ A screenshot of the target design is attached separately (`doc/ui_design_pipelin
 Where screenshot and spec disagree, this screenshot wins. Stage/job names, runner
 names and log lines in the screenshot are example data.
 
+Helper files for the ui design are in `doc/ui_design_pipelines_helpers`
+
 ---
 
 ## 1. Layout
