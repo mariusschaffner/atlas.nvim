@@ -107,7 +107,8 @@ function M.readiness()
 end
 
 --- Opens one of the PR's pipelines in the pipeline detail view (the
---- pipelines domain's own view, same one its dashboard opens).
+--- pipelines domain's own view, same one its dashboard opens). Closing that
+--- view (`q`) comes back to this PR, on the tab it was opened from.
 ---@param pipeline PullsPipeline
 function M.open_pipeline(pipeline)
 	local pr = state.current_pr
@@ -120,6 +121,9 @@ function M.open_pipeline(pipeline)
 		return
 	end
 	local path = tostring(pr.repo_full_name or "")
+	-- Only what identifies the pipeline: its ref/sha/user/times are loaded by
+	-- the pipeline view itself (the MR's head ref/sha aren't an older
+	-- pipeline's).
 	---@type Pipeline
 	local target = {
 		id = tostring(pipeline.id or ""),
@@ -127,8 +131,8 @@ function M.open_pipeline(pipeline)
 		project_path = path,
 		status = pipeline.provider_state or "",
 		state = pipeline.state,
-		ref = pr.source and pr.source.branch or "",
-		sha = pr.source and pr.source.commit_hash or "",
+		ref = "",
+		sha = "",
 		merge_request_iid = tonumber(pr.id),
 		web_url = pipeline.url,
 		duration = pipeline.duration,
@@ -137,7 +141,21 @@ function M.open_pipeline(pipeline)
 	for _, stage in ipairs(pipeline.stages or {}) do
 		table.insert(target.stages, { name = stage.name or "Stage", state = stage.state, jobs = {} })
 	end
-	require("atlas.pipelines.ui.detail").open(target, { provider = provider })
+
+	-- Opening the pipeline view replaces this one (and its cleanup wipes
+	-- this state), so capture what's needed to come back first.
+	local pulls_provider, on_update, tab = state.provider, state.on_update, state.current_tab
+	require("atlas.pipelines.ui.detail").open(target, {
+		provider = provider,
+		merge_request = { iid = tonumber(pr.id), title = pr.title },
+		return_to = function()
+			local detail = require("atlas.pulls.ui.detail")
+			detail.open(pr, { provider = pulls_provider, on_update = on_update })
+			if tab then
+				detail.select_tab(tab)
+			end
+		end,
+	})
 end
 
 --- The PR's most recent pipeline, or nil (none, or not loaded yet).
