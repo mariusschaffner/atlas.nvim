@@ -246,7 +246,11 @@ local function split_geometry(spacer_win)
 		local sidebar_col = 1 + content_width + 2 + SIDEBAR_GAP
 		return content_width, 1, sidebar_width, sidebar_col, height, row
 	end
-	return math.max(1, total - 2), 1, nil, nil, height, row
+	-- A boxed header's borders sit on columns 1 and total-1 (see
+	-- `detail_header`), so the content box (col 1, plus its own two border
+	-- cells) gets total-3 columns to line up with it. total-2 would run one
+	-- column past the screen, and Neovim would shift the whole float left.
+	return math.max(1, total - (state.boxed_header and 3 or 2)), 1, nil, nil, height, row
 end
 
 --- Re-syncs the content float's position/size to whatever `state.spacer_win`

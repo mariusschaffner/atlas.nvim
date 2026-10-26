@@ -310,6 +310,8 @@ function M.render_header()
 		end
 	end
 	local lines, spans, regions = detail_header.render(data, outer, extra)
+	-- One blank row between the header box and the log box below it.
+	table.insert(lines, "")
 	set_lines(buf, lines)
 	utils.apply_spans(buf, header_ns, spans)
 	detail_ui.resize_header(#lines)
