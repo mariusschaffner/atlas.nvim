@@ -81,6 +81,33 @@ describe("atlas.ui.components.detail_header", function()
 		assert.equal(53, detail_header.bottom_width(60))
 	end)
 
+	it("right-aligns bottom_right_chunks against the corner", function()
+		local data = base()
+		data.bottom_chunks = { { "h/l", "AtlasKeyHint" } }
+		data.bottom_right_chunks = { { "gX", "AtlasKeyHint" }, { " cancel", "AtlasKeyHintLabel" } }
+		local lines, highlights = detail_header.render(data, 60)
+		local bottom = lines[#lines]
+		assert.equal(" ╰─ h/l ", bottom:sub(1, #" ╰─ h/l "))
+		assert.equal(" gX cancel ─╯", bottom:sub(-#" gX cancel ─╯"))
+		assert.equal(60, vim.api.nvim_strwidth(bottom))
+		local labels = {}
+		for _, span in ipairs(spans_on(highlights, #lines - 1)) do
+			if span.hl_group == "AtlasKeyHintLabel" then
+				table.insert(labels, text_of(bottom, span))
+			end
+		end
+		assert.are.same({ " cancel" }, labels)
+	end)
+
+	it("draws right chunks alone without a left gap", function()
+		local data = base()
+		data.bottom_right_chunks = { { "R retry failed" } }
+		local bottom = select(1, detail_header.render(data, 40))[1 + #select(1, detail_header.render(data, 40)) - 1]
+		assert.equal(" ╰─", bottom:sub(1, #" ╰─"))
+		assert.equal(" R retry failed ─╯", bottom:sub(-#" R retry failed ─╯"))
+		assert.equal(40, vim.api.nvim_strwidth(bottom))
+	end)
+
 	it("keeps the plain bottom border without bottom_chunks", function()
 		local lines = detail_header.render(base(), 60)
 		assert.equal(" ╰" .. string.rep("─", 57) .. "╯", lines[#lines])

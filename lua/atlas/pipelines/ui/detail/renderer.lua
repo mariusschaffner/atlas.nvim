@@ -138,16 +138,11 @@ local function job_counts(pipeline)
 	return done, total
 end
 
--- Below this header width the title line keeps only the timer/job count, so
--- the title itself stays readable.
-local TITLE_HINTS_MIN_WIDTH = 110
-
---- Right side of the title line: "3:05 elapsed · 4/7 jobs   R retry failed   gX cancel".
+--- Right side of the title line: "3:05 elapsed · 4/7 jobs".
 ---@param pipeline PipelineGraph
 ---@param pill AtlasPipelinePill
----@param with_hints boolean
 ---@return { [1]: string, [2]: string|nil }[]
-local function title_right(pipeline, pill, with_hints)
+local function title_right(pipeline, pill)
 	local chunks = {}
 	local value, suffix = status.elapsed(pipeline, now())
 	local info = {}
@@ -162,18 +157,34 @@ local function title_right(pipeline, pill, with_hints)
 	if #info > 0 then
 		table.insert(chunks, { (value and " " or "") .. table.concat(info, " · "), "AtlasTextMuted" })
 	end
-	if not with_hints then
-		return chunks
-	end
-	local hints = keyhints.chunks({
-		{ action_id = "pipelines.retry_failed", label = "retry failed" },
-		{ action_id = "pipelines.cancel_pipeline", label = "cancel" },
-	}, { separator = "   " })
-	if #hints > 0 then
-		table.insert(chunks, { "   " })
-		vim.list_extend(chunks, hints)
-	end
 	return chunks
+end
+
+---@param chunks { [1]: string, [2]: string|nil }[]
+---@return integer
+local function chunks_width(chunks)
+	local w = 0
+	for _, chunk in ipairs(chunks) do
+		w = w + vim.api.nvim_strwidth(chunk[1])
+	end
+	return w
+end
+
+--- Pipeline-level key hints, right-aligned in the header box's bottom
+--- border: "R retry failed" only once the pipeline failed, "gX cancel" only
+--- while it can still be cancelled (running or waiting to run).
+---@param pipeline PipelineGraph
+---@return { [1]: string, [2]: string }[]
+local function pipeline_hints(pipeline)
+	local s = status.normalize(pipeline.status)
+	local segments = {}
+	if s == "failed" then
+		table.insert(segments, { action_id = "pipelines.retry_failed", label = "retry failed" })
+	end
+	if status.is_active(s) then
+		table.insert(segments, { action_id = "pipelines.cancel_pipeline", label = "cancel" })
+	end
+	return keyhints.chunks(segments, { separator = "   " })
 end
 
 --- The graph's key hints (§3), drawn into the header box's bottom border:
@@ -200,18 +211,10 @@ local function graph_hints(width)
 		table.insert(segments, { action_id = "pipelines.cancel_job", label = "cancel" })
 	end
 
-	local function render(segs)
-		local chunks = keyhints.chunks(segs, { separator = "   " })
-		local w = 0
-		for _, chunk in ipairs(chunks) do
-			w = w + vim.api.nvim_strwidth(chunk[1])
-		end
-		return chunks, w
-	end
-	local chunks, w = render(segments)
-	while #segments > 1 and w > width do
+	local chunks = keyhints.chunks(segments, { separator = "   " })
+	while #segments > 1 and chunks_width(chunks) > width do
 		table.remove(segments)
-		chunks, w = render(segments)
+		chunks = keyhints.chunks(segments, { separator = "   " })
 	end
 	return chunks
 end
@@ -299,14 +302,23 @@ function M.render_header()
 		state_hl = pill.hl,
 		title = (mr and mr.title) or pipeline.commit_title or ("Pipeline #" .. tostring(pipeline.id)),
 		iid_text = "#" .. tostring(pipeline.id),
-		title_right = title_right(pipeline, pill, outer >= TITLE_HINTS_MIN_WIDTH),
+		title_right = title_right(pipeline, pill),
 	}
 
+	-- Bottom border: job hints left (with the graph), pipeline hints right.
+	local loaded = state.store and state.store.pipeline
+	local room = detail_header.bottom_width(outer)
+	if loaded then
+		data.bottom_right_chunks = pipeline_hints(pipeline)
+		if #data.bottom_right_chunks > 0 then
+			room = room - chunks_width(data.bottom_right_chunks) - 3
+		end
+	end
 	local extra, selected_row = nil, nil
 	if not state.fullscreen then
 		extra, selected_row = graph_block(pipeline, detail_header.inner_width(outer))
-		if state.store and state.store.pipeline then
-			data.bottom_chunks = graph_hints(detail_header.bottom_width(outer))
+		if loaded then
+			data.bottom_chunks = graph_hints(room)
 		end
 	end
 	local lines, spans, regions = detail_header.render(data, outer, extra)

@@ -41,6 +41,7 @@ local MIN_BREADCRUMB = 20
 ---@field meta_right_chunks { [1]: string, [2]: string|nil }[]|nil Coloured meta text (replaces `meta_right`); chunks without a group are dim.
 ---@field title_right { [1]: string, [2]: string|nil }[]|nil Right-aligned on the title line (timers, key hints); the title is shortened to make room.
 ---@field bottom_chunks { [1]: string, [2]: string|nil }[]|nil Drawn into the bottom border, left-aligned (key hints); the caller keeps it within `M.bottom_width`.
+---@field bottom_right_chunks { [1]: string, [2]: string|nil }[]|nil Same, right-aligned; both together must fit `M.bottom_width` minus 3.
 
 ---@class IssuesDetailHeaderBlock
 ---@field lines string[] Rendered at `M.inner_width`, unpadded.
@@ -301,22 +302,36 @@ function M.render(data, outer_width, extra)
 	end
 
 	local bottom_row = #lines
-	if data.bottom_chunks and #data.bottom_chunks > 0 then
-		-- " ╰─ <chunks> ─────╯", like the top border's meta line.
-		local head = " ╰─ "
-		local text = ""
-		for _, chunk in ipairs(data.bottom_chunks) do
-			text = text .. chunk[1]
+	local left_chunks = data.bottom_chunks or {}
+	local right_chunks = data.bottom_right_chunks or {}
+	if #left_chunks > 0 or #right_chunks > 0 then
+		-- " ╰─ <left> ───── <right> ─╯", like the top border's meta line.
+		local function joined(chunks)
+			local text = ""
+			for _, chunk in ipairs(chunks) do
+				text = text .. chunk[1]
+			end
+			return text
 		end
-		local fill = math.max(1, outer_width - text_width(head) - text_width(text) - 2)
-		local bottom = head .. text .. " " .. string.rep("─", fill) .. "╯"
+		local left, right = joined(left_chunks), joined(right_chunks)
+		local left_part = left ~= "" and (" " .. left .. " ") or ""
+		local right_part = right ~= "" and (" " .. right .. " ") or ""
+		local head, tail = " ╰─", "─╯"
+		local fill = math.max(
+			1,
+			outer_width - text_width(head) - text_width(left_part) - text_width(right_part) - text_width(tail)
+		)
+		local bottom = head .. left_part .. string.rep("─", fill) .. right_part .. tail
 		table.insert(lines, bottom)
 		table.insert(spans, { line = bottom_row, start_col = 0, end_col = #bottom, hl_group = "AtlasBorder" })
-		local col = #head
-		for _, chunk in ipairs(data.bottom_chunks) do
-			table.insert(spans, { line = bottom_row, start_col = col, end_col = col + #chunk[1], hl_group = chunk[2] or "Normal" })
-			col = col + #chunk[1]
+		local function add_spans(chunks, col)
+			for _, chunk in ipairs(chunks) do
+				table.insert(spans, { line = bottom_row, start_col = col, end_col = col + #chunk[1], hl_group = chunk[2] or "Normal" })
+				col = col + #chunk[1]
+			end
 		end
+		add_spans(left_chunks, #head + 1)
+		add_spans(right_chunks, #bottom - #tail - #right_part + 1)
 	else
 		local bottom = " ╰" .. string.rep("─", math.max(1, outer_width - 3)) .. "╯"
 		table.insert(lines, bottom)
