@@ -38,6 +38,44 @@
 ---@field web_url string|nil
 ---@field stages PipelineStage[]|nil Stage name/state only until `fetch_pipeline_details` fills in jobs.
 
+---@class PipelineGraphJob
+---@field id string Numeric job id.
+---@field name string
+---@field status string Lower-case GitLab status ("success", "running", "manual", ...).
+---@field allow_failure boolean
+---@field manual boolean `when: manual` job.
+---@field playable boolean
+---@field retryable boolean
+---@field cancelable boolean
+---@field duration number|nil Seconds; nil while running.
+---@field started_at string|nil
+---@field finished_at string|nil
+---@field web_url string|nil
+
+---@class PipelineGraphStage
+---@field name string
+---@field status string Lower-case GitLab status.
+---@field jobs PipelineGraphJob[]
+
+--- Full snapshot of one pipeline for the detail view (status, stages, jobs).
+---@class PipelineGraph
+---@field id string
+---@field iid string|nil
+---@field project_path string
+---@field status string Lower-case GitLab status.
+---@field ref string
+---@field sha string
+---@field short_sha string|nil
+---@field user PipelineUser|nil
+---@field created_at string|nil
+---@field started_at string|nil
+---@field finished_at string|nil
+---@field duration number|nil
+---@field web_url string|nil
+---@field commit_title string|nil
+---@field merge_request { iid: integer|nil, title: string|nil }|nil
+---@field stages PipelineGraphStage[]
+
 ---@class PipelinesViewConfig
 ---@field name string
 ---@field key string|nil

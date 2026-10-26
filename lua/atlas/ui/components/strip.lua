@@ -147,6 +147,22 @@ local function truncate_chunks(chunks, max)
 	return out
 end
 
+M.chunks_width = chunks_width
+M.truncate_chunks = truncate_chunks
+
+--- Shortens `text` to `max` columns, ending in "…" when anything was cut.
+---@param text string
+---@param max integer
+---@return string
+function M.truncate(text, max)
+	local out = truncate_chunks({ { tostring(text or "") } }, max)
+	local parts = {}
+	for _, chunk in ipairs(out) do
+		table.insert(parts, chunk[1])
+	end
+	return table.concat(parts)
+end
+
 --- Places one text item under each node: the first left-aligned with its
 --- node, the last right-aligned with its node, the others centred under
 --- theirs. Items keep at least `GAP` columns between each other; when they

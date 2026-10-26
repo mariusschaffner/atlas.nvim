@@ -256,26 +256,10 @@ function M.fetch_job_log(pr, _pipeline, job, on_done)
 	})
 end
 
----@param pr PullRequest
----@param endpoint string
----@param action string
----@param on_done fun(ok: boolean, err: string|nil)
----@return { cancel: fun() }|nil
-local function post_action(pr, endpoint, action, on_done)
-	local path = tostring(pr.repo_full_name or "")
-	if path == "" then
-		on_done(false, "Missing project")
-		return nil
-	end
-	return service.request(
-		"POST",
-		string.format("/projects/%s/%s", service.url_encode(path), endpoint),
-		nil,
-		function(_, err)
-			on_done(err == nil, err)
-		end,
-		{ action = action, project = path }
-	)
+-- The write endpoints live with the pipelines domain (the pipeline detail
+-- view uses them too); these keep the MR Pipelines tab's `pr`-based signatures.
+local function pipelines_api()
+	return require("atlas.pipelines.providers.gitlab.api.pipelines")
 end
 
 ---@param pr PullRequest
@@ -283,12 +267,7 @@ end
 ---@param on_done fun(ok: boolean, err: string|nil)
 ---@return { cancel: fun() }|nil
 function M.retry(pr, pipeline, on_done)
-	local id = tonumber(pipeline.id)
-	if not id then
-		on_done(false, "Missing pipeline ID")
-		return nil
-	end
-	return post_action(pr, string.format("pipelines/%d/retry", id), "Retry pipeline", on_done)
+	return pipelines_api().retry_pipeline(tostring(pr.repo_full_name or ""), pipeline.id, on_done)
 end
 
 ---@param pr PullRequest
@@ -296,27 +275,7 @@ end
 ---@param on_done fun(ok: boolean, err: string|nil)
 ---@return { cancel: fun() }|nil
 function M.cancel(pr, pipeline, on_done)
-	local id = tonumber(pipeline.id)
-	if not id then
-		on_done(false, "Missing pipeline ID")
-		return nil
-	end
-	return post_action(pr, string.format("pipelines/%d/cancel", id), "Cancel pipeline", on_done)
-end
-
----@param pr PullRequest
----@param job PullsPipelineJob
----@param action "retry"|"cancel"
----@param on_done fun(ok: boolean, err: string|nil)
----@return { cancel: fun() }|nil
-local function run_job_action(pr, job, action, on_done)
-	local id = tonumber(job.id)
-	if not id then
-		on_done(false, "Missing pipeline job ID")
-		return nil
-	end
-	local label = action == "retry" and "Retry pipeline job" or "Cancel pipeline job"
-	return post_action(pr, string.format("jobs/%d/%s", id, action), label, on_done)
+	return pipelines_api().cancel_pipeline(tostring(pr.repo_full_name or ""), pipeline.id, on_done)
 end
 
 ---@param pr PullRequest
@@ -324,7 +283,7 @@ end
 ---@param on_done fun(ok: boolean, err: string|nil)
 ---@return { cancel: fun() }|nil
 function M.retry_job(pr, job, on_done)
-	return run_job_action(pr, job, "retry", on_done)
+	return pipelines_api().retry_job(tostring(pr.repo_full_name or ""), job.id, on_done)
 end
 
 ---@param pr PullRequest
@@ -332,7 +291,7 @@ end
 ---@param on_done fun(ok: boolean, err: string|nil)
 ---@return { cancel: fun() }|nil
 function M.cancel_job(pr, job, on_done)
-	return run_job_action(pr, job, "cancel", on_done)
+	return pipelines_api().cancel_job(tostring(pr.repo_full_name or ""), job.id, on_done)
 end
 
 return M

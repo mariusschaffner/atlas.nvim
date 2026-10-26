@@ -206,32 +206,32 @@ end
 
 ---@param method string
 ---@param endpoint string
----@param on_done fun(result: string|nil, err: string|nil)
+---@param on_done fun(result: string|nil, err: string|nil, status: integer|nil)
 ---@param ctx? table
+---@param opts? { headers: table<string, string>|nil } Extra request headers (e.g. `Range`).
 ---@return { job_id: integer, cancel: fun() }|nil
-function M.request_text(method, endpoint, on_done, ctx)
+function M.request_text(method, endpoint, on_done, ctx, opts)
 	local _, auth_err = get_auth()
 	if auth_err then
 		logger.logerror("GitLab auth missing", { error = auth_err })
-		on_done(nil, auth_err)
+		on_done(nil, auth_err, nil)
 		return nil
 	end
 
+	local headers = build_headers()
+	if opts and type(opts.headers) == "table" then
+		headers = vim.tbl_extend("force", headers, opts.headers)
+	end
+
 	local message, log = log_request("GitLab request", { method = method, endpoint = endpoint }, ctx)
-	return http.curl_text_request(
-		method,
-		M.base_url() .. API_PATH .. endpoint,
-		build_headers(),
-		nil,
-		function(result, err)
-			if err then
-				logger.logerror(message .. " failed", vim.tbl_extend("force", {}, log, { error = tostring(err) }))
-				on_done(nil, err)
-				return
-			end
-			on_done(result, nil)
+	return http.curl_text_request(method, M.base_url() .. API_PATH .. endpoint, headers, nil, function(result, err, status)
+		if err then
+			logger.logerror(message .. " failed", vim.tbl_extend("force", {}, log, { error = tostring(err) }))
+			on_done(nil, err, nil)
+			return
 		end
-	)
+		on_done(result, nil, status)
+	end)
 end
 
 ---@param query string

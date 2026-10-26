@@ -24,6 +24,16 @@ local M = {
 			fetch_pipeline_details = pipelines_api.fetch_pipeline_details,
 			fetch_job_log = pipelines_api.fetch_job_log,
 		},
+		detail = {
+			fetch_pipeline = pipelines_api.fetch_pipeline,
+			fetch_pipeline_graph = pipelines_api.fetch_pipeline_graph,
+			fetch_job_trace = pipelines_api.fetch_job_trace,
+			retry_pipeline = pipelines_api.retry_pipeline,
+			cancel_pipeline = pipelines_api.cancel_pipeline,
+			retry_job = pipelines_api.retry_job,
+			cancel_job = pipelines_api.cancel_job,
+			play_job = pipelines_api.play_job,
+		},
 		ui = {
 			setup = highlights.setup,
 		},

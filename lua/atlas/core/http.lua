@@ -167,7 +167,7 @@ end
 ---@param url string
 ---@param headers table<string, string>
 ---@param data? string
----@param callback fun(result?: string, err?: string)
+---@param callback fun(result?: string, err?: string, status?: integer)
 ---@return { job_id: integer, cancel: fun() }
 function M.curl_text_request(method, url, headers, data, callback)
 	return curl_fetch(method, url, headers, data, function(body, http_status, err)
@@ -176,12 +176,19 @@ function M.curl_text_request(method, url, headers, data, callback)
 			return
 		end
 
+		-- 416 answers a `Range` request that starts at (or past) the end of
+		-- the resource: nothing new, not a failure.
+		if http_status == 416 then
+			callback("", nil, http_status)
+			return
+		end
+
 		if http_status ~= nil and (http_status < 200 or http_status >= 300) then
 			callback(nil, string.format("HTTP %d", http_status))
 			return
 		end
 
-		callback(body or "", nil)
+		callback(body or "", nil, http_status)
 	end, true)
 end
 
