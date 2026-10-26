@@ -258,4 +258,112 @@ function M.toggle_fullscreen()
 	renderer.render_log_title()
 end
 
+-- Actions (DESIGN-pipeline-view.md §5). The store refreshes (and restarts
+-- polling) after each one; destructive ones ask first.
+
+---@param question string
+---@param on_yes fun()
+local function confirm(question, on_yes)
+	vim.ui.input({ prompt = question .. " [y/N]: " }, function(input)
+		local answer = input and vim.trim(input):lower()
+		if answer == "y" or answer == "yes" then
+			on_yes()
+		end
+	end)
+end
+
+---@param run fun(store: AtlasPipelineStore, done: fun(ok: boolean, err: string|nil))
+---@param doing string e.g. "Retrying job deploy-prod"
+---@param done_text string e.g. "Job retried"
+local function act(run, doing, done_text)
+	local store = state.store
+	if store == nil then
+		return
+	end
+	notify.loading(doing .. "...")
+	run(store, function(ok, err)
+		if not ok then
+			notify.error(doing .. " failed: " .. tostring(err))
+			return
+		end
+		notify.success(done_text, { timeout = 1200 })
+	end)
+end
+
+---@return PipelineGraphJob|nil
+local function selected_job()
+	local job = state.store and state.store:selected_job()
+	if job == nil then
+		notify.warn("Select a job first")
+	end
+	return job
+end
+
+--- R: retry the pipeline's failed jobs.
+function M.retry_failed()
+	act(function(store, done)
+		store:retry_failed(done)
+	end, "Retrying failed jobs", "Failed jobs retried")
+end
+
+--- gX: cancel the whole pipeline (asks first).
+function M.cancel_pipeline()
+	local store = state.store
+	if store == nil then
+		return
+	end
+	confirm(string.format("Cancel pipeline #%s?", store.pipeline_id), function()
+		act(function(s, done)
+			s:cancel_pipeline(done)
+		end, "Cancelling pipeline", "Pipeline cancelled")
+	end)
+end
+
+--- r: retry the selected job.
+function M.retry_job()
+	local job = selected_job()
+	if job == nil then
+		return
+	end
+	if not job.retryable then
+		notify.warn(job.name .. " can't be retried")
+		return
+	end
+	act(function(store, done)
+		store:retry_job(job.id, done)
+	end, "Retrying " .. job.name, job.name .. " retried")
+end
+
+--- p: play the selected manual job.
+function M.play_job()
+	local job = selected_job()
+	if job == nil then
+		return
+	end
+	if not (job.manual and job.playable) then
+		notify.warn(job.name .. (job.manual and " is blocked" or " is not a manual job"))
+		return
+	end
+	act(function(store, done)
+		store:play_job(job.id, done)
+	end, "Starting " .. job.name, job.name .. " started")
+end
+
+--- X: cancel the selected job (asks first).
+function M.cancel_job()
+	local job = selected_job()
+	if job == nil then
+		return
+	end
+	if not job.cancelable then
+		notify.warn(job.name .. " can't be cancelled")
+		return
+	end
+	confirm(string.format("Cancel job %s?", job.name), function()
+		act(function(store, done)
+			store:cancel_job(job.id, done)
+		end, "Cancelling " .. job.name, job.name .. " cancelled")
+	end)
+end
+
 return M

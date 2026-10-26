@@ -43,6 +43,8 @@ local GENERAL_ACTIONS = {
 		end,
 	},
 	{ "ui.close", "Close pipeline", "close" },
+	{ "pipelines.retry_failed", "Retry failed jobs", "retry_failed" },
+	{ "pipelines.cancel_pipeline", "Cancel pipeline", "cancel_pipeline" },
 	{ "pipelines.follow", "Follow the log", "follow" },
 	{ "pipelines.fullscreen", "Toggle fullscreen log", "toggle_fullscreen" },
 	{ "ui.toggle_fold", "Toggle log section", "toggle_fold" },
@@ -54,6 +56,9 @@ local GRAPH_ACTIONS = {
 	{ "ui.next_item", "Next job", "next_job" },
 	{ "ui.previous_item", "Previous job", "previous_job" },
 	{ "ui.select", "Show output (focus the log)", "focus_log" },
+	{ "pipelines.retry_job", "Retry job", "retry_job" },
+	{ "pipelines.play_job", "Play manual job", "play_job" },
+	{ "pipelines.cancel_job", "Cancel job", "cancel_job" },
 }
 
 local LOG_ACTIONS = {
