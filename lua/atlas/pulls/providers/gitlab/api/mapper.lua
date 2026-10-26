@@ -130,6 +130,10 @@ function M.to_pull_request(raw)
 	local diff_refs = json.nilify(raw.diff_refs)
 	local head_sha = type(diff_refs) == "table" and json.safe_str(diff_refs.head_sha) or nil
 	local base_sha = type(diff_refs) == "table" and json.safe_str(diff_refs.base_sha) or nil
+	local remove_source_branch = nil
+	if type(raw.force_remove_source_branch) == "boolean" then
+		remove_source_branch = raw.force_remove_source_branch
+	end
 
 	---@type GitLabPullRequest
 	return {
@@ -155,7 +159,7 @@ function M.to_pull_request(raw)
 		merge_status = json.safe_str(raw.merge_status),
 		detailed_merge_status = json.safe_str(raw.detailed_merge_status),
 		diff_refs = diff_refs,
-		remove_source_branch = raw.force_remove_source_branch == true,
+		remove_source_branch = remove_source_branch,
 	}
 end
 

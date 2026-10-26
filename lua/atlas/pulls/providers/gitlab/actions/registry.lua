@@ -94,9 +94,15 @@ local function merge(ctx, done)
 			return
 		end
 		notify(ctx, "loading", string.format("Merging %s...", pr_label(pr)))
+		-- An explicit should_remove_source_branch overrides the MR's own flag, so the
+		-- MR's toggle wins and the config default only applies when the MR doesn't say.
+		local remove_source_branch = pr.remove_source_branch
+		if remove_source_branch == nil then
+			remove_source_branch = options.delete_branch
+		end
 		pullrequests_api.merge(pr, {
 			squash = options.method == "squash",
-			should_remove_source_branch = options.delete_branch,
+			should_remove_source_branch = remove_source_branch,
 		}, function(ok, err)
 			if not ok then
 				notify(ctx, "error", err or "Merge failed")
