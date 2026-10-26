@@ -68,7 +68,8 @@ describe("atlas.ui.components.detail_header", function()
 		data.bottom_chunks = { { "h/l", "AtlasKeyHint" }, { " stage", "AtlasKeyHintLabel" } }
 		local lines, highlights = detail_header.render(data, 60)
 		local bottom = lines[#lines]
-		assert.truthy(bottom:find("^ ╰─ h/l stage ─+╯$"))
+		assert.equal(" ╰─ h/l stage ", bottom:sub(1, #" ╰─ h/l stage "))
+		assert.equal("─╯", bottom:sub(-#"─╯"))
 		assert.equal(60, vim.api.nvim_strwidth(bottom))
 		local key
 		for _, span in ipairs(spans_on(highlights, #lines - 1)) do
