@@ -42,6 +42,7 @@ end
 ---| "convert_to_draft"
 ---| "edit_reviewers"
 ---| "edit_labels"
+---| "edit_milestone"
 ---| "search"
 ---| "approve"
 ---| "request_changes"

@@ -14,6 +14,7 @@ query($path:ID!,$iid:String!){
       subscribed
       assignees(first:100){nodes{id name username}}
       labels(first:100){nodes{name:title color text_color:textColor}}
+      milestone{id title}
     }
   }
 }
@@ -416,6 +417,14 @@ function M.update_labels(pr, diff, on_done)
 		return nil
 	end
 	return update(pr, payload, on_done)
+end
+
+---@param pr PullRequest
+---@param milestone_id integer|nil nil clears the milestone.
+---@param on_done fun(ok: boolean, err: string|nil)
+---@return { cancel: fun() }|nil
+function M.update_milestone(pr, milestone_id, on_done)
+	return update(pr, { milestone_id = milestone_id or 0 }, on_done)
 end
 
 ---@param pr PullRequest

@@ -70,7 +70,7 @@ local MERGE_NODE = {
 	closed = { glyph = "✗", hl = "AtlasTextMuted", label_hl = "AtlasTextMuted" },
 }
 
---- "gM merge"-style hint chunks: the key in the key-hint colour, the word dim.
+--- "gp pipeline"-style hint chunks: the key in the key-hint colour, the word dim.
 ---@param action_id string
 ---@param word string
 ---@return AtlasStripChunk[]
@@ -99,10 +99,10 @@ local function render_strip(width)
 	end
 
 	-- Narrow terminals (sidebar hidden, DESIGN-merge-request-view.md §1):
-	-- one line, "✓ pipeline · ✓ no conflicts · ◷ review · gM blocked".
+	-- one line, "✓ pipeline · ✓ no conflicts · ◷ review · blocked".
 	if detail_ui.is_sidebar_collapsed() then
 		local line, spans = "", {}
-		for i, segment in ipairs(readiness.compact(gates, key_hint("pulls.merge"))) do
+		for i, segment in ipairs(readiness.compact(gates)) do
 			if i > 1 then
 				table.insert(spans, { line = 0, start_col = #line, end_col = #line + #" · ", hl_group = "AtlasBorder" })
 				line = line .. " · "
@@ -142,14 +142,10 @@ local function render_strip(width)
 
 	local merge = gates.merge
 	local style = MERGE_NODE[merge.state] or MERGE_NODE.blocked
+	-- No key hint: merging only happens through the action menu.
 	local merge_hint
-	if merge.state == "ready" then
-		merge_hint = key_chunks("pulls.merge", "merge")
-	elseif merge.state == "blocked" then
-		merge_hint = key_chunks("pulls.merge", "blocked")
-		if merge.reason then
-			table.insert(merge_hint, 1, { merge.reason .. " · ", "AtlasTextMuted" })
-		end
+	if merge.state == "blocked" then
+		merge_hint = { { merge.reason and (merge.reason .. " · blocked") or "blocked", "AtlasTextMuted" } }
 	end
 	table.insert(nodes, {
 		glyph = style.glyph,

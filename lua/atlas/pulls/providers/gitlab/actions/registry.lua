@@ -8,10 +8,12 @@ local core_utils = require("atlas.core.utils")
 local pullrequests_api = require("atlas.pulls.providers.gitlab.api.pullrequests")
 local users_api = require("atlas.pulls.providers.gitlab.api.users")
 local labels_api = require("atlas.pulls.providers.gitlab.api.labels")
+local milestones_api = require("atlas.pulls.providers.gitlab.api.milestones")
 local service = require("atlas.providers.gitlab.client")
 local inline_field_edit = require("atlas.ui.inline_field_edit")
 local users_completion = require("atlas.providers.gitlab.completion.users")
 local labels_completion = require("atlas.providers.gitlab.completion.labels")
+local milestones_completion = require("atlas.providers.gitlab.completion.milestones")
 local detail_state = require("atlas.pulls.ui.detail.state")
 local presentation = require("atlas.pulls.ui.presentation")
 
@@ -383,6 +385,100 @@ local function edit_labels(ctx, done)
 end
 
 ---@param ctx AtlasPullActionContext
+---@param done fun(result: PullsActionResult|nil, err: string|nil)
+local function edit_milestone(ctx, done)
+	local pr = ctx.pr
+	local path = pr.repo_full_name
+	if path == "" then
+		done(nil, "Could not determine project path")
+		return
+	end
+
+	local sidebar_win = require("atlas.ui.detail").sidebar_win()
+	local region = detail_state.sidebar_regions and detail_state.sidebar_regions.milestone
+	if sidebar_win == nil or region == nil then
+		local message = "Milestone field is not visible"
+		notify(ctx, "warn", message)
+		done(nil, message)
+		return
+	end
+
+	---@param current PullsMilestone|nil
+	local function open_editor(current)
+		local current_title = current and current.title or ""
+		local by_title = {}
+		if current then
+			by_title[current_title:lower()] = current.id
+		end
+
+		local completion = milestones_completion.for_project(milestones_api.list, path, function(milestones)
+			for _, item in ipairs(milestones) do
+				by_title[item.title:lower()] = item.id
+			end
+		end)
+
+		inline_field_edit.start({
+			anchor_win = sidebar_win,
+			row = region.row,
+			col = region.col,
+			width = region.width,
+			height = region.height,
+			seed_text = current_title,
+			seed_resolved = current_title ~= "" and { current_title } or {},
+			completion = completion,
+			on_save = function(text, save_done)
+				local trimmed = vim.trim(text)
+				if trimmed == current_title then
+					save_done(true)
+					done({ changed_pr = false, message = "No changes" }, nil)
+					return
+				end
+
+				local milestone_id = nil
+				if trimmed ~= "" then
+					milestone_id = by_title[trimmed:lower()]
+					if milestone_id == nil then
+						save_done(false, "Unknown milestone: " .. trimmed)
+						return
+					end
+				end
+
+				notify(ctx, "loading", string.format("Updating milestone on %s...", pr_label(pr)))
+				pullrequests_api.update_milestone(pr, milestone_id, function(ok, set_err)
+					if not ok then
+						save_done(false, set_err or "Failed")
+						return
+					end
+					local msg = milestone_id and "Milestone updated" or "Milestone cleared"
+					notify(ctx, "success", msg, 1200)
+					save_done(true)
+					done({ changed_pr = true, message = msg }, nil)
+				end)
+			end,
+			on_cancel = function()
+				done({ changed_pr = false, message = "Cancelled" }, nil)
+			end,
+			on_done = function() end,
+		})
+	end
+
+	if ctx.details then
+		open_editor(ctx.details.milestone)
+		return
+	end
+	notify(ctx, "loading", "Loading pull request...")
+	pullrequests_api.fetch_pullrequest(pr, { force_load = false }, function(details, err)
+		if err or details == nil then
+			local message = tostring(err or "Failed to load merge request")
+			notify(ctx, "error", message)
+			done(nil, message)
+			return
+		end
+		open_editor(details.milestone)
+	end)
+end
+
+---@param ctx AtlasPullActionContext
 ---@return boolean, string|nil
 local function edit_target_branch_available(ctx)
 	if not is_open_or_draft(ctx) then
@@ -646,6 +742,16 @@ register({
 	-- state (open, draft, merged, or declined) -- only requires a PR to exist.
 	is_available = has_pr,
 	run = edit_labels,
+})
+
+register({
+	id = "edit_milestone",
+	label = "Edit milestone",
+	-- Reachable via the Milestone field's own "gM" hint; redundant in the picker.
+	hidden = true,
+	-- Like labels, editable in any PR state.
+	is_available = has_pr,
+	run = edit_milestone,
 })
 
 register({

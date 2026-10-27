@@ -209,33 +209,6 @@ describe("pulls.ui.detail.readiness.derive", function()
 	end)
 end)
 
-describe("pulls.ui.detail.readiness.blocked_message", function()
-	it("is nil when mergeable", function()
-		assert.is_nil(readiness.blocked_message(readiness.derive(base())))
-	end)
-
-	it("names the blocking gate and its reason", function()
-		local r = readiness.derive(base({
-			detailed_merge_status = "not_approved",
-			reviewers = { { name = "mose.mueller", decision = "pending" } },
-		}))
-		assert.are.equal("Can't merge yet: Review · mose.mueller (waiting for approval)", readiness.blocked_message(r))
-	end)
-
-	it("names merge-node blockers", function()
-		local r = readiness.derive(base({ detailed_merge_status = "need_rebase" }))
-		assert.are.equal("Can't merge yet: needs rebase", readiness.blocked_message(r))
-	end)
-
-	it("explains merged and closed states", function()
-		assert.are.equal("Already merged", readiness.blocked_message(readiness.derive(base({ state = "merged" }))))
-		assert.are.equal(
-			"Merge request is closed",
-			readiness.blocked_message(readiness.derive(base({ state = "declined" })))
-		)
-	end)
-end)
-
 describe("pulls.ui.detail.readiness.compact", function()
 	it("builds the narrow one-liner segments", function()
 		local r = readiness.derive(base({
@@ -243,14 +216,14 @@ describe("pulls.ui.detail.readiness.compact", function()
 			reviewers = { { name = "m", decision = "pending" } },
 		}))
 		local texts = {}
-		for _, seg in ipairs(readiness.compact(r, "gM")) do
+		for _, seg in ipairs(readiness.compact(r)) do
 			table.insert(texts, (seg.glyph and (seg.glyph .. " ") or "") .. seg.text)
 		end
-		assert.are.same({ "✓ pipeline", "✓ no conflicts", "◷ review", "gM blocked" }, texts)
+		assert.are.same({ "✓ pipeline", "✓ no conflicts", "◷ review", "blocked" }, texts)
 	end)
 
 	it("says merge when ready", function()
-		local segs = readiness.compact(readiness.derive(base()), "gM")
-		assert.are.equal("gM merge", segs[#segs].text)
+		local segs = readiness.compact(readiness.derive(base()))
+		assert.are.equal("merge", segs[#segs].text)
 	end)
 end)

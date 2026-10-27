@@ -163,6 +163,23 @@ function M.to_pull_request(raw)
 	}
 end
 
+--- GraphQL milestone ({ id = "gid://gitlab/Milestone/12", title }) -> numeric
+--- id, which is what the REST update endpoint expects.
+---@param raw any
+---@return PullsMilestone|nil
+local function normalize_milestone(raw)
+	raw = json.nilify(raw)
+	if type(raw) ~= "table" then
+		return nil
+	end
+	local id = tonumber(tostring(raw.id or ""):match("(%d+)$"))
+	local title = json.safe_str(raw.title)
+	if id == nil or title == nil or title == "" then
+		return nil
+	end
+	return { id = id, title = title }
+end
+
 ---@param raw any Decoded API value.
 ---@return GitLabPullRequestDetails|nil
 function M.to_pull_request_details(raw)
@@ -176,6 +193,7 @@ function M.to_pull_request_details(raw)
 		is_subscribed = json.nilify(value.subscribed),
 		assignees = normalize_authors(json.safe_table(json.safe_table(value.assignees).nodes or value.assignees)),
 		labels = normalize_labels(json.safe_table(json.safe_table(value.labels).nodes or value.labels)),
+		milestone = normalize_milestone(value.milestone),
 	}
 end
 

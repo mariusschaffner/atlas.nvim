@@ -30,6 +30,10 @@
 ---@field name string
 ---@field color string|nil
 
+---@class PullsMilestone
+---@field id integer
+---@field title string
+
 --------------------------------------------------------------------------------
 -- Pull Request
 --------------------------------------------------------------------------------
@@ -59,6 +63,7 @@
 ---@field is_subscribed boolean|nil
 ---@field assignees PullsAuthor[]|nil
 ---@field labels PullsLabel[]|nil
+---@field milestone PullsMilestone|nil
 
 --------------------------------------------------------------------------------
 -- Create

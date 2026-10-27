@@ -48,6 +48,7 @@ describe("GitLab pull request details", function()
 			subscribed = true,
 			assignees = { { id = 8, name = "Assignee", username = "assignee" } },
 			labels = { { name = "backend", color = "#ffffff", text_color = "#000000" } },
+			milestone = { id = "gid://gitlab/Milestone/42", title = "Sprint 2" },
 		})
 
 		assert.equal("Description", details.description)
@@ -55,6 +56,7 @@ describe("GitLab pull request details", function()
 		assert.equal("assignee", details.assignees[1].username)
 		assert.equal("backend", details.labels[1].name)
 		assert.equal("#000000", details.labels[1].text_color)
+		assert.are.same({ id = 42, title = "Sprint 2" }, details.milestone)
 		assert.is_nil(details.repo_full_name)
 	end)
 end)

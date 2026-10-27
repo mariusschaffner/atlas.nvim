@@ -1,5 +1,5 @@
 -- The merge request detail view's sidebar (DESIGN-merge-request-view.md §5):
--- BRANCHES, ASSIGNEE, REVIEWERS, LABELS, a divider, ON MERGE. Built from the
+-- BRANCHES, ASSIGNEE, REVIEWERS, LABELS, MILESTONE, a divider, ON MERGE. Built from the
 -- shared `atlas.ui.components.sidebar`/`sidebar_field`/`avatar` components,
 -- same as the issue and milestone sidebars.
 local M = {}
@@ -221,6 +221,28 @@ local function labels_entry(details, width)
 	return { id = "labels", label = "Labels", key_hint = hint, value_lines = lines, value_highlights = spans }
 end
 
+---@param details PullRequestDetails|nil
+---@param width integer
+---@return IssuesSidebarEntry
+local function milestone_entry(details, width)
+	local hint = supports_action("edit_milestone") and key_hint("pulls.edit_milestone") or nil
+	if details == nil and state.details_loading then
+		return loading_entry("Milestone", hint)
+	end
+	local milestone = details and details.milestone
+	if milestone == nil then
+		return { id = "milestone", label = "Milestone", key_hint = hint, empty = true, empty_text = "+ set milestone" }
+	end
+	local text = "◆ " .. fit(milestone.title, width - ui_utils.text_width("◆ "))
+	return {
+		id = "milestone",
+		label = "Milestone",
+		key_hint = hint,
+		value_lines = { text },
+		value_highlights = { { line = 0, start_col = 0, end_col = #text, hl_group = "AtlasCyan" } },
+	}
+end
+
 ---@param pr PullRequest
 ---@param details PullRequestDetails|nil
 ---@param width integer
@@ -267,6 +289,7 @@ function M.render(pr, details, outer_width)
 		assignee_entry(details, width),
 		reviewers_entry(width),
 		labels_entry(details, width),
+		milestone_entry(details, width),
 		{ divider = true },
 		on_merge_entry(pr, details, width),
 	}, width)

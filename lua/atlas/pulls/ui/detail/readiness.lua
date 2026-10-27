@@ -322,34 +322,11 @@ function M.derive(input)
 	}
 end
 
---- The message `gM` shows instead of merging while something blocks.
----@param readiness AtlasReadiness
----@return string|nil message nil when the MR can be merged.
-function M.blocked_message(readiness)
-	if readiness.mergeable then
-		return nil
-	end
-	local merge = readiness.merge
-	if merge.state == "merged" then
-		return "Already merged"
-	end
-	if merge.state == "closed" then
-		return "Merge request is closed"
-	end
-	local gate = readiness.blocking and readiness.gates[readiness.blocking]
-	if gate then
-		local reason = gate.reason and (" (" .. gate.reason .. ")") or ""
-		return "Can't merge yet: " .. gate.label .. reason
-	end
-	return "Can't merge yet: " .. (merge.reason or "merge is blocked")
-end
-
 --- Narrow-terminal one-liner segments, e.g. ✓ pipeline · ✓ no conflicts ·
---- ◷ review · gM blocked (DESIGN-merge-request-view.md §1 "Narrow terminals").
+--- ◷ review · blocked (DESIGN-merge-request-view.md §1 "Narrow terminals").
 ---@param readiness AtlasReadiness
----@param merge_key string|nil
 ---@return { text: string, state: AtlasReadinessState|"ready"|"blocked"|"merged"|"closed", glyph: string|nil }[]
-function M.compact(readiness, merge_key)
+function M.compact(readiness)
 	local GLYPHS = { passed = "✓", pending = "◷", failed = "✗" }
 	local out = {}
 	for _, gate in ipairs(readiness.gates) do
@@ -362,8 +339,7 @@ function M.compact(readiness, merge_key)
 	elseif merge.state == "closed" then
 		text = "closed"
 	else
-		local word = merge.state == "ready" and "merge" or "blocked"
-		text = merge_key and (merge_key .. " " .. word) or word
+		text = merge.state == "ready" and "merge" or "blocked"
 	end
 	table.insert(out, { text = text, state = merge.state })
 	return out

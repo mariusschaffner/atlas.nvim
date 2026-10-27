@@ -290,6 +290,30 @@ function M.register(buf, opts)
 		)
 	end
 
+	if supports_action("edit_milestone") then
+		utils.insert_if(
+			items,
+			resolver.item("pulls.edit_milestone", {
+				desc = "Edit milestone",
+				hint = false,
+				opts = { nowait = true, silent = true },
+				callback = function()
+					local pr = state.current_pr
+					if pr == nil then
+						return
+					end
+					local current = action_context(pr)
+					if current then
+						local on_update = state.on_update
+						actions.run("edit_milestone", current, function(result)
+							complete_action(pr, on_update, result)
+						end)
+					end
+				end,
+			})
+		)
+	end
+
 	if supports_action("edit_target_branch") then
 		utils.insert_if(
 			items,
@@ -355,39 +379,6 @@ function M.register(buf, opts)
 			})
 		)
 	end
-
-	utils.insert_if(
-		items,
-		resolver.item("pulls.merge", {
-			desc = "Merge (or explain what's blocking)",
-			hint = false,
-			opts = { nowait = true, silent = true },
-			callback = function()
-				local pr = state.current_pr
-				if pr == nil then
-					return
-				end
-				local detail_data = require("atlas.pulls.ui.detail.data")
-				local gates = detail_data.readiness()
-				if gates == nil then
-					notify.warn("Merge status is still loading")
-					return
-				end
-				local blocked = require("atlas.pulls.ui.detail.readiness").blocked_message(gates)
-				if blocked then
-					notify.warn(blocked)
-					return
-				end
-				local context = action_context(pr, buf)
-				if context then
-					local on_update = state.on_update
-					actions.run("merge", context, function(result)
-						complete_action(pr, on_update, result)
-					end)
-				end
-			end,
-		})
-	)
 
 	utils.insert_if(
 		items,
@@ -498,9 +489,9 @@ function M.remove(buf)
 	utils.insert_if(general, resolver.remove_item("pulls.edit_reviewers"))
 	utils.insert_if(general, resolver.remove_item("pulls.edit_assignees"))
 	utils.insert_if(general, resolver.remove_item("pulls.edit_labels"))
+	utils.insert_if(general, resolver.remove_item("pulls.edit_milestone"))
 	utils.insert_if(general, resolver.remove_item("pulls.edit_target_branch"))
 	utils.insert_if(general, resolver.remove_item("pulls.toggle_remove_source_branch"))
-	utils.insert_if(general, resolver.remove_item("pulls.merge"))
 	utils.insert_if(general, resolver.remove_item("pulls.open_pipeline"))
 	utils.insert_if(general, resolver.remove_item("ui.open_in_browser"))
 	utils.insert_if(general, resolver.remove_item("ui.next_panel_tab"))

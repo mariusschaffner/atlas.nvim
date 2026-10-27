@@ -112,8 +112,8 @@ local M = {}
 ---@field edit_reviewers? AtlasKeymapValue
 ---@field edit_assignees? AtlasKeymapValue
 ---@field edit_labels? AtlasKeymapValue
+---@field edit_milestone? AtlasKeymapValue Edits the MR's milestone from its detail view's sidebar.
 ---@field toggle_remove_source_branch? AtlasKeymapValue
----@field merge? AtlasKeymapValue Merges the MR from its detail view, or explains what's blocking it.
 ---@field open_pipeline? AtlasKeymapValue Opens the MR's latest pipeline from its detail view.
 ---@field toggle_file_viewed? AtlasKeymapValue Toggles a file's viewed mark in the MR detail view's Changes tab.
 ---@field edit_target_branch? AtlasKeymapValue Edits an existing MR's target branch (real detail view) -- same id/key as the create view's own Target branch field, since it's the same field either way.
@@ -222,8 +222,8 @@ local M = {}
 ---| "pulls.edit_reviewers"
 ---| "pulls.edit_assignees"
 ---| "pulls.edit_labels"
+---| "pulls.edit_milestone"
 ---| "pulls.toggle_remove_source_branch"
----| "pulls.merge"
 ---| "pulls.open_pipeline"
 ---| "pulls.toggle_file_viewed"
 ---| "pulls.edit_target_branch"
@@ -491,9 +491,10 @@ function M.validate()
 		-- detail buffer) and open_pipeline (MR detail buffer) are different
 		-- buffers, never active at once, so sharing "gp" is safe.
 		{ "ui.next_page", "issues.go_to_pull", "pulls.open_pipeline" },
-		-- change_milestone (issue detail buffer) and merge (MR detail buffer)
-		-- are separate panels that are never open at once, so sharing "gM" is safe.
-		{ "issues.change_milestone", "pulls.merge" },
+		-- change_milestone (issue detail buffer) and edit_milestone (MR detail
+		-- buffer) are separate panels that are never open at once, so sharing
+		-- "gM" is safe.
+		{ "issues.change_milestone", "pulls.edit_milestone" },
 		-- previous_page (dashboard buffer), review.diff.toggle_detail_panel
 		-- (the standalone diff viewer) and create_pull_for_issue (issue detail
 		-- buffer) are three separate buffers, never active at once, so
