@@ -14,7 +14,8 @@ local header = require("atlas.ui.components.detail_header")
 local sidebar = require("atlas.ui.components.sidebar")
 local tabs = require("atlas.ui.components.tabs")
 local progress_bar = require("atlas.ui.components.progress_bar")
-local markdown_sections = require("atlas.issues.ui.detail.milestone.markdown_sections")
+local markdown_lines = require("atlas.ui.components.markdown_lines")
+local keyhints = require("atlas.ui.components.keyhints")
 local timeline = require("atlas.issues.ui.detail.milestone.timeline")
 local strip = require("atlas.ui.components.strip")
 local wf_state = require("atlas.issues.providers.gitlab.wf_state")
@@ -24,7 +25,6 @@ local pulls_dashboard_renderer = require("atlas.pulls.ui.dashboard.renderer")
 local pulls_dashboard_providers = require("atlas.pulls.ui.dashboard.providers")
 local detail_ui = require("atlas.ui.detail")
 local inline_edit = require("atlas.ui.inline_edit")
-local resolver = require("atlas.core.keymaps")
 local state = require("atlas.issues.ui.detail.milestone.state")
 
 local ns = vim.api.nvim_create_namespace("atlas.issues.milestone_detail")
@@ -50,30 +50,23 @@ local function set_lines(buf, lines)
 	vim.api.nvim_set_option_value("modifiable", false, { buf = buf })
 end
 
----@param action_id string
----@return string|nil
-local function key_hint(action_id)
-	local keys = resolver.resolve(action_id)
-	return keys and keys[1] or nil
-end
-
---- "gs gd" (space-joined, unlike `key_hints`' " | " style elsewhere -- these
---- are two different fields' keys shown together, not alternatives for one).
----@return string|nil
-local function dates_hint()
-	local parts = {}
-	local gs = key_hint("issues.change_milestone_start_date")
-	local gd = key_hint("issues.change_milestone_due_date")
-	if gs then
-		table.insert(parts, gs)
+--- "gs Start - gd Due", right-aligned in the header box's bottom border.
+--- Dropped entirely when the header is too narrow to fit it.
+---@param outer_width integer
+---@return { [1]: string, [2]: string }[]
+local function dates_hints(outer_width)
+	local chunks = keyhints.chunks({
+		{ action_id = "issues.change_milestone_start_date", label = "Start" },
+		{ action_id = "issues.change_milestone_due_date", label = "Due" },
+	}, { separator = " - ", separator_hl = "AtlasBorder" })
+	local w = 0
+	for _, chunk in ipairs(chunks) do
+		w = w + vim.api.nvim_strwidth(chunk[1])
 	end
-	if gd then
-		table.insert(parts, gd)
+	if w > header.bottom_width(outer_width) then
+		return {}
 	end
-	if #parts == 0 then
-		return nil
-	end
-	return table.concat(parts, " ")
+	return chunks
 end
 
 ---@param milestone IssueMilestone
@@ -161,92 +154,38 @@ local function render_timeline_unpadded(milestone, width, today_iso)
 	-- Without both ends of the range there's no cols_per_day to compute --
 	-- same degenerate "+ set dates" treatment as the no-dates case.
 	if bar.state == "no_dates" or start_iso == nil or due_iso == nil then
-		local hint = dates_hint()
 		local text = "+ set dates"
-		local full = hint and (text .. "  " .. hint) or text
-		table.insert(lines, full)
+		table.insert(lines, text)
 		table.insert(spans, { line = 0, start_col = 0, end_col = #text, hl_group = "AtlasTextMutedItalic" })
-		if hint then
-			table.insert(spans, { line = 0, start_col = #full - #hint, end_col = #full, hl_group = "AtlasKeyHint" })
-			-- No separate start/due anchors to point at here (neither date is
-			-- set yet) -- both keys open their picker anchored over the hint.
-			-- Two distinct tables (not the same one aliased twice), since a
-			-- caller may adjust one's `col` independently of the other's.
-			regions.start_date = { row = 0, col = #full - #hint, width = #hint, height = 1 }
-			regions.due_date = { row = 0, col = #full - #hint, width = #hint, height = 1 }
-		end
+		-- No separate start/due anchors to point at here (neither date is set
+		-- yet) -- both keys open their picker anchored over the placeholder.
+		-- Two distinct tables (not the same one aliased twice), since a caller
+		-- may adjust one's `col` independently of the other's.
+		regions.start_date = { row = 0, col = 0, width = #text, height = 1 }
+		regions.due_date = { row = 0, col = 0, width = #text, height = 1 }
 		return lines, spans, regions
 	end
 
 	local marker_col = timeline.column_for(today_iso, start_iso, due_iso, width)
 
-	-- Line 1: date ticks, with "gs"/"gd" right next to the start/due labels
-	-- (the start date's tick is always ticks[1], the due date's is always
-	-- ticks[#ticks] -- `timeline.date_ticks` guarantees both are present).
+	-- Line 1: date ticks (the start date's tick is always ticks[1], the due
+	-- date's is always ticks[#ticks] -- `timeline.date_ticks` guarantees both
+	-- are present). Their "gs"/"gd" keys live in the header's bottom border.
 	do
 		local ticks = timeline.date_ticks(start_iso, due_iso, width)
-		local gs_hint = key_hint("issues.change_milestone_start_date")
-		local gd_hint = key_hint("issues.change_milestone_due_date")
-
-		-- The hints extend the start/due ticks' occupied range beyond what
-		-- `timeline.date_ticks`'s own overlap-drop already accounted for (it
-		-- only knows about the plain date text, not these appended hints).
-		-- Start/due take priority over their immediate neighbor on collision.
-		if gs_hint and ticks[1].text and ticks[2] and ticks[2].text then
-			-- +1 so the two labels keep at least one column of breathing room
-			-- instead of just touching.
-			local start_end = ticks[1].col + #ticks[1].text + 1 + #gs_hint + 1
-			if start_end > ticks[2].col then
-				ticks[2].text = nil
-			end
-		end
-		if gd_hint and #ticks >= 2 then
-			local due_tick = ticks[#ticks]
-			local neighbor = ticks[#ticks - 1]
-			if due_tick.text and neighbor.text then
-				local due_start = due_tick.col - #due_tick.text + 1 - 1 - #gd_hint
-				if due_start <= neighbor.col + #neighbor.text then
-					neighbor.text = nil
-				end
-			end
-		end
-
 		local cells = strip.cells(width)
-		local hint_ranges = {}
-		-- Byte-independent column ranges of the start/due date text itself
-		-- (not the "gs"/"gd" hint), so an inline edit opens right over the
-		-- date -- converted to byte offsets once the line is finalized below.
+		-- Byte-independent column ranges of the start/due date text, so an
+		-- inline edit opens right over the date.
 		local date_col_ranges = {}
 
 		for idx, tick in ipairs(ticks) do
 			strip.set_glyph(cells, tick.col, "│")
 			if tick.text then
 				local text_start = tick.right_aligned and (tick.col - #tick.text + 1) or tick.col
-
-				if idx == 1 and gs_hint then
-					-- Start date: hint follows the date, growing rightward.
-					strip.set_text(cells, text_start, tick.text)
+				strip.set_text(cells, text_start, tick.text)
+				if idx == 1 then
 					date_col_ranges.start_date = { col = text_start, len = #tick.text }
-					local hint_col = text_start + #tick.text + 1
-					strip.set_text(cells, hint_col, gs_hint)
-					table.insert(hint_ranges, { start_col = hint_col, end_col = hint_col + #gs_hint })
-				elseif idx == #ticks and gd_hint then
-					-- Due date: hint precedes the date so the date itself stays
-					-- flush against the strip's closing border.
-					local hint_col = text_start - 1 - #gd_hint
-					if hint_col >= 0 then
-						strip.set_text(cells, hint_col, gd_hint)
-						table.insert(hint_ranges, { start_col = hint_col, end_col = hint_col + #gd_hint })
-					end
-					strip.set_text(cells, text_start, tick.text)
-					date_col_ranges.due_date = { col = text_start, len = #tick.text }
-				else
-					strip.set_text(cells, text_start, tick.text)
-				end
-
-				if idx == 1 and date_col_ranges.start_date == nil then
-					date_col_ranges.start_date = { col = text_start, len = #tick.text }
-				elseif idx == #ticks and date_col_ranges.due_date == nil then
+				elseif idx == #ticks then
 					date_col_ranges.due_date = { col = text_start, len = #tick.text }
 				end
 			end
@@ -256,10 +195,6 @@ local function render_timeline_unpadded(milestone, width, today_iso)
 		table.insert(lines, line)
 		local s0, s1 = byte_range(0, width)
 		table.insert(spans, { line = 0, start_col = s0, end_col = s1, hl_group = "AtlasTextMuted" })
-		for _, hint_range in ipairs(hint_ranges) do
-			local h0, h1 = byte_range(hint_range.start_col, hint_range.end_col)
-			table.insert(spans, { line = 0, start_col = h0, end_col = h1, hl_group = "AtlasKeyHint" })
-		end
 
 		-- Display columns (every cell is 1 column wide), not byte offsets:
 		-- the "│" tick glyphs before a date are multi-byte, and the inline
@@ -320,8 +255,7 @@ local function render_timeline_unpadded(milestone, width, today_iso)
 		end
 	end
 
-	-- Line 3: label only -- "gs"/"gd" now sit next to the dates themselves on
-	-- line 1, so there's no separate key-hint to show here any more.
+	-- Line 3: label only.
 	do
 		local label_text
 		if bar.state == "before_start" then
@@ -354,7 +288,8 @@ local function render_timeline_unpadded(milestone, width, today_iso)
 	return lines, spans, regions
 end
 
---- The boxed header with the timeline strip inside it, below the title.
+--- The boxed header with the timeline strip inside it, below the title, and
+--- the date keys in its bottom border.
 ---@param milestone IssueMilestone
 ---@param outer_width integer
 ---@param today_iso string
@@ -364,11 +299,9 @@ end
 local function render_header(milestone, outer_width, today_iso)
 	local t_lines, t_spans, t_regions =
 		render_timeline_unpadded(milestone, header.inner_width(outer_width), today_iso)
-	return header.render(
-		header_data(milestone, today_iso),
-		outer_width,
-		{ lines = t_lines, highlights = t_spans, regions = t_regions }
-	)
+	local data = header_data(milestone, today_iso)
+	data.bottom_right_chunks = dates_hints(outer_width)
+	return header.render(data, outer_width, { lines = t_lines, highlights = t_spans, regions = t_regions })
 end
 
 ---@param work_items Issue[]
@@ -498,7 +431,7 @@ local function render_description(width)
 		utils.push(lines, spans, spinner.with_text("Loading description..."), "AtlasTextMuted", PADDING_X)
 		return lines, spans
 	end
-	local lines, spans = markdown_sections.render(tostring(state.description or ""), { width = width - 2 * PADDING_X })
+	local lines, spans = markdown_lines.render(tostring(state.description or ""), { width = width - 2 * PADDING_X })
 	if #lines == 0 then
 		utils.push(lines, spans, "No description", "AtlasTextMuted", PADDING_X)
 		return lines, spans

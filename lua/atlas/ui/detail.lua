@@ -335,7 +335,14 @@ local function create_sidebar_window(tab)
 		zindex = 50,
 	})
 	configure_header(sidebar_win)
-	vim.api.nvim_set_option_value("winhighlight", content_winhighlight("AtlasBorder"), { win = sidebar_win, scope = "local" })
+	-- Keep `configure_header`'s StatusLine mapping: Neovim 0.12+ draws a
+	-- float's local statusline as its last inner row, which would otherwise
+	-- show up as a dark bar at the bottom of the sidebar box.
+	vim.api.nvim_set_option_value(
+		"winhighlight",
+		content_winhighlight("AtlasBorder") .. ",StatusLine:Normal,StatusLineNC:Normal",
+		{ win = sidebar_win, scope = "local" }
+	)
 
 	state.sidebar_win = sidebar_win
 end
